@@ -77,42 +77,16 @@ def init(spots, vars, k):
     u = u.T
     return np.maximum(0, u-k)
 
-def hs_call(ss, k, r, vs, t, kappa, theta, sigma, rho, density=None, varexp=None):
-    fname = \
-    'heston_grids/hs_%i_density_%f_%i_exp_%f_kappa_%f_theta_%f_sigma_%f_rho_%f.npy' % (
-        len(ss), density, len(vs), varexp, kappa, theta, sigma, rho)
-    try:
-        ret = np.load(fname)
-    except IOError:
-        ret = empty((len(ss), len(vs)))
-        tot = len(ss)*len(vs)
-        for i in xrange(len(ss)):
-            print float(i*len(vs)) / tot
-            for j in xrange(len(vs)):
-                s = ss[i]
-                if isclose(vs[j], 0):
-                    v = 0.0001
-                else:
-                    v = vs[j]
-                ret[i,j] = heston.call(s, k, r, sqrt(v), t,
-                                       kappa, theta, sigma, rho)
-        np.save(fname, ret)
-    return ret
-
-
-def bs_call(s, k, r, v, t):
-    N = scipy.stats.distributions.norm.cdf
-    s = s[:,newaxis]
-    v = v[newaxis,:]
-    d1 = (np.log(s/k) + (r+0.5*v**2) * t) / (v * np.sqrt(t))
-    d2 = d1 - v*np.sqrt(t)
-    return (N(d1)*s - N(d2)*k*np.exp(-r * t), N(d1))
-
-def center_diff(xs):
+def center_diff(xs, axis=0):
     dx = np.zeros_like(xs,dtype=float)
-    dx[:-1]  += np.diff(xs)
-    dx[1:]   += np.diff(xs[::-1])[::-1]*-1
-    dx[1:-1] *= 0.5
+    if axis == 0:
+        dx[:-1]  += np.diff(xs, axis=axis)
+        dx[1:]   += np.diff(xs[::-1], axis=axis)[::-1]*-1
+        dx[1:-1] *= 0.5
+    if axis == 1:
+        dx[:,:-1]  += np.diff(xs, axis=axis)
+        dx[:,1:]   += np.diff(xs[::-1], axis=axis)[::-1]*-1
+        dx[:,1:-1] *= 0.5
     return dx
 
 def str_coeff():
@@ -209,6 +183,8 @@ def expl(V, L1, R1, L2, R2, dt, n, crumbs=None):
         L2[i].data *= dt
         L2[i].data[1,:] += 1
         R2[i] *= dt
+    if crumbs is not None:
+        crumbs.append(V.copy())
     for k in xrange(n):
         for j in xrange(V.shape[1]):
                 V[:,j] = L1[j].dot(V[:,j]) + R1[j]
@@ -220,7 +196,7 @@ def expl(V, L1, R1, L2, R2, dt, n, crumbs=None):
         return crumbs
     return V
 
-def impl(V, L1, R1, L2, R2, dt, n, crumbs=None):
+def impl(V, L1, R1, L2, R2, dt, n, crumbs=None, callback=None):
     V = V.copy()
     L1i = [x.copy() for x in L1]
     R1  = [x.copy() for x in R1]
@@ -235,6 +211,8 @@ def impl(V, L1, R1, L2, R2, dt, n, crumbs=None):
         L2i[i].data[1,:] += 1
         R2[i] *= dt
     for k in xrange(n):
+        if callback is not None:
+            callback(V, k*dt)
         for j in xrange(V.shape[1]):
             V[:,j] = spl.solve_banded((1,1), L1i[j].data, V[:,j] + R1[j])
         for i in xrange(V.shape[0]):
@@ -265,7 +243,7 @@ def crank(V, L, R, dt, n):
     return V
 
 
-def plot_price_err(V, label, spots, bs, _, ids=slice(None), vars=None):
+def plot_price_err(V, label, spots, bs, _, ids=None, vars=None):
     # Trim for plotting
     front = 2
     back = 2
@@ -278,19 +256,21 @@ def plot_price_err(V, label, spots, bs, _, ids=slice(None), vars=None):
         title("Error in Price")
     if V.ndim == 2 and V.shape[1] > 1:
         assert(vars is not None)
+        if ids is None:
+            ids = slice(len(spots))
         wireframe((V-bs)[ids,:] , (spots/k*100)[ids],(vars))
         xlabel("Var")
         ylabel("% of strike")
         title("Error in Price: {0}".format(label))
     legend(loc=0)
 
+def g(x, K, c, p): return K + c/p * sinh(p*x + arcsinh(-p*K/c))
 def sinh_space(high, exact, density, size):
     c = float(density)
     K = float(exact)
     Smax = float(high)
-    def g(x, K, c, p): return K + c/p * sinh(p*x + arcsinh(-p*K/c))
-    p = scipy.optimize.root(lambda p: g(1, K, c, p)-1, 1)
-    print p.success, p.r, g(1, K, c, p.r)
+    p = scipy.optimize.root(lambda p: g(1.0, K, c, p)-1.0, -1)
+    print p.success, p.r, g(1.0, K, c, p.r)-1
     p = p.r
     deps = 1./size * (arcsinh((Smax - K)*p/c) - arcsinh(-p*K/c))
     eps = arcsinh(-p*K/c) + arange(size)*deps
@@ -305,13 +285,17 @@ def plot_price(V, label, spots, ids=slice(None), vars=None):
     back = 2
     assert(0 < V.ndim < 3)
     if V.ndim == 1 or V.shape[1] == 1:
+        if ids is None:
+            ids = slice(len(spots))
         plot((spots/k*100)[ids][front:-back],
-             V[ids][front:-back], label=label)
+             V[ids,front:-back], label=label)
         xlabel("% of strike")
         ylabel("Price")
         title("Price")
     if V.ndim == 2 and V.shape[1] > 1:
         assert(vars is not None)
+        if ids is None:
+            ids = slice(len(spots))
         wireframe(V[ids,:] , (spots/k*100)[ids],(vars))
         xlabel("Var")
         ylabel("% of strike")
@@ -331,20 +315,36 @@ def plot_delta_err(V, label, spots, bs, delta, ids=slice(None)):
     ylabel("Error")
     legend(loc=0)
 
+def plot_dUdv(vars, V, bs, j=16):
+    plot(center_diff(bs[j,:]), label="BS")
+    plot(center_diff(V[-1][j,:]), label="ADI")
+    title("First deriv w.r.t. var")
+    ylabel(r"$\frac{\partial U}{\partial v}$")
+    legend(loc=0)
+    show()
+
+def plot_d2Udv2(vars, V, bs, j=16):
+    plot(vars, center_diff(center_diff(bs[j,:])), label="BS")
+    plot(vars, center_diff(center_diff(V[-1][j,:])), label="ADI")
+    title("Second deriv w.r.t. var")
+    ylabel(r"$\frac{\partial^2 U}{\partial v^2}$")
+    legend(loc=0)
+    show()
+
 
 def main():
     global ids, idx, idv, spots, dss, vars, dvs, fst, snd, Vi, L1, L2, R1, R2
-    global Ass, mu_s, gamma2_s, V, spot, k, r, t, v, dt, nspots, nvols, Rs, Rss
-    global Rv, Rvv, Av, Avv, As, hs, bs
+    global Ass, mu_s, gamma2_s, G, V, spot, k, r, t, v, dt, nspots, nvols, Rs, Rss
+    global Rv, Rvv, Av, Avv, As, hs, bs, COSboundary
     spot = 100.
     k = 99.
-    r = 0.06
+    r = 0
     t = 1.
     v = 0.2**2
-    dt = 1/1000.
-    kappa = 0.01
-    theta = 0.04
-    sigma = 0.001
+    dt = 1/300.
+    kappa = 1e-4
+    theta = v
+    sigma = 1e-4
     nspots = 80
     nspots += not (nspots%2)
     nvols = 40
@@ -358,7 +358,7 @@ def main():
         print spotdensity
     # spots = cubic_sigmoid_space(spot, spot*2-1,
                                     # spotdensity, nspots)
-    # spots = linspace(0, 980, nspots)
+    spots = linspace(0, 200, nspots)
     # spot = spots[8]
     dss = np.hstack((nan, np.diff(spots)))
     ids = (spot*0.8 < spots) & (spots < spot*1.2) # Just the range we care about
@@ -367,32 +367,43 @@ def main():
     idx = isclose(spots, spot) # The actual spot we care about
 
     # vars = exponential_space(0.001, v, 10, varexp, nvols)
-    vars = linspace(0, 10, nvols)
+    vars = linspace(0.001, 2, nvols)
     nvols = len(vars)
     dvs = np.hstack((nan, np.diff(vars)))
     idv = isclose(vars, v) # The actual vol we care about
 
+    def BSboundary(V,t):
+        m = heston.bs_call_delta(maximum(spots,0.0001), k, r, maximum(sqrt(vars),0.0001), t)[0]
+        V[0,:] = m[0,:] # top
+        V[:,0] = m[:,0] # left
+        V[-1,:] = m[-1,:] # bottom
+        V[:,-1] = m[:,-1] # right
+
+
+    def COSboundary(V, t):
+        m = heston.hs_call(spots, k, r, sqrt(vars), t, kappa, theta, sigma, rho,
+                           HFUNC=heston.HestonCos)
+        V[0,:] = m[0,:] # top
+        V[:,0] = m[:,0] # left
+        V[-1,:] = m[-1,:] # bottom
+        V[:,-1] = m[:,-1] # right
 
 
     Vi = init(spots, vars, k)
     V = Vi.copy()
 
+    global bs, hs
+    bs, delta = heston.bs_call_delta(spots, k, r, np.sqrt(vars), t)
+    hs = heston.hs_call(spots, k, r, np.sqrt(vars), t, kappa, theta, sigma, rho,
+                       HFUNC=heston.HestonCos)
 
-    def plot_it(domain, label):
-        global bs, hs
-        if sigma < 0.01:
-            print "Low sigma, using black scholes solution."
-            bs, delta = bs_call(spots, k, r, np.sqrt(vars), t)
-            analytical = bs
-        else:
-            hs = hs_call(spots, k, t, np.sqrt(vars), t, kappa, theta, sigma,
-                         rho, spotdensity, varexp)
-            analytical = hs
+    def plot_it(domain, label, analytical=hs):
         print domain[idx,idv] - analytical[idx,idv]
         # plot_delta_err(domain, label, spots/k*100, analytical, delta, ids)
         plot_price_err(domain, label, spots/k*100, analytical, delta, ids, vars)
         # plot_price(domain[:,idvs], label, spots/k*100, ids, vars[idvs])
-        # plot_price(domain, label, spots/k*100, None, vars)
+        plot_price(domain, label, spots/k*100, None, vars)
+        # plot_price(analytical, "Analytical Price", spots/k*100, None, vars)
 
     L1 = [0]*nvols
     R1 = [0]*nvols
@@ -411,8 +422,8 @@ def main():
         Rs *= mu_s
 
         Ass = sps.dia_matrix((snd, (1, 0, -1)), shape=(nspots,nspots))
-        Ass.data[1, -1] = -2/dss[-1]**2
-        Ass.data[2, -2] =  2/dss[-1]**2
+        Ass.data[1, -1] = -2/dss[-1]**2  # Last elem of center diag
+        Ass.data[2, -2] =  2/dss[-1]**2  # last elem of sub diag
         Ass.data[0,1:]  *= gamma2_s[:-1]
         Ass.data[1,:]   *= gamma2_s
         Ass.data[2,:-1] *= gamma2_s[1:]
@@ -442,15 +453,20 @@ def main():
         Av.data[1, 0] =  1 / dvs[1]
         # Av.data[0, 1:]  =  1 / dvs[1:]
         # Av.data[1,:-1]  = -1 / dvs[1:]
-        # Av.data[2,:] *= 0
+        # Av.data[2,:]   *= 0
         # Av.data[2,:-1] *= mu_v[1:]
+
+        Av.data[1:-1] = -1  # This is to cancel out the previous value so we can
+                            # set the dirichlet boundary condition in R.
+                            # Then we have U_i + -U_i + R
+
         Av.data[0,1:]  *= mu_v[:-1]
         Av.data[1,:]   *= mu_v
         Av.data[2,:-1] *= mu_v[1:]
 
         Rv = np.zeros_like(V[i,:])
-        Rv[-1] = s
-        # Rv *= mu_v
+        Rv[-1] = s - k
+        Rv *= mu_v
 
         Avv = sps.dia_matrix((snd, (1, 0, -1)), shape=(nvols,nvols))
         Avv.data[0, 1] =  2/dvs[1]**2
@@ -478,8 +494,15 @@ def main():
         # plot_it(V,"exp")
 
 
-    V = impl(Vi, L1, R1, L2, R2, dt, int(t/dt), [])
-    plot_it(V[-1], "impl")
+    # V = impl(Vi, L1, R1, L2, R2, dt, int(t/dt), [], callback=COSboundary)
+    G = impl(Vi, L1, R1, L2, R2, dt, int(t/dt), [])
+    # plot_it(G[-1], "impl")
+    # plot_it(V[-1], "impl - forced")
+    # plot_price_err(hs, "Heston - Black", spots/k*100, bs, delta, ids, vars)
+    # print "Max analytical err vs BS: ", max(abs(hs.flatten() - bs.flatten()))
+    # print "Max FD err (forced): ", max(abs(V[-1].flatten() - hs.flatten()))
+    print "Max FD err: ", max(abs(G[-1].flatten() - hs.flatten()))
+
 
 
     # V = crank(Vi, L, R, dt, int(t/dt))
@@ -494,21 +517,30 @@ def main():
 
     show()
 
+
+wire = lambda m: wireframe(m, spots, vars)
+def w(m): wire(m); show()
+
+def d(s, v, t=1,sigma=0.00001):
+    h = heston.hs_call(s, 99, .06, v, float(t), 1, None, sigma, 0)
+    b = heston.bs_call_delta(s, 99, .06, v, float(t))[0]
+    return (h,b,h-b)
+
 def iterate(f, x0):
     while 1:
         yield x0
         x0 = f(x0)
 
-def take(n, seq, step=1):
+def itake(n, seq, step=1):
     for i, x in enumerate(seq):
         if i/step == n:
             raise StopIteration
         if not i % step:
             yield x
 
-def bs_stream(s, k, r, v, dt):
+def bs_stream(s, k, r, vol, dt):
     for i in it.count():
-        yield bs_call(s, k, r, v, i*dt)[0]
+        yield heston.bs_call_delta(s, k, r, vol, i*dt)[0]
 
 
 def wireframe(domain, xs, ys, ax=None):
@@ -530,10 +562,11 @@ def lineplot(domain, xs, ys=None, ax=None):
     return lines, ax
 
 
-def anim(plotter, domains, xs, ys):
+def anim(plotter, domains, xs, ys, FPS=2):
     """
     A very simple 'animation' of a 3D plot
     """
+    SPF = 1.0 / FPS
     ion()
     tstart = time.time()
     oldcol = None
@@ -544,15 +577,18 @@ def anim(plotter, domains, xs, ys):
             if oldcol is not None:
                 ax.collections.remove(oldcol)
 
+            frame_time = time.time()
             oldcol, ax = plotter(Z, xs, ys, ax)
-            title("#%02i" % (i,))
+            xlabel("#%02i" % (i,))
 
+            time.sleep(max(j, SPF - frame_time))
             draw()
     except StopIteration:
         pass
+    ioff()
 
     print 'FPS: %f' % (100 / (time.time() - tstart))
 
 if __name__ == "__main__":
     pass
-    # main()
+    main()
