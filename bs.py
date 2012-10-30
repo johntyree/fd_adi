@@ -1,6 +1,10 @@
 #!/usr/bin/env python
 """Demonstration of 1D Black Scholes using FTCS BTCS CTCS and Smoothed CTCS."""
 
+# Boundary to S-k not S
+# look at mismatch for very high vol
+# consider the case of high d1 and d2
+
 
 import sys
 import numpy as np
