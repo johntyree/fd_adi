@@ -157,37 +157,37 @@ def plot_price(V, spots, k, vars, label=None, ids=slice(None)):
     pylab.legend(loc=0)
 
 
-def plot_delta_err(V, spots, k, vars, label=None, ids=slice(None)):
-    # Trim for plotting
-    front = 2
-    back = 2
-    dVds = center_diff(V)/center_diff(spots)
-    pylab.plot((spots)[ids][front:-back],
-         (dVds - delta)[ids][front:-back], label=label)
+def plot_dUds_err(V, bs, spots, vars, plotter=surface):
+    dUds = center_diff(V,axis=0)/center_diff(vars)
+    dbsds = center_diff(bs,axis=0)/center_diff(vars)
+    plotter(dUds - dbsds, spots, vars)
+    # plotter(dUds, spots, vars)
     pylab.title("Error in $\Delta$")
-    pylab.xlabel("% of strike")
-    pylab.ylabel("Error")
-    pylab.legend(loc=0)
+    pylab.xlabel("Var")
+    pylab.ylabel("% of strike")
 
-def plot_dUdv(vars, V, bs, i=16):
-    print i
-    print bs.shape
-    print V.shape
-    dUdv = center_diff(V[i,:])/center_diff(vars)
-    dUdbs = center_diff(bs[i,:])/center_diff(vars)
-    # pylab.plot(vars, center_diff(bs[i,:]), label="BS")
-    pylab.plot(vars, dUdbs, label="BS")
-    pylab.plot(vars, dUdv, label="ADI")
+def plot_dUdv(V, bs, spots, vars, plotter=surface):
+    dUdv = center_diff(V,axis=1)/center_diff(vars)
+    dbsdv = center_diff(bs,axis=1)/center_diff(vars)
+    plotter(dUdv, spots, vars)
     pylab.title("First deriv w.r.t. var")
-    pylab.ylabel(r"$\frac{\partial U}{\partial v}$")
-    pylab.legend(loc=0)
+    pylab.xlabel("Var")
+    pylab.ylabel("% of strike")
+    plotter(dbsdv, spots, vars)
+    pylab.title("First deriv w.r.t. var")
+    pylab.xlabel("Var")
+    pylab.ylabel("% of strike")
     pylab.show()
 
-def plot_d2Udv2(vars, V, bs, i=16):
-    pylab.plot(vars, center_diff(center_diff(bs[i,:])), label="BS")
-    pylab.plot(vars, center_diff(center_diff(V[i,:])), label="ADI")
+def plot_d2Udv2(V, bs, spots, vars, plotter=surface):
+    d2Udv2 = center_diff(V,n=2,axis=1)/center_diff(vars, 2)
+    d2bsdv2 = center_diff(bs,n=2,axis=1)/center_diff(vars, 2)
+    plotter(d2Udv2, spots, vars)
     pylab.title("Second deriv w.r.t. var")
-    pylab.ylabel(r"$\frac{\partial^2 U}{\partial v^2}$")
-    pylab.legend(loc=0)
+    pylab.xlabel("Var")
+    pylab.ylabel("% of strike")
+    plotter(d2bsdv2, spots, vars)
+    pylab.title("Second deriv w.r.t. var")
+    pylab.xlabel("Var")
+    pylab.ylabel("% of strike")
     pylab.show()
-
