@@ -71,7 +71,6 @@ def exponential_space(low, exact, high, ex, n):
         print "Did not find thingy."
         assert(j != 0)
     dx = x - (l + j*dv)
-    print dx
     h += (n-1) * dx/j
     dv = (h - l) / (n-1)
     for i in range(n):
