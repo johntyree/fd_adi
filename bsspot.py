@@ -8,7 +8,7 @@ import scipy.stats
 import scipy.linalg as spl
 import scipy.sparse as sps
 from pylab import *
-from utils import sinh_space,center_diff,D,D2,nonuniform_center_coefficients
+from utils import sinh_space,exponential_space,center_diff,D,D2,nonuniform_center_coefficients
 from visualize import fp, wireframe
 from heston import bs_call_delta, hs_call
 from time import time
@@ -20,13 +20,13 @@ rate_Spot_Var = 0.5
 
 spot = 100.0
 k = 100.0
-r = 0.06
+r = 0.00
 t = 1
 v0 = 0.2
-dt = 1/300.0
+dt = 1/30.0
 
 kappa = 1
-theta = v0
+theta = 1
 sigma = 0.2
 rho = 0
 
@@ -34,13 +34,15 @@ nspots = 200
 nvols = 100
 
 spotdensity = 10.  # infinity is linear?
+varexp = 4
 spots = sinh_space(k, 2000, spotdensity, nspots+1)[1:]
-vars = linspace(0.1,10.,nvols)
+vars = exponential_space(0.01, v0, 10., varexp, nvols)
 # plot(spots); title("Spots"); show()
 # plot(vars); title("Vars"); show()
 
-trims = spots < spot*2.0
-trimv = slice(None)#vars < v0*2
+trims = (k/2  < spots) & (spots < k*2.0)
+# trimv = slice(None)
+trimv = (0.00 < vars) & (vars < 4)
 
 
 ids = isclose(spots[trims], spot)
