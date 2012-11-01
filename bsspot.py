@@ -45,7 +45,7 @@ dss = np.hstack((np.nan, np.diff(spots)))
 
 spotdensity = 0.  # 0 is linear
 # varexp = 1        # 1 is linear
-vars = array((1.,))
+vars = array((1.,2))
 nvols = len(vars)
 # dvs = np.hstack((nan, np.diff(vars)))
 
@@ -98,7 +98,7 @@ for j, v in enumerate(vars):
     L1_[j].data += Ass.data
     L1_[j].data[1,:] -= (1 - rate_Spot_Var)*r
 
-    R1_.append(Rs + Rss)
+    R1_.append((Rs + Rss).copy())
 print time() - start
 
 # mu_v = kappa*(theta - vars)
@@ -153,10 +153,10 @@ print time() - start
     # R2_.append(Rv + Rvv)
 # print time() - start
 
-def impl(V,dt,n):
+def impl(V,L1,R1x,dt,n):
     V = V.copy()
-    L1i = [x.copy() for x in L1_]
-    R1  = [x.copy() for x in R1_]
+    L1i = [x.copy() for x in L1]
+    R1  = [x.copy() for x in R1x]
     # L2i = [x.copy() for x in L2_]
     # R2  = [x.copy() for x in R2_]
 
@@ -184,13 +184,13 @@ def impl(V,dt,n):
     print "  (%fs)" % (time() - start)
     return V
 
-def crank(V,dt,n):
+def crank(V,L1,R1x,dt,n):
     V = V.copy()
     dt *= 0.5
 
-    L1e = [x.copy() for x in L1_]
-    L1i = [x.copy() for x in L1_]
-    R1  = [x.copy() for x in R1_]
+    L1e = [x.copy() for x in L1]
+    L1i = [x.copy() for x in L1]
+    R1  = [x.copy() for x in R1x]
     # L2e = [x.copy() for x in L2_]
     # L2i = [x.copy() for x in L2_]
     # R2  = [x.copy() for x in R2_]
@@ -260,15 +260,15 @@ p = p1
 # dVds = center_diff(V)/(ds)
 # p(V, spots, vars, 1, "impl")
 
-V = crank(Vi,dt, int(t/dt))
+V = crank(Vi, L1_, R1_, dt, int(t/dt))
 V = V[trims,:]
 print V[ids] - bs[ids]
 dVds = center_diff(V)/(ds)
 p(V, spots, vars, 2, "crank")
 
 ## Rannacher smoothing to damp oscilations at the discontinuity
-V = impl(Vi, 0.5*dt, 4)
-V = crank(V, dt, int(t/dt)-2)
+V = impl(Vi, L1_, R1_, 0.5*dt, 4)
+V = crank(V, L1_, R1_, dt, int(t/dt)-2)
 V = V[trims,:]
 print V[ids] - bs[ids]
 p(V, spots, vars, 3, "smooth")
