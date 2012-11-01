@@ -22,7 +22,7 @@ spot = 100.0
 k = 100.0
 r = 0.06
 t = 1
-# v0 = 3
+v0 = 0.2
 dt = 1/30.0
 nspots = 2000
 # spots = linspace(0,1400,nspots)
@@ -35,10 +35,10 @@ ids = isclose(spots[trims], spot)
 ds = ds[nspots//2]
 dss = np.hstack((np.nan, np.diff(spots)))
 
-# kappa = 1e-4
-# theta = v0
-# sigma = 1e-4
-# rho = 0
+kappa = 1e-5
+theta = v0
+sigma = 1e-5
+rho = 0
 
 nvols = 20
 vars = linspace(0.01,1.,nvols)
@@ -93,8 +93,8 @@ for j, v in enumerate(vars[:nvols]):
     R1_.append((Rs + Rss).copy())
 print time() - start
 
-# mu_v = kappa*(theta - vars[:nvols])
-# gamma2_v = 0.5*sigma**2*vars[:nvols]
+mu_v = kappa*(theta - vars[:nvols])
+gamma2_v = 0.5*sigma**2*vars[:nvols]
 
 L2_ = []
 R2_ = []
@@ -104,39 +104,37 @@ print "Building Av(v)",
 sys.stdout.flush()
 for i, s in enumerate(spots):
     Av = sps.dia_matrix((fst.copy(), (1, 0, -1)), shape=(nvols,nvols))
-    Av *= 0
-    # Av.data[0, 1] = -1 / dvs[1]
-    # Av.data[1, 0] =  1 / dvs[1]
-    # # Av.data[0, 1:]  =  1 / dvs[1:]
-    # # Av.data[1,:-1]  = -1 / dvs[1:]
-    # # Av.data[2,:]   *= 0
-    # # Av.data[2,:-1] *= mu_v[1:]
-
-    # Av.data[1:-1] = -1  # This is to cancel out the previous value so we can
-                        # # set the dirichlet boundary condition in R.
-                        # # Then we have U_i + -U_i + R
-
-    # Av.data[0,1:]  *= mu_v[:-1]
-    # Av.data[1,:]   *= mu_v
+    Av.data[0, 1] = -1 / dvs[1]
+    Av.data[1, 0] =  1 / dvs[1]
+    # Av.data[0, 1:]  =  1 / dvs[1:]
+    # Av.data[1,:-1]  = -1 / dvs[1:]
+    # Av.data[2,:]   *= 0
     # Av.data[2,:-1] *= mu_v[1:]
 
+    Av.data[1:-1] = -1  # This is to cancel out the previous value so we can
+                        # set the dirichlet boundary condition in R.
+                        # Then we have U_i + -U_i + R
+
+    Av.data[0,1:]  *= mu_v[:-1]
+    Av.data[1,:]   *= mu_v
+    Av.data[2,:-1] *= mu_v[1:]
+
     Rv = np.zeros(nvols)
-    # Rv[-1] = s - k
-    # Rv *= mu_v
+    Rv[-1] = s - k
+    Rv *= mu_v
 
     Avv = sps.dia_matrix((snd.copy(), (1, 0, -1)), shape=(nvols,nvols))
-    Avv *= 0
-    # Avv.data[0, 1] =  2/dvs[1]**2
-    # Avv.data[1, 0] = -2/dvs[1]**2
+    Avv.data[0, 1] =  2/dvs[1]**2
+    Avv.data[1, 0] = -2/dvs[1]**2
 
-    # Avv.data[0, 1:]  *= gamma2_v[:-1]
-    # Avv.data[1, :]   *= gamma2_v
-    # Avv.data[2, :-1] *= gamma2_v[1:]
+    Avv.data[0, 1:]  *= gamma2_v[:-1]
+    Avv.data[1, :]   *= gamma2_v
+    Avv.data[2, :-1] *= gamma2_v[1:]
 
 
     Rvv = np.zeros(nvols)
-    # Rvv[0] = 2*dvs[1]/dvs[1]**2
-    # Rvv *= gamma2_v
+    Rvv[0] = 2*dvs[1]/dvs[1]**2
+    Rvv *= gamma2_v
 
     L2_.append(Av.copy())
     L2_[i].data += Avv.data
