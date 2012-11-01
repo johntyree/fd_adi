@@ -27,12 +27,11 @@ dt = 1/30.0
 nspots = 20000
 nspots += not (nspots%2)
 # spots = linspace(0,1400,nspots)
-spots = sinh_space(k, 20000, 1, nspots)
+spots = sinh_space(k, 20000, 10, nspots)
 # plot(spots)
 # title("Spots")
 # show()
 ds = center_diff(spots)
-trims = (0 <= spots) & (spots <= 400)
 trims = slice(None)
 ids = isclose(spots[trims], spot)
 ds = ds[nspots//2]
@@ -42,14 +41,13 @@ dss = np.hstack((np.nan, np.diff(spots)))
 # theta = v0
 # sigma = 1e-4
 # rho = 0
-nvols = 3
+# nvols = 3
 
 spotdensity = 0.  # 0 is linear
-varexp = 1        # 1 is linear
-vars = linspace(1,2,nvols)
+# varexp = 1        # 1 is linear
 vars = array((1.,))
 nvols = len(vars)
-dvs = np.hstack((nan, np.diff(vars)))
+# dvs = np.hstack((nan, np.diff(vars)))
 
 def init(spots, vs, k):
     u = np.ones((len(spots),len(vs))).T * spots
@@ -59,11 +57,11 @@ def init(spots, vs, k):
 
 Vi = init(spots, vars, k)
 V = np.copy(Vi)
-bs, delta = [x[trims] for x in bs_call_delta(spots[:,newaxis], k, r,
+bs, delta = [x[trims,:] for x in bs_call_delta(spots[:,newaxis], k, r,
                                             np.sqrt(vars)[newaxis,:], t)]
 
-L1_ = [0]*nvols
-R1_ = [0]*nvols
+L1_ = []
+R1_ = []
 start = time()
 print "Building As(s)",
 sys.stdout.flush()
@@ -71,6 +69,7 @@ fst, snd = nonuniform_center_coefficients(dss)
 for j, v in enumerate(vars):
     mu_s = r*spots
     gamma2_s = 0.5*v*spots**2
+    print sum(gamma2_s)
 
 
     As = sps.dia_matrix((fst.copy(), (1, 0, -1)), shape=(nspots,nspots))
@@ -95,18 +94,18 @@ for j, v in enumerate(vars):
     Ass.data[2,:-1] *= gamma2_s[1:]
     Rss *= gamma2_s
 
-    L1_[j] = As.copy()
+    L1_.append(As.copy())
     L1_[j].data += Ass.data
     L1_[j].data[1,:] -= (1 - rate_Spot_Var)*r
 
-    R1_[j] = (Rs + Rss)
+    R1_.append(Rs + Rss)
 print time() - start
 
 # mu_v = kappa*(theta - vars)
 # gamma2_v = 0.5*sigma**2*vars
 
-# L2_ = [0]*nspots
-# R2_ = [0]*nspots
+# L2_ = []
+# R2_ = []
 # fst, snd = nonuniform_center_coefficients(dvs)
 # start = time()
 # print "Building Av(v)",
@@ -147,11 +146,11 @@ print time() - start
     # # Rvv[0] = 2*dvs[1]/dvs[1]**2
     # # Rvv *= gamma2_v
 
-    # L2_[i] = Av.copy()
+    # L2_.append(Av.copy())
     # L2_[i].data += Avv.data
     # L2_[i].data[1,:] -= rate_Spot_Var*r
 
-    # R2_[i] = (Rv + Rvv)
+    # R2_.append(Rv + Rvv)
 # print time() - start
 
 def impl(V,dt,n):
@@ -234,7 +233,7 @@ front = 1
 back = 1
 line_width = 2
           # exp  imp   cr   smo
-markers = ['--', '--', ':', ':']
+markers = ['--', '--', ':', '--']
 
 def p1(V, spots, vars, marker_idx, label):
     plot((spots/k*100)[trims][front:-back],
