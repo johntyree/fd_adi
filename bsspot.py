@@ -26,12 +26,12 @@ t = 1
 dt = 1/30.0
 nspots = 2000
 # spots = linspace(0,1400,nspots)
-spots = sinh_space(k, 200000, 100, nspots+1)[1:]
+spots = sinh_space(k, 20000, 100, nspots+1)[1:]
 # plot(spots)
 # title("Spots")
 # show()
 ds = center_diff(spots)
-trims = slice(None)
+trims = spots < 400
 ids = isclose(spots[trims], spot)
 ds = ds[nspots//2]
 dss = np.hstack((np.nan, np.diff(spots)))
@@ -44,8 +44,8 @@ dss = np.hstack((np.nan, np.diff(spots)))
 
 spotdensity = 0.  # 0 is linear
 # varexp = 1        # 1 is linear
-vars = array((0.01,0.2,1.,4))
-nvols = 4
+nvols = 20
+vars = linspace(0.01,1.,nvols)
 # dvs = np.hstack((nan, np.diff(vars[:nvols])))
 
 def init(spots, nvols, k):
@@ -54,7 +54,7 @@ def init(spots, nvols, k):
 
 Vi = init(spots, nvols, k)
 V = np.copy(Vi)
-bs, delta = [x for x in bs_call_delta(spots[:,newaxis], k, r,
+bs, delta = [x for x in bs_call_delta(spots[:,newaxis][trims,:], k, r,
                                             np.sqrt(vars[:nvols])[newaxis,:], t)]
 
 L1_ = []
@@ -256,18 +256,18 @@ p = p2
 # dVds = center_diff(V)/(ds)
 # p(V, spots, vars[:nvols], 1, "impl")
 
-V = crank(Vi, L1_, R1_, dt, int(t/dt))
-V = V[trims,:]
-print V[ids] - bs[ids]
-dVds = center_diff(V)/(ds)
-p(V, spots, vars[:nvols], 2, "crank")
-
-# ## Rannacher smoothing to damp oscilations at the discontinuity
-# V = impl(Vi, L1_, R1_, 0.5*dt, 4)
-# V = crank(V, L1_, R1_, dt, int(t/dt)-2)
+# V = crank(Vi, L1_, R1_, dt, int(t/dt))
 # V = V[trims,:]
 # print V[ids] - bs[ids]
-# p(V, spots, vars[:nvols], 3, "smooth")
+# dVds = center_diff(V)/(ds)
+# p(V, spots[trims], vars[:nvols], 2, "crank")
+
+## Rannacher smoothing to damp oscilations at the discontinuity
+V = impl(Vi, L1_, R1_, 0.5*dt, 4)
+V = crank(V, L1_, R1_, dt, int(t/dt)-2)
+V = V[trims,:]
+print V[ids] - bs[ids]
+p(V, spots[trims], vars[:nvols], 3, "smooth")
 
 if p is p1:
     show()
