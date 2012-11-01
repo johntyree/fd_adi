@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-"""Demonstration of 1D Black Scholes using FTCS BTCS CTCS and Smoothed CTCS."""
+"""Demonstration of 2D Heston using BTCS CTCS and Smoothed CTCS."""
 
 
 import sys
@@ -9,8 +9,8 @@ import scipy.linalg as spl
 import scipy.sparse as sps
 from pylab import *
 from utils import sinh_space,center_diff,D,D2,nonuniform_center_coefficients
-from visualize import fp,wireframe
-from heston import bs_call_delta
+from visualize import fp, wireframe
+from heston import bs_call_delta, hs_call
 from time import time
 
 
@@ -35,9 +35,9 @@ ids = isclose(spots[trims], spot)
 ds = ds[nspots//2]
 dss = np.hstack((np.nan, np.diff(spots)))
 
-kappa = 1e-5
+kappa = 1e-4
 theta = v0
-sigma = 1e-5
+sigma = 1e-4
 rho = 0
 
 nvols = 20
@@ -52,6 +52,8 @@ Vi = init(spots, nvols, k)
 V = np.copy(Vi)
 bs, delta = [x for x in bs_call_delta(spots[:,newaxis][trims,:], k, r,
                                             np.sqrt(vars[:nvols])[newaxis,:], t)]
+hs = hs_call(spots[trims], k, r, np.sqrt(vars[:nvols]),
+             t, kappa, theta, sigma, rho)
 
 L1_ = []
 R1_ = []
@@ -225,18 +227,18 @@ line_width = 2
           # exp  imp   cr   smo
 markers = ['--', '--', ':', '--']
 
-def p1(V, spots, vars, marker_idx, label):
+def p1(V, analytical, spots, vars, marker_idx, label):
     plot((spots/k*100)[trims][front:-back],
-         (V-bs)[front:-back],
+         (V-analytical)[front:-back],
          markers[marker_idx], lw=line_width, label=label)
     title("Error in Price")
     xlabel("% of strike")
     ylabel("Error")
     legend(loc=0)
 
-def p2(V, spots, vars, marker_idx, label):
-    wireframe(V-bs, spots, vars)
-    title("Error in Price")
+def p2(V, analytical, spots, vars, marker_idx, label):
+    wireframe(V-analytical, spots, vars)
+    title("Error in Price (%s)" % label)
     xlabel("Var")
     ylabel("% of strike")
     show()
@@ -261,7 +263,8 @@ V = impl(Vi, L1_, R1_, 0.5*dt, 4)
 V = crank(V, L1_, R1_, dt, int(t/dt)-2)
 V = V[trims,:]
 print V[ids] - bs[ids]
-p(V, spots[trims], vars[:nvols], 3, "smooth")
+p(V, bs, spots[trims], vars[:nvols], 3, "smooth")
+p(V, hs, spots[trims], vars[:nvols], 3, "smooth")
 
 if p is p1:
     show()
