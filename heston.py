@@ -29,6 +29,7 @@ class HestonCos(object):
             S = np.array(S, copy=False, dtype=float)
             K = np.array([K], dtype=float)
         else:
+            S = np.array([S], dtype=float)
             K = np.array([K], dtype=float)
 
         self.S     = S
@@ -59,7 +60,10 @@ class HestonCos(object):
 
 
     def solve(self):
-        return self.COS(self.S,
+        ret = np.zeros_like(self.S)
+        ok = np.exp(np.log(self.S)) * 5*np.sqrt(self.vol) > self.K
+        print min(self.S[ok]),
+        ret[ok] = self.COS(self.S[ok],
                         self.K,
                         self.r,
                         self.vol**2,
@@ -69,6 +73,7 @@ class HestonCos(object):
                         self.rho,
                         self.sigma,
                        )
+        return ret
 
 
     def xi(self, k,a,b,c,d):
@@ -127,7 +132,7 @@ class HestonCos(object):
         ret = unit.dot(
             (CF_tiled * np.exp(1j*k[:,np.newaxis]*np.pi*(x-a)/(b-a))) * U_tiled)
         ret = K * np.exp(-r*T) * ret.real
-        return ret
+        return np.maximum(0, ret)
 
 
 
@@ -215,6 +220,8 @@ class HestonFundamental(object):
         return res * 1./np.pi + 0.5
 
     def solve(self):
+        ok = np.exp(np.log(self.spot)) * 5*np.sqrt(np.sqrt(self.var)) > self.strike
+        print "Spots:", self.spot[ok]
         self.u = 0.5
         self.b = self.mean_reversion + self.lam - self.rho * self.sig
         P1 = self.P()
@@ -225,13 +232,13 @@ class HestonFundamental(object):
 
         discount = np.exp(-self.r * self.tenor)
 
-        return self.spot * P1 - self.strike * P2 * discount
+        return np.maximum(0, self.spot * P1 - self.strike * P2 * discount)
 
-def hs_call(s, k, r, v, t, kappa, theta, sigma, rho, HFUNC=HestonCos):
-    ret = np.empty((len(s), len(v)))
+def hs_call(s, k, r, vol, t, kappa, theta, sigma, rho, HFUNC=HestonCos):
+    ret = np.empty((len(s), len(vol)))
     h = HFUNC(s, k, r, 0, t, kappa, theta, sigma, rho)
-    for j in range(len(v)):
-        h.vol = v[j]
+    for j in range(len(vol)):
+        h.vol = vol[j]
         ret[:,j] = h.solve()
     return ret
 
@@ -288,9 +295,9 @@ def call(s=100, k=99, r=0.06, vol=0.2, t=1, kappa=1, theta=None,
         except ValueError, e:
             print "COS failed:", e
             x = None
-        except TypeError, e:
-            print "COS failed:", e
-            x = None
+        # except TypeError, e:
+            # print "COS failed:", e
+            # x = None
         ret.append(x)
     return ret
 
