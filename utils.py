@@ -22,18 +22,23 @@ def D2(dim):
     return scipy.sparse.dia_matrix((operator, (1,0,-1)), shape=(dim,dim))
 
 
-def center_diff(xs, axis=0):
+def center_diff(domain, n=1, axis=0):
     """Like numpy.diff, but centered instead of forward."""
+    xs = domain.copy()
     dx = np.zeros_like(xs,dtype=float)
     if axis == 0:
-        dx[:-1]  += np.diff(xs, axis=axis)
-        dx[1:]   += np.diff(xs[::-1], axis=axis)[::-1]*-1
-        dx[1:-1] *= 0.5
+        for i in xrange(n):
+            dx[:-1]  += np.diff(xs, axis=axis)
+            dx[1:]   += np.diff(xs[::-1], axis=axis)[::-1]*-1
+            dx[1:-1] *= 0.5
+            t = xs; xs = dx; dx = t
     if axis == 1:
-        dx[:,:-1]  += np.diff(xs, axis=axis)
-        dx[:,1:]   += np.diff(xs[::-1], axis=axis)[::-1]*-1
-        dx[:,1:-1] *= 0.5
-    return dx
+        for i in xrange(n):
+            dx[:,:-1]  += np.diff(xs, axis=axis)
+            dx[:,1:]   += np.diff(xs[::-1], axis=axis)[::-1]*-1
+            dx[:,1:-1] *= 0.5
+            t = xs; xs = dx; dx = t
+    return xs
 
 def sinh_space(exact, high, density, size):
     """Sigmoidal space with high density around 'exact'. Use ~ 0.93."""
