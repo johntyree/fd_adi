@@ -45,20 +45,18 @@ dss = np.hstack((np.nan, np.diff(spots)))
 
 spotdensity = 0.  # 0 is linear
 # varexp = 1        # 1 is linear
-vars = array((1.,2))
-nvols = len(vars)
-# dvs = np.hstack((nan, np.diff(vars)))
+vars = array((1.,3.,2.))
+nvols = 3
+# dvs = np.hstack((nan, np.diff(vars[:nvols])))
 
-def init(spots, vs, k):
-    u = np.ones((len(spots),len(vs))).T * spots
-    u = u.T
-    return np.maximum(0, u-k)
+def init(spots, nvols, k):
+    return tile(np.maximum(0,spots-k), (nvols,1)).T
 
 
-Vi = init(spots, vars, k)
+Vi = init(spots, nvols, k)
 V = np.copy(Vi)
 bs, delta = [x[trims,:] for x in bs_call_delta(spots[:,newaxis], k, r,
-                                            np.sqrt(vars)[newaxis,:], t)]
+                                            np.sqrt(vars[:nvols])[newaxis,:], t)]
 
 L1_ = []
 R1_ = []
@@ -66,10 +64,9 @@ start = time()
 print "Building As(s)",
 sys.stdout.flush()
 fst, snd = nonuniform_center_coefficients(dss)
-for j, v in enumerate(vars):
+for j, v in enumerate(vars[:nvols]):
     mu_s = r*spots
     gamma2_s = 0.5*v*spots**2
-    print sum(gamma2_s)
 
 
     As = sps.dia_matrix((fst.copy(), (1, 0, -1)), shape=(nspots,nspots))
@@ -101,8 +98,8 @@ for j, v in enumerate(vars):
     R1_.append((Rs + Rss).copy())
 print time() - start
 
-# mu_v = kappa*(theta - vars)
-# gamma2_v = 0.5*sigma**2*vars
+# mu_v = kappa*(theta - vars[:nvols])
+# gamma2_v = 0.5*sigma**2*vars[:nvols]
 
 # L2_ = []
 # R2_ = []
@@ -252,26 +249,26 @@ def p2(V, spots, vars, marker_idx, label):
     show()
 
 
-p = p1
+p = p2
 
 # V = impl(Vi,dt, int(t/dt))
 # V = V[trims,:]
 # print V[ids] - bs[ids]
 # dVds = center_diff(V)/(ds)
-# p(V, spots, vars, 1, "impl")
+# p(V, spots, vars[:nvols], 1, "impl")
 
 V = crank(Vi, L1_, R1_, dt, int(t/dt))
 V = V[trims,:]
 print V[ids] - bs[ids]
 dVds = center_diff(V)/(ds)
-p(V, spots, vars, 2, "crank")
+p(V, spots, vars[:nvols], 2, "crank")
 
-## Rannacher smoothing to damp oscilations at the discontinuity
-V = impl(Vi, L1_, R1_, 0.5*dt, 4)
-V = crank(V, L1_, R1_, dt, int(t/dt)-2)
-V = V[trims,:]
-print V[ids] - bs[ids]
-p(V, spots, vars, 3, "smooth")
+# ## Rannacher smoothing to damp oscilations at the discontinuity
+# V = impl(Vi, L1_, R1_, 0.5*dt, 4)
+# V = crank(V, L1_, R1_, dt, int(t/dt)-2)
+# V = V[trims,:]
+# print V[ids] - bs[ids]
+# p(V, spots, vars[:nvols], 3, "smooth")
 
 if p is p1:
     show()
