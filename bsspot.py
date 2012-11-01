@@ -15,7 +15,7 @@ from time import time
 
 
 # TEMPORARY PARAMETERS
-rate_Spot_Var = 0.0
+rate_Spot_Var = 0.5
 
 
 spot = 100.0
@@ -26,10 +26,9 @@ t = 1
 dt = 1/30.0
 nspots = 2000
 # spots = linspace(0,1400,nspots)
-spots = sinh_space(k, 20000, 100, nspots+1)[1:]
-# plot(spots)
-# title("Spots")
-# show()
+spotdensity = 100.  # 0 is linear
+spots = sinh_space(k, 20000, spotdensity, nspots+1)[1:]
+# plot(spots); title("Spots"); show()
 ds = center_diff(spots)
 trims = spots < 400
 ids = isclose(spots[trims], spot)
@@ -40,13 +39,10 @@ dss = np.hstack((np.nan, np.diff(spots)))
 # theta = v0
 # sigma = 1e-4
 # rho = 0
-# nvols = 3
 
-spotdensity = 0.  # 0 is linear
-# varexp = 1        # 1 is linear
 nvols = 20
 vars = linspace(0.01,1.,nvols)
-# dvs = np.hstack((nan, np.diff(vars[:nvols])))
+dvs = np.hstack((nan, np.diff(vars[:nvols])))
 
 def init(spots, nvols, k):
     return tile(np.maximum(0,spots-k), (nvols,1)).T
@@ -100,71 +96,71 @@ print time() - start
 # mu_v = kappa*(theta - vars[:nvols])
 # gamma2_v = 0.5*sigma**2*vars[:nvols]
 
-# L2_ = []
-# R2_ = []
-# fst, snd = nonuniform_center_coefficients(dvs)
-# start = time()
-# print "Building Av(v)",
-# sys.stdout.flush()
-# for i, s in enumerate(spots):
-    # Av = sps.dia_matrix((fst.copy(), (1, 0, -1)), shape=(nvols,nvols))
-    # Av *= 0
-    # # Av.data[0, 1] = -1 / dvs[1]
-    # # Av.data[1, 0] =  1 / dvs[1]
-    # # # Av.data[0, 1:]  =  1 / dvs[1:]
-    # # # Av.data[1,:-1]  = -1 / dvs[1:]
-    # # # Av.data[2,:]   *= 0
-    # # # Av.data[2,:-1] *= mu_v[1:]
-
-    # # Av.data[1:-1] = -1  # This is to cancel out the previous value so we can
-                        # # # set the dirichlet boundary condition in R.
-                        # # # Then we have U_i + -U_i + R
-
-    # # Av.data[0,1:]  *= mu_v[:-1]
-    # # Av.data[1,:]   *= mu_v
+L2_ = []
+R2_ = []
+fst, snd = nonuniform_center_coefficients(dvs)
+start = time()
+print "Building Av(v)",
+sys.stdout.flush()
+for i, s in enumerate(spots):
+    Av = sps.dia_matrix((fst.copy(), (1, 0, -1)), shape=(nvols,nvols))
+    Av *= 0
+    # Av.data[0, 1] = -1 / dvs[1]
+    # Av.data[1, 0] =  1 / dvs[1]
+    # # Av.data[0, 1:]  =  1 / dvs[1:]
+    # # Av.data[1,:-1]  = -1 / dvs[1:]
+    # # Av.data[2,:]   *= 0
     # # Av.data[2,:-1] *= mu_v[1:]
 
-    # Rv = np.zeros(nvols)
-    # # Rv[-1] = s - k
-    # # Rv *= mu_v
+    # Av.data[1:-1] = -1  # This is to cancel out the previous value so we can
+                        # # set the dirichlet boundary condition in R.
+                        # # Then we have U_i + -U_i + R
 
-    # Avv = sps.dia_matrix((snd.copy(), (1, 0, -1)), shape=(nvols,nvols))
-    # Avv *= 0
-    # # Avv.data[0, 1] =  2/dvs[1]**2
-    # # Avv.data[1, 0] = -2/dvs[1]**2
+    # Av.data[0,1:]  *= mu_v[:-1]
+    # Av.data[1,:]   *= mu_v
+    # Av.data[2,:-1] *= mu_v[1:]
 
-    # # Avv.data[0, 1:]  *= gamma2_v[:-1]
-    # # Avv.data[1, :]   *= gamma2_v
-    # # Avv.data[2, :-1] *= gamma2_v[1:]
+    Rv = np.zeros(nvols)
+    # Rv[-1] = s - k
+    # Rv *= mu_v
+
+    Avv = sps.dia_matrix((snd.copy(), (1, 0, -1)), shape=(nvols,nvols))
+    Avv *= 0
+    # Avv.data[0, 1] =  2/dvs[1]**2
+    # Avv.data[1, 0] = -2/dvs[1]**2
+
+    # Avv.data[0, 1:]  *= gamma2_v[:-1]
+    # Avv.data[1, :]   *= gamma2_v
+    # Avv.data[2, :-1] *= gamma2_v[1:]
 
 
-    # Rvv = np.zeros(nvols)
-    # # Rvv[0] = 2*dvs[1]/dvs[1]**2
-    # # Rvv *= gamma2_v
+    Rvv = np.zeros(nvols)
+    # Rvv[0] = 2*dvs[1]/dvs[1]**2
+    # Rvv *= gamma2_v
 
-    # L2_.append(Av.copy())
-    # L2_[i].data += Avv.data
-    # L2_[i].data[1,:] -= rate_Spot_Var*r
+    L2_.append(Av.copy())
+    L2_[i].data += Avv.data
+    L2_[i].data[1,:] -= rate_Spot_Var*r
 
-    # R2_.append(Rv + Rvv)
-# print time() - start
+    R2_.append(Rv + Rvv)
+print time() - start
 
 def impl(V,L1,R1x,dt,n):
     V = V.copy()
     L1i = [x.copy() for x in L1]
     R1  = [x.copy() for x in R1x]
-    # L2i = [x.copy() for x in L2_]
-    # R2  = [x.copy() for x in R2_]
+    L2i = [x.copy() for x in L2_]
+    R2  = [x.copy() for x in R2_]
 
     # L  = (As + Ass - r*np.eye(nspots))*-dt + np.eye(nspots)
     for j in xrange(nvols):
         L1i[j].data *= -dt
         L1i[j].data[1,:] += 1
         R1[j] *= dt
-    # for i in xrange(nspots):
-        # L2i[i].data *= -dt
-        # L2i[i].data[1,:] += 1
-        # R2[i] *= dt
+    for i in xrange(nspots):
+        L2i[i].data *= -dt
+        L2i[i].data[1,:] += 1
+        R2[i] *= dt
 
     start = time()
     print_step = max(1, int(n / 10))
@@ -175,8 +171,8 @@ def impl(V,L1,R1x,dt,n):
             print int(k*to_percent),
         for j in xrange(nvols):
             V[:,j] = spl.solve_banded((1,1), L1i[j].data, V[:,j] + R1[j], overwrite_b=True)
-        # for i in xrange(len(R2)):
-            # V[i,:] = spl.solve_banded((1,1), L2i[i].data, V[i,:] + R2[i], overwrite_b=True)
+        for i in xrange(len(R2)):
+            V[i,:] = spl.solve_banded((1,1), L2i[i].data, V[i,:] + R2[i], overwrite_b=True)
     print "  (%fs)" % (time() - start)
     return V
 
@@ -187,9 +183,9 @@ def crank(V,L1,R1x,dt,n):
     L1e = [x.copy() for x in L1]
     L1i = [x.copy() for x in L1]
     R1  = [x.copy() for x in R1x]
-    # L2e = [x.copy() for x in L2_]
-    # L2i = [x.copy() for x in L2_]
-    # R2  = [x.copy() for x in R2_]
+    L2e = [x.copy() for x in L2_]
+    L2i = [x.copy() for x in L2_]
+    R2  = [x.copy() for x in R2_]
 
     for j in xrange(nvols):
         L1e[j].data *= dt
@@ -198,12 +194,12 @@ def crank(V,L1,R1x,dt,n):
         L1i[j].data *= -dt
         L1i[j].data[1,:] += 1
 
-    # for i in xrange(nspots):
-        # L2e[i].data *= dt
-        # L2e[i].data[1,:] += 1
-        # R2[i] *= dt
-        # L2i[i].data *= -dt
-        # L2i[i].data[1,:] += 1
+    for i in xrange(nspots):
+        L2e[i].data *= dt
+        L2e[i].data[1,:] += 1
+        R2[i] *= dt
+        L2i[i].data *= -dt
+        L2i[i].data[1,:] += 1
 
 
     start = time()
@@ -215,9 +211,9 @@ def crank(V,L1,R1x,dt,n):
             print int(k*to_percent),
         for j in xrange(nvols):
             V[:,j] = L1e[j].dot(V[:,j]) + R1[j]
-        # for i in xrange(len(R2)):
-            # V[i,:] = spl.solve_banded((1,1), L2i[i].data, V[i,:] + R2[i], overwrite_b=True)
-            # V[i,:] = L2e[i].dot(V[i,:]) + R2[i]
+        for i in xrange(len(R2)):
+            V[i,:] = spl.solve_banded((1,1), L2i[i].data, V[i,:] + R2[i], overwrite_b=True)
+            V[i,:] = L2e[i].dot(V[i,:]) + R2[i]
         for j in xrange(nvols):
             V[:,j] = spl.solve_banded((1,1), L1i[j].data, V[:,j] + R1[j], overwrite_b=True)
     print "  (%fs)" % (time() - start)
