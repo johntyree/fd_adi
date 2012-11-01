@@ -62,7 +62,7 @@ class HestonCos(object):
     def solve(self):
         ret = np.zeros_like(self.S)
         ok = np.exp(np.log(self.S)) * 5*np.sqrt(self.vol) > self.K
-        print min(self.S[ok]),
+        # print "Cutoff:", min(self.S[ok]),
         ret[ok] = self.COS(self.S[ok],
                         self.K,
                         self.r,
@@ -87,7 +87,6 @@ class HestonCos(object):
 
     def psi(self, k, a, b, c, d):
         if not hasattr(k, '__iter__'):
-            print type(k), k
             k = np.array([k])
         ret = np.hstack([d-c,
                      (np.sin(k[1:]*np.pi*(d-a) / (b-a))
@@ -221,7 +220,6 @@ class HestonFundamental(object):
 
     def solve(self):
         ok = np.exp(np.log(self.spot)) * 5*np.sqrt(np.sqrt(self.var)) > self.strike
-        print "Spots:", self.spot[ok]
         self.u = 0.5
         self.b = self.mean_reversion + self.lam - self.rho * self.sig
         P1 = self.P()
