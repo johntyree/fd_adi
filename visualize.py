@@ -38,6 +38,32 @@ def lineplot(domain, xs, ys=None, ax=None):
 
 
 def wireframe(domain, xs, ys, ax=None):
+    """Convenience func for plotting a wireframe."""
+    if domain.shape != (len(xs), len(ys)):
+        print "Domain shape %s does match axes %s!." % (domain.shape, (len(xs),
+                                                                    len(ys)))
+    if ax is None:
+        fig = pylab.figure()
+        ax = fig.add_subplot(111, projection='3d')
+    X, Y = np.meshgrid(ys, xs)
+    wframe = ax.plot_surface(X, Y, domain,
+                             rstride=(max(int(np.shape(X)[0]/15.0), 1)),
+                             cstride=(max(int(np.shape(X)[1]/15.0), 1)),
+                             alpha=0.3)
+    xmin = np.min(ax.xaxis.get_tick_positions()[1])
+    ymax = np.max(ax.yaxis.get_tick_positions()[1])
+    zmin = np.min(ax.zaxis.get_tick_positions()[1])
+    xmin = np.min(ys)
+    ymax = np.max(xs)
+    zmin = np.min(domain)
+    print xmin, ymax, zmin
+    cset = ax.contour(X, Y, domain, zdir='x', offset=xmin)
+    cset = ax.contour(X, Y, domain, zdir='y', offset=ymax)
+    cset = ax.contour(X, Y, domain, zdir='z', offset=zmin)
+    return wframe, ax
+
+
+def surface(domain, xs, ys, ax=None):
     """Convenience func for plotting a surface."""
     if domain.shape != (len(xs), len(ys)):
         print "Domain shape %s does match axes %s!." % (domain.shape, (len(xs),
