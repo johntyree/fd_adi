@@ -23,26 +23,30 @@ k = 100.0
 r = 0.06
 t = 1
 v0 = 0.2
-dt = 1/30.0
-nspots = 2000
-# spots = linspace(0,1400,nspots)
-spotdensity = 100.  # 0 is linear
-spots = sinh_space(k, 20000, spotdensity, nspots+1)[1:]
-# plot(spots); title("Spots"); show()
-ds = center_diff(spots)
-trims = spots < 400
-ids = isclose(spots[trims], spot)
-ds = ds[nspots//2]
-dss = np.hstack((np.nan, np.diff(spots)))
+dt = 1/300.0
 
-kappa = 1e-4
+kappa = 1
 theta = v0
-sigma = 1e-4
+sigma = 0.2
 rho = 0
 
-nvols = 20
-vars = linspace(0.01,1.,nvols)
-dvs = np.hstack((nan, np.diff(vars[:nvols])))
+nspots = 200
+nvols = 100
+
+spotdensity = 10.  # infinity is linear?
+spots = sinh_space(k, 2000, spotdensity, nspots+1)[1:]
+vars = linspace(0.1,10.,nvols)
+# plot(spots); title("Spots"); show()
+# plot(vars); title("Vars"); show()
+
+trims = spots < spot*2.0
+trimv = slice(None)#vars < v0*2
+
+
+ids = isclose(spots[trims], spot)
+idv = isclose(vars[trimv], v0)
+dss = np.hstack((np.nan, np.diff(spots)))
+dvs = np.hstack((nan, np.diff(vars)))
 
 def init(spots, nvols, k):
     return tile(np.maximum(0,spots-k), (nvols,1)).T
@@ -51,8 +55,8 @@ def init(spots, nvols, k):
 Vi = init(spots, nvols, k)
 V = np.copy(Vi)
 bs, delta = [x for x in bs_call_delta(spots[:,newaxis][trims,:], k, r,
-                                            np.sqrt(vars[:nvols])[newaxis,:], t)]
-hs = hs_call(spots[trims], k, r, np.sqrt(vars[:nvols]),
+                                            np.sqrt(vars[trimv])[newaxis,:], t)]
+hs = hs_call(spots[trims], k, r, np.sqrt(vars[trimv]),
              t, kappa, theta, sigma, rho)
 
 L1_ = []
@@ -61,7 +65,7 @@ start = time()
 print "Building As(s)",
 sys.stdout.flush()
 fst, snd = nonuniform_center_coefficients(dss)
-for j, v in enumerate(vars[:nvols]):
+for j, v in enumerate(vars):
     mu_s = r*spots
     gamma2_s = 0.5*v*spots**2
 
@@ -95,8 +99,8 @@ for j, v in enumerate(vars[:nvols]):
     R1_.append((Rs + Rss).copy())
 print time() - start
 
-mu_v = kappa*(theta - vars[:nvols])
-gamma2_v = 0.5*sigma**2*vars[:nvols]
+mu_v = kappa*(theta - vars)
+gamma2_v = 0.5*sigma**2*vars
 
 L2_ = []
 R2_ = []
@@ -113,7 +117,7 @@ for i, s in enumerate(spots):
     # Av.data[2,:]   *= 0
     # Av.data[2,:-1] *= mu_v[1:]
 
-    Av.data[1:-1] = -1  # This is to cancel out the previous value so we can
+    Av.data[1,-1] = -1  # This is to cancel out the previous value so we can
                         # set the dirichlet boundary condition in R.
                         # Then we have U_i + -U_i + R
 
@@ -228,7 +232,7 @@ line_width = 2
 markers = ['--', '--', ':', '--']
 
 def p1(V, analytical, spots, vars, marker_idx, label):
-    plot((spots/k*100)[trims][front:-back],
+    plot((spots/k*100)[front:-back],
          (V-analytical)[front:-back],
          markers[marker_idx], lw=line_width, label=label)
     title("Error in Price")
@@ -247,24 +251,24 @@ def p2(V, analytical, spots, vars, marker_idx, label):
 p = p2
 
 # V = impl(Vi,dt, int(t/dt))
-# V = V[trims,:]
-# print V[ids] - bs[ids]
+# V = V[trims,trimv]
+# print V[ids,:][:,idv] - bs[ids,:][:,idv]
 # dVds = center_diff(V)/(ds)
-# p(V, spots, vars[:nvols], 1, "impl")
+# p(V, spots[trims], vars[trimv], 1, "impl")
 
 # V = crank(Vi, L1_, R1_, dt, int(t/dt))
-# V = V[trims,:]
-# print V[ids] - bs[ids]
+# V = V[trims,trimv]
+# print V[ids,:][:,idv] - bs[ids,:][:,idv]
 # dVds = center_diff(V)/(ds)
-# p(V, spots[trims], vars[:nvols], 2, "crank")
+# p(V, spots[trims], vars[trimv], 2, "crank")
 
 ## Rannacher smoothing to damp oscilations at the discontinuity
 V = impl(Vi, L1_, R1_, 0.5*dt, 4)
 V = crank(V, L1_, R1_, dt, int(t/dt)-2)
-V = V[trims,:]
-print V[ids] - bs[ids]
-p(V, bs, spots[trims], vars[:nvols], 3, "smooth")
-p(V, hs, spots[trims], vars[:nvols], 3, "smooth")
+V = V[trims,:][:,trimv]
+print V[ids,:][:,idv] - bs[ids,:][:,idv]
+p(V, bs, spots[trims], vars[trimv], 3, "smooth")
+p(V, hs, spots[trims], vars[trimv], 3, "smooth")
 
 if p is p1:
     show()
