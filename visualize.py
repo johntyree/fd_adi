@@ -3,6 +3,7 @@
 import numpy as np
 import pylab
 from mpl_toolkits.mplot3d import axes3d
+from utils import center_diff
 
 def filterprint(A, prec=1, fmt="f", predicate=lambda x: x == 0, blank='- '):
     """
@@ -140,17 +141,23 @@ def plot_delta_err(V, spots, k, vars, label=None, ids=slice(None)):
     pylab.ylabel("Error")
     pylab.legend(loc=0)
 
-def plot_dUdv(vars, V, bs, j=16):
-    pylab.plot(center_diff(bs[j,:]), label="BS")
-    pylab.plot(center_diff(V[-1][j,:]), label="ADI")
+def plot_dUdv(vars, V, bs, i=16):
+    print i
+    print bs.shape
+    print V.shape
+    dUdv = center_diff(V[i,:])/center_diff(vars)
+    dUdbs = center_diff(bs[i,:])/center_diff(vars)
+    # pylab.plot(vars, center_diff(bs[i,:]), label="BS")
+    pylab.plot(vars, dUdbs, label="BS")
+    pylab.plot(vars, dUdv, label="ADI")
     pylab.title("First deriv w.r.t. var")
     pylab.ylabel(r"$\frac{\partial U}{\partial v}$")
     pylab.legend(loc=0)
     pylab.show()
 
-def plot_d2Udv2(vars, V, bs, j=16):
-    pylab.plot(vars, center_diff(center_diff(bs[j,:])), label="BS")
-    pylab.plot(vars, center_diff(center_diff(V[-1][j,:])), label="ADI")
+def plot_d2Udv2(vars, V, bs, i=16):
+    pylab.plot(vars, center_diff(center_diff(bs[i,:])), label="BS")
+    pylab.plot(vars, center_diff(center_diff(V[i,:])), label="ADI")
     pylab.title("Second deriv w.r.t. var")
     pylab.ylabel(r"$\frac{\partial^2 U}{\partial v^2}$")
     pylab.legend(loc=0)

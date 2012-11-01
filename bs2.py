@@ -16,7 +16,7 @@ k = 100.0
 r = 0.06
 t = 1.0
 v0 = 0.2**2
-dt = 1/30.0
+dt = 1/100.0
 nspots = 20000
 nspots += not (nspots%2)
 

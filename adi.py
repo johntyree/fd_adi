@@ -1,82 +1,61 @@
 #!/usr/bin/env python
-"""Description of file."""
+"""Demonstration of 1D Black Scholes using FTCS BTCS CTCS and Smoothed CTCS."""
 
-
-# from mpl_toolkits.mplot3d import axes3d
-# import matplotlib.pyplot as plt
-
-from pylab import *
 import numpy as np
-# import scipy.stats as sp
-# import scipy as sp
-from math import pow
+from pylab import *
+from utils import fp, wireframe
+def w(m): wireframe(m,spots,sqrt(vars)); show()
 
+def center_diff(xs):
+    dx = np.zeros_like(xs,dtype=float)
+    dx[:-1]  += np.diff(xs)
+    dx[1:]   += np.diff(xs[::-1])[::-1]*-1
+    dx[1:-1] *= 0.5
+    return dx
 
-import time
+def g(x, K, c, p): return K + c/p * sinh(p*x + arcsinh(-p*K/c))
+def sinh_space(exact, high, density, size):
+    c = float(density)
+    K = float(exact)
+    Smax = float(high)
+    p = scipy.optimize.root(lambda p: g(1.0, K, c, p)-1.0, -1)
+    print p.success, p.r, g(1.0, K, c, p.r)-1
+    p = p.r
+    deps = 1./size * (arcsinh((Smax - K)*p/c) - arcsinh(-p*K/c))
+    eps = arcsinh(-p*K/c) + arange(size)*deps
+    space = K + c/p * sinh(eps)
+    return space
 
-def init(xs, vs, k):
-    u = np.ones((len(xs),len(vs))).T * np.exp(xs)
+# x = np.log(100)
+# spot = 100
+# k = 100.
+# r = 0.06
+# t = 1.
+# v0 = 0.2**2
+# dt = 1/30.
+# nspots = 200
+
+# vars = array(linspace(0.01,10,100))
+# # vars = array([2., 2.])**2
+# nvols = len(vars)
+# idv = find(vars == v0)
+
+# nspots += not (nspots%2)
+# xs = np.linspace(-1, 1, nspots)
+# xs = 3*np.sqrt(5)*xs*x + x
+# # xs = sinh_space(x, 3*np.sqrt(v0)*x + x, 0.93, nspots)
+# # xs = sinh_space(x, log(200), 1., nspots)
+# spots = np.exp(xs)
+# dxs = np.hstack((nan, np.diff(xs)))
+# ids = (0 < np.exp(xs)) & (np.exp(xs) < 1200)
+# idx = find(xs == x)
+# # dx = dxs[1]
+
+def init(spots, vars, k):
+    u = np.ones((len(spots),len(vars))).T * spots
     u = u.T
     return np.maximum(0, u-k)
 
-def D(dim, boundary=False):
-    domain = np.arange(dim)
-    return discrete_first(domain, boundary)
-
-def D2(dim, boundary=False):
-    domain = np.arange(dim)
-    return discrete_second(domain, boundary)
-
-def discrete_first(domain, boundary=False):
-    '''Discrete first derivative operator with no boundary.'''
-    operator = np.zeros((len(domain), len(domain)))
-    (xdim, ydim) = np.shape(operator)
-    if boundary:
-        operator[0,1] = 0.5
-    else:
-        xstart, xend = 1, xdim-1
-        ystart, yend = 1, ydim-1
-    for i in xrange(xstart, xend):
-        for j in xrange(1, ydim-1):
-            if i == j:
-                operator[i][j-1] = -0.5
-                operator[i][j+1] =  0.5
-    # operator[-1][-2] = -1
-    # operator[-1][-1] =  1
-    return operator
-
-def discrete_second(domain, boundary=False):
-    '''Discrete second derivative operator with no boundary.'''
-    operator = np.zeros((len(domain), len(domain)))
-    (xdim, ydim) = np.shape(operator)
-    if boundary:
-        xstart, xend = 0, xdim
-        ystart, yend = 0, ydim
-    else:
-        xstart, xend = 1, xdim-1
-        ystart, yend = 1, ydim-1
-    for i in xrange(xstart, xend):
-        for j in xrange(ystart, yend):
-            if i == j:
-                operator[i][j-1] =  1
-                operator[i][j  ] = -2
-                operator[i][j+1] =  1
-    return operator
-
-
-
-
-
-# def ddx(mat, n):
-    # '''Return nth discrete derivative w.r.t. x.'''
-    # return ddy(mat.T, n).T
-
-# def ddy(mat, n):
-    # '''Return nth discrete derivative w.r.t. y.'''
-    # ret = mat
-    # for i in range(n):
-        # ret = discrete_first(ret).dot(ret)
-    # return ret
 
 def exponential_space(low, high, exact, ex, n):
     v = np.zeros(n);

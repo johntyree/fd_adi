@@ -152,6 +152,7 @@ def crank(V,dt,n):
     L.data *= dt
     L.data[1,:] += 1
     R  = (Rs + Rss)*dt
+
     Li = As.copy()
     Li.data += Ass.data
     Li.data[1,:] -= r
