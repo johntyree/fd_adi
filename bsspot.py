@@ -24,10 +24,9 @@ r = 0.06
 t = 1
 # v0 = 3
 dt = 1/30.0
-nspots = 20000
-nspots += not (nspots%2)
+nspots = 2000
 # spots = linspace(0,1400,nspots)
-spots = sinh_space(k, 20000, 10, nspots)
+spots = sinh_space(k, 200000, 100, nspots+1)[1:]
 # plot(spots)
 # title("Spots")
 # show()
@@ -45,8 +44,8 @@ dss = np.hstack((np.nan, np.diff(spots)))
 
 spotdensity = 0.  # 0 is linear
 # varexp = 1        # 1 is linear
-vars = array((1.,3.,2.))
-nvols = 3
+vars = array((0.01,0.2,1.,4))
+nvols = 4
 # dvs = np.hstack((nan, np.diff(vars[:nvols])))
 
 def init(spots, nvols, k):
@@ -55,7 +54,7 @@ def init(spots, nvols, k):
 
 Vi = init(spots, nvols, k)
 V = np.copy(Vi)
-bs, delta = [x[trims,:] for x in bs_call_delta(spots[:,newaxis], k, r,
+bs, delta = [x for x in bs_call_delta(spots[:,newaxis], k, r,
                                             np.sqrt(vars[:nvols])[newaxis,:], t)]
 
 L1_ = []
@@ -195,7 +194,7 @@ def crank(V,L1,R1x,dt,n):
     for j in xrange(nvols):
         L1e[j].data *= dt
         L1e[j].data[1,:] += 1
-        R1[j]  = (Rs + Rss)*dt
+        R1[j]  *= dt
         L1i[j].data *= -dt
         L1i[j].data[1,:] += 1
 
