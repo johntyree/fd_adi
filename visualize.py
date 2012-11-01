@@ -40,8 +40,9 @@ def lineplot(domain, xs, ys=None, ax=None):
 def wireframe(domain, xs, ys, ax=None):
     """Convenience func for plotting a wireframe."""
     if domain.shape != (len(xs), len(ys)):
-        print "Domain shape %s does match axes %s!." % (domain.shape, (len(xs),
-                                                                    len(ys)))
+        print "Domain shape %s does match axes %s." % (domain.shape, (len(xs),
+                                                                       len(ys)))
+        return
     if ax is None:
         fig = pylab.figure()
         ax = fig.add_subplot(111, projection='3d')
@@ -66,8 +67,9 @@ def wireframe(domain, xs, ys, ax=None):
 def surface(domain, xs, ys, ax=None):
     """Convenience func for plotting a surface."""
     if domain.shape != (len(xs), len(ys)):
-        print "Domain shape %s does match axes %s!." % (domain.shape, (len(xs),
+        print "Domain shape %s does match axes %s." % (domain.shape, (len(xs),
                                                                     len(ys)))
+        return
     if ax is None:
         fig = pylab.figure()
         ax = fig.add_subplot(111, projection='3d')
