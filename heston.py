@@ -61,9 +61,10 @@ class HestonCos(object):
 
     def solve(self):
         ret = np.zeros_like(self.S)
-        ok = np.exp(np.log(self.S)) * 5*np.sqrt(self.vol) > self.K
+        # ok = np.exp(np.log(self.S)) * 5*np.sqrt(self.vol) > self.K
+        # ok = slice(None)
         # print "Cutoff:", min(self.S[ok]),
-        ret[ok] = self.COS(self.S[ok],
+        ret = self.COS(self.S,
                         self.K,
                         self.r,
                         self.vol**2,
@@ -219,7 +220,7 @@ class HestonFundamental(object):
         return res * 1./np.pi + 0.5
 
     def solve(self):
-        ok = np.exp(np.log(self.spot)) * 5*np.sqrt(np.sqrt(self.var)) > self.strike
+        # ok = np.exp(np.log(self.spot)) * 5*np.sqrt(np.sqrt(self.var)) > self.strike
         self.u = 0.5
         self.b = self.mean_reversion + self.lam - self.rho * self.sig
         P1 = self.P()
