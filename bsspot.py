@@ -18,31 +18,32 @@ from time import time
 rate_Spot_Var = 0.5
 
 
-spot = 100.0
+spot = 103.0
 k = 100.0
-r = 0.00
+r = 0.06
 t = 1
 v0 = 0.2
-dt = 1/30.0
+dt = 1/100.0
 
 kappa = 1
-theta = 1
+theta = 0.2
 sigma = 0.2
 rho = 0
 
 nspots = 200
-nvols = 100
+nvols = 200
 
-spotdensity = 10.  # infinity is linear?
-varexp = 4
-spots = sinh_space(k, 2000, spotdensity, nspots+1)[1:]
-vars = exponential_space(0.01, v0, 10., varexp, nvols)
+spotdensity = 10.0  # infinity is linear?
+varexp = 3
+spots = sinh_space(k, 2000, spotdensity, nspots)
+vars = exponential_space(0.00, v0, 10., varexp, nvols)
 # plot(spots); title("Spots"); show()
 # plot(vars); title("Vars"); show()
 
-trims = (k/2  < spots) & (spots < k*2.0)
+trims = (0 < spots) & (spots < k*2.0)
+trimv = (v0*0.1 < vars) & (vars < v0*2.0)
+# trims = slice(None)
 # trimv = slice(None)
-trimv = (0.00 < vars) & (vars < 4)
 
 
 ids = isclose(spots[trims], spot)
@@ -56,9 +57,9 @@ def init(spots, nvols, k):
 
 Vi = init(spots, nvols, k)
 V = np.copy(Vi)
-bs, delta = [x for x in bs_call_delta(spots[:,newaxis][trims,:], k, r,
-                                            np.sqrt(vars[trimv])[newaxis,:], t)]
-hs = hs_call(spots[trims], k, r, np.sqrt(vars[trimv]),
+bs, delta = [x for x in bs_call_delta(spots[:,newaxis], k, r,
+                                            np.sqrt(vars)[newaxis,:], t)]
+hs = hs_call(spots, k, r, np.sqrt(vars),
              t, kappa, theta, sigma, rho)
 
 L1_ = []
@@ -151,12 +152,12 @@ for i, s in enumerate(spots):
     R2_.append(Rv + Rvv)
 print time() - start
 
-def impl(V,L1,R1x,dt,n):
+def impl(V,L1,R1x,L2,R2x,dt,n):
     V = V.copy()
     L1i = [x.copy() for x in L1]
     R1  = [x.copy() for x in R1x]
-    L2i = [x.copy() for x in L2_]
-    R2  = [x.copy() for x in R2_]
+    L2i = [x.copy() for x in L2]
+    R2  = [x.copy() for x in R2x]
 
     # L  = (As + Ass - r*np.eye(nspots))*-dt + np.eye(nspots)
     for j in xrange(nvols):
@@ -174,6 +175,9 @@ def impl(V,L1,R1x,dt,n):
     print "Impl:",
     for k in xrange(n):
         if not k % print_step:
+            if isnan(V).any():
+                print "Impl fail @ t = %f (%i steps)" % (dt*k, k)
+                return zeros_like(V)
             print int(k*to_percent),
         for j in xrange(nvols):
             V[:,j] = spl.solve_banded((1,1), L1i[j].data, V[:,j] + R1[j], overwrite_b=True)
@@ -182,16 +186,16 @@ def impl(V,L1,R1x,dt,n):
     print "  (%fs)" % (time() - start)
     return V
 
-def crank(V,L1,R1x,dt,n):
+def crank(V,L1,R1x,L2,R2x,dt,n):
     V = V.copy()
     dt *= 0.5
 
     L1e = [x.copy() for x in L1]
     L1i = [x.copy() for x in L1]
     R1  = [x.copy() for x in R1x]
-    L2e = [x.copy() for x in L2_]
-    L2i = [x.copy() for x in L2_]
-    R2  = [x.copy() for x in R2_]
+    L2e = [x.copy() for x in L2]
+    L2i = [x.copy() for x in L2]
+    R2  = [x.copy() for x in R2x]
 
     for j in xrange(nvols):
         L1e[j].data *= dt
@@ -214,6 +218,9 @@ def crank(V,L1,R1x,dt,n):
     print "Crank:",
     for k in xrange(n):
         if not k % print_step:
+            if isnan(V).any():
+                print "Crank fail @ t = %f (%i steps)" % (dt*k, k)
+                return zeros_like(V)
             print int(k*to_percent),
         for j in xrange(nvols):
             V[:,j] = L1e[j].dot(V[:,j]) + R1[j]
@@ -242,7 +249,7 @@ def p1(V, analytical, spots, vars, marker_idx, label):
     ylabel("Error")
     legend(loc=0)
 
-def p2(V, analytical, spots, vars, marker_idx, label):
+def p2(V, analytical, spots, vars, marker_idx=0, label=""):
     wireframe(V-analytical, spots, vars)
     title("Error in Price (%s)" % label)
     xlabel("Var")
@@ -252,25 +259,22 @@ def p2(V, analytical, spots, vars, marker_idx, label):
 
 p = p2
 
-# V = impl(Vi,dt, int(t/dt))
-# V = V[trims,trimv]
-# print V[ids,:][:,idv] - bs[ids,:][:,idv]
-# dVds = center_diff(V)/(ds)
-# p(V, spots[trims], vars[trimv], 1, "impl")
-
-# V = crank(Vi, L1_, R1_, dt, int(t/dt))
-# V = V[trims,trimv]
-# print V[ids,:][:,idv] - bs[ids,:][:,idv]
-# dVds = center_diff(V)/(ds)
-# p(V, spots[trims], vars[trimv], 2, "crank")
-
-## Rannacher smoothing to damp oscilations at the discontinuity
-V = impl(Vi, L1_, R1_, 0.5*dt, 4)
-V = crank(V, L1_, R1_, dt, int(t/dt)-2)
+V = impl(Vi,L1_, R1_, L2_, R2_, dt, int(t/dt))
 V = V[trims,:][:,trimv]
 print V[ids,:][:,idv] - bs[ids,:][:,idv]
-p(V, bs, spots[trims], vars[trimv], 3, "smooth")
-p(V, hs, spots[trims], vars[trimv], 3, "smooth")
+p(V, hs[trims,:][:,trimv], spots[trims], vars[trimv], 1, "impl")
+
+V = crank(Vi,L1_, R1_, L2_, R2_, dt, int(t/dt))
+V = V[trims,:][:,trimv]
+print V[ids,:][:,idv] - bs[ids,:][:,idv]
+p(V, hs[trims,:][:,trimv], spots[trims], vars[trimv], 2, "crank")
+
+## Rannacher smoothing to damp oscilations at the discontinuity
+V = impl(Vi,L1_, R1_, L2_, R2_, 0.5*dt, 4)
+V = crank(Vi,L1_, R1_, L2_, R2_, dt, int(t/dt)-2)
+V = V[trims,:][:,trimv]
+print V[ids,:][:,idv] - bs[ids,:][:,idv]
+p(V, hs[trims,:][:,trimv], spots[trims], vars[trimv], 3, "smooth")
 
 if p is p1:
     show()
