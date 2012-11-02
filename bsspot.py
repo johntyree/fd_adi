@@ -1,6 +1,45 @@
 #!/usr/bin/env python
 """Demonstration of 2D Heston using BTCS CTCS and Smoothed CTCS."""
 
+# Defaults: spot = k = 100
+#           v0 = 0.2
+#           dt = 1/100.0
+#           kappa = 1
+#           theta = v0
+#           sigma = 0.2
+#           rho = 0
+#           nspots = 200
+#           nvols = 200
+
+# Pretty much everything goes to infinity at high vol boundary. Trimming shows
+# the interesting area looks reasonable.
+
+# High theta oscillates wildly at (vol < v0)
+# theta = 3.2
+
+# For low theta, Analytical has problems at low vol and spot (FD ok)
+# theta = 0.01
+
+# At high sigma, FD explodes around strike at low vol. Analytical jagged but
+# better.
+# sigma = 3
+# Still well behaved at sigma = 1
+
+# Crank explodes around strike at low vol if nvols is low. Implicit ok.
+# nvols = 40
+# sigma = 1
+# With sigma at 0.2 again, both explode.
+
+# Well behaved when nspots is low
+# nspots = 40
+
+# Crank has small oscillations when dt is exactly 1/10.0. Implicit is way way too large. O(5000)
+# dt = 1/10.0
+# At other large dt, everything is ok again.
+# dt = 1/2.0 ... 1/8.0 .. 1/11.0.. etc
+
+# At small dt, impl and crank are both ok, but with big dip at strike and low
+# vol. Err O(0.05)
 
 import sys
 import numpy as np
@@ -18,7 +57,7 @@ from time import time
 rate_Spot_Var = 0.5
 
 
-spot = 103.0
+spot = 80.0
 k = 100.0
 r = 0.06
 t = 1
@@ -31,7 +70,7 @@ sigma = 0.2
 rho = 0
 
 nspots = 200
-nvols = 200
+nvols = 40
 
 spotdensity = 10.0  # infinity is linear?
 varexp = 3
@@ -269,12 +308,12 @@ V = V[trims,:][:,trimv]
 print V[ids,:][:,idv] - bs[ids,:][:,idv]
 p(V, hs[trims,:][:,trimv], spots[trims], vars[trimv], 2, "crank")
 
-## Rannacher smoothing to damp oscilations at the discontinuity
-V = impl(Vi,L1_, R1_, L2_, R2_, 0.5*dt, 4)
-V = crank(Vi,L1_, R1_, L2_, R2_, dt, int(t/dt)-2)
-V = V[trims,:][:,trimv]
-print V[ids,:][:,idv] - bs[ids,:][:,idv]
-p(V, hs[trims,:][:,trimv], spots[trims], vars[trimv], 3, "smooth")
+# ## Rannacher smoothing to damp oscilations at the discontinuity
+# V = impl(Vi,L1_, R1_, L2_, R2_, 0.5*dt, 4)
+# V = crank(Vi,L1_, R1_, L2_, R2_, dt, int(t/dt)-2)
+# V = V[trims,:][:,trimv]
+# print V[ids,:][:,idv] - bs[ids,:][:,idv]
+# p(V, hs[trims,:][:,trimv], spots[trims], vars[trimv], 3, "smooth")
 
 if p is p1:
     show()
