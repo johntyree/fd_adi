@@ -37,8 +37,12 @@ def lineplot(domain, xs, ys=None, ax=None):
     return lines, ax
 
 
-def wireframe(domain, xs, ys, ax=None):
+def wireframe(domain, xs=None, ys=None, ax=None):
     """Convenience func for plotting a wireframe."""
+    if xs is None:
+        xs = np.arange(domain.shape[0])
+    if ys is None:
+        ys = np.arange(domain.shape[1])
     if domain.shape != (len(xs), len(ys)):
         print "Domain shape %s does match axes %s." % (domain.shape, (len(xs),
                                                                        len(ys)))
@@ -66,6 +70,10 @@ def wireframe(domain, xs, ys, ax=None):
 
 def surface(domain, xs, ys, ax=None):
     """Convenience func for plotting a surface."""
+    if xs is None:
+        xs = np.arange(domain.shape[0])
+    if ys is None:
+        ys = np.arange(domain.shape[1])
     if domain.shape != (len(xs), len(ys)):
         print "Domain shape %s does match axes %s." % (domain.shape, (len(xs),
                                                                     len(ys)))
@@ -157,36 +165,25 @@ def plot_price(V, spots, k, vars, label=None, ids=slice(None)):
     pylab.legend(loc=0)
 
 
-def plot_dUds_err(V, bs, spots, vars, plotter=surface):
+def plot_dUds_err(V, bs, spots, vars, plotter=wireframe):
     dUds = center_diff(V,axis=0)/center_diff(vars)
     dbsds = center_diff(bs,axis=0)/center_diff(vars)
     plotter(dUds - dbsds, spots, vars)
-    # plotter(dUds, spots, vars)
     pylab.title("Error in $\Delta$")
     pylab.xlabel("Var")
     pylab.ylabel("% of strike")
 
-def plot_dUdv(V, bs, spots, vars, plotter=surface):
+def plot_dUdv(V, spots, vars, plotter=wireframe):
     dUdv = center_diff(V,axis=1)/center_diff(vars)
-    dbsdv = center_diff(bs,axis=1)/center_diff(vars)
     plotter(dUdv, spots, vars)
-    pylab.title("First deriv w.r.t. var")
-    pylab.xlabel("Var")
-    pylab.ylabel("% of strike")
-    plotter(dbsdv, spots, vars)
     pylab.title("First deriv w.r.t. var")
     pylab.xlabel("Var")
     pylab.ylabel("% of strike")
     pylab.show()
 
-def plot_d2Udv2(V, bs, spots, vars, plotter=surface):
+def plot_d2Udv2(V, spots, vars, plotter=wireframe):
     d2Udv2 = center_diff(V,n=2,axis=1)/center_diff(vars, 2)
-    d2bsdv2 = center_diff(bs,n=2,axis=1)/center_diff(vars, 2)
     plotter(d2Udv2, spots, vars)
-    pylab.title("Second deriv w.r.t. var")
-    pylab.xlabel("Var")
-    pylab.ylabel("% of strike")
-    plotter(d2bsdv2, spots, vars)
     pylab.title("Second deriv w.r.t. var")
     pylab.xlabel("Var")
     pylab.ylabel("% of strike")

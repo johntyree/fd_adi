@@ -22,7 +22,7 @@ def D2(dim):
     return scipy.sparse.dia_matrix((operator, (1,0,-1)), shape=(dim,dim))
 
 
-def center_diff(domain, n=1, axis=0):
+def center_diff(domain, n=1, axis=-1):
     """Like numpy.diff, but centered instead of forward."""
     xs = domain.copy()
     dx = np.zeros_like(xs,dtype=float)
