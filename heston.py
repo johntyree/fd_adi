@@ -99,7 +99,7 @@ class HestonCos(object):
                - np.sin(k*np.pi*(c-a) / (b-a))
               ) * (b-a) / (k * np.pi)
 
-        ret = np.hstack(((d-c), ret[:,1:]))
+        ret = np.hstack(((d-c), ret[1:]))
         return ret
 
     def CF(self, omega, r, var, T, kappa, theta, sigma, rho):
@@ -117,7 +117,7 @@ class HestonCos(object):
         global U, a, b, U_tiled, CF_tiled, cf
         N = self.N
         L = 12
-        x = np.log(S/K)[:,np.newaxis]
+        x = np.log(S/K)
         # var = var[:,np.newaxis,np.newaxis]
         c1 = r*T + (1 - np.exp(-kappa*T))*(theta-var)/(2*kappa) - 0.5*theta*T
         c2 = 0.125*kappa**(-3) * (sigma*T*kappa*np.exp(-kappa*T)*(var-theta)*(8*kappa*rho - 4*sigma)
@@ -130,10 +130,9 @@ class HestonCos(object):
         a = x + c1-L*np.sqrt(abs(c2))
         b = x + c1+L*np.sqrt(abs(c2))
         # print "a, b", a.shape
-        k = np.arange(N)[np.newaxis,:]
+        k = np.arange(N)
         # print "k", k.shape
 
-        NPOINTS = max(len(S), len(K))
 
         U = 2./(b-a)*(self.xi(k,a,b,0,b) - self.psi(k,a,b,0,b))
         # print "U", U.shape, fp(U,prec)
@@ -149,7 +148,7 @@ class HestonCos(object):
         # print "p5 =", p5
 
         cf = self.CF(k*np.pi/(b-a), r, var, T, kappa, theta, sigma, rho)
-        cf[:,0] *= 0.5
+        cf[0] *= 0.5
         # print "CF", cf.shape, fp(cf, prec)
         # CF_tiled = np.tile(cf, (NPOINTS,1))
         CF_tiled = cf
@@ -260,11 +259,14 @@ class HestonFundamental(object):
         return np.maximum(0, self.spot * P1 - self.strike * P2 * discount)
 
 def hs_call(s, k, r, vol, t, kappa, theta, sigma, rho, HFUNC=HestonCos):
-    h = HFUNC(s, k, r, vol, t, kappa, theta, sigma, rho).solve()
-    # for j in range(len(vol)):
-        # h.vol = vol[j]
-        # ret[:,j] = h.solve()
-    return h
+    h = HFUNC(0, k, r, 0, t, kappa, theta, sigma, rho)
+    ret = np.zeros((len(s), len(vol)))
+    for i in range(len(s)):
+        h.S = s[i]
+        for j in range(len(vol)):
+            h.vol = vol[j]
+            ret[i,j] = h.solve()
+    return ret
 
 
 def hs_stream(s, k, r, v, dt, kappa, theta, sigma, rho, HFUNC=HestonCos):
