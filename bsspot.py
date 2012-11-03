@@ -70,7 +70,7 @@ sigma = 0.2
 rho = 0
 
 nspots = 200
-nvols = 40
+nvols = 200
 
 spotdensity = 10.0  # infinity is linear?
 varexp = 3
