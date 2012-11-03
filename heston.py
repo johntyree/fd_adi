@@ -10,6 +10,9 @@ import scipy.stats
 import scipy.integrate
 import numpy as np
 
+from visualize import fp
+prec = 3
+
 
 I = 1j
 
@@ -19,7 +22,7 @@ ALL = BLACKSCHOLES | HESTON
 
 class HestonCos(object):
     def __init__(self, S, K, r, vol, T, kappa, theta, sigma, rho, N=2**8):
-        r,vol,T,kappa,theta,sigma,rho = map(float, [r,vol,T,kappa, theta, sigma,rho])
+        r,T,kappa,theta,sigma,rho = map(float, [r,T,kappa, theta, sigma,rho])
         if hasattr(S, '__iter__') and hasattr(K, '__iter__'):
             raise TypeError("Can only have np.array(K) or np.array(S), not both.")
         elif hasattr(K, '__iter__'):
@@ -32,6 +35,11 @@ class HestonCos(object):
             S = np.array([S], dtype=float)
             K = np.array([K], dtype=float)
 
+        if hasattr(vol, '__iter__'):
+            vol = np.array(vol, dtype=float)
+        else:
+            vol = np.array((vol,), dtype=float)
+
         self.S     = S
         self.K     = K
         self.r     = r
@@ -41,7 +49,7 @@ class HestonCos(object):
         self.theta = theta
         self.sigma = sigma
         self.rho   = rho
-        self.N = N
+        self.N = 2**8
 
     def __str__(self):
         return '\n'.join([
@@ -71,13 +79,13 @@ class HestonCos(object):
                         self.T,
                         self.kappa,
                         self.theta,
-                        self.rho,
                         self.sigma,
+                        self.rho,
                        )
         return ret
 
 
-    def xi(self, k,a,b,c,d):
+    def xi(self,k,a,b,c,d):
         return (
             1./(1+(k*np.pi/(b-a))**2) *
             (np.cos(k*np.pi*(d-a)/(b-a)) * np.exp(d)
@@ -87,51 +95,69 @@ class HestonCos(object):
         )
 
     def psi(self, k, a, b, c, d):
-        if not hasattr(k, '__iter__'):
-            k = np.array([k])
-        ret = np.hstack([d-c,
-                     (np.sin(k[1:]*np.pi*(d-a) / (b-a))
-                      - np.sin(k[1:]*np.pi*(c-a) / (b-a))
-                     ) * (b-a) / (k[1:] * np.pi)
-                    ])
+        ret = (np.sin(k*np.pi*(d-a) / (b-a))
+               - np.sin(k*np.pi*(c-a) / (b-a))
+              ) * (b-a) / (k * np.pi)
+
+        ret = np.hstack(((d-c), ret[:,1:]))
         return ret
 
     def CF(self, omega, r, var, T, kappa, theta, sigma, rho):
         D = np.sqrt((kappa - 1j*rho*sigma*omega)**2 + (omega**2 + 1j*omega)*sigma**2)
         G = (kappa - 1j*rho*sigma*omega - D) / (kappa - 1j*rho*sigma*omega + D)
+        # print "D", D.shape, fp(D, prec)
+        # print "G", G.shape, fp(G, prec)
         return (np.exp(1j * omega * r * T + var/sigma**2 *
             ((1-np.exp(-D*T))/(1-G*np.exp(-D*T)))*(kappa - 1j*rho*sigma*omega - D))
             * np.exp((kappa*theta)/sigma**2 * (T*(kappa - 1j*rho*sigma*omega - D) -
                                           2*np.log((1-G*np.exp(-D*T))/(1-G)))))
 
-    def COS(self, S, K, r, var, T, kappa, theta, rho, sigma):
+    def COS(self, S, K, r, var, T, kappa, theta, sigma, rho):
+        # Axes: [var, S, cosines]
+        global U, a, b, U_tiled, CF_tiled, cf
         N = self.N
         L = 12
-        c1 = r*T + (1 - np.exp(-kappa*T))*(theta-var/(2*kappa)) - 0.5*theta*T
+        x = np.log(S/K)[:,np.newaxis]
+        # var = var[:,np.newaxis,np.newaxis]
+        c1 = r*T + (1 - np.exp(-kappa*T))*(theta-var)/(2*kappa) - 0.5*theta*T
         c2 = 0.125*kappa**(-3) * (sigma*T*kappa*np.exp(-kappa*T)*(var-theta)*(8*kappa*rho - 4*sigma)
             + kappa*rho*sigma*(1-np.exp(-kappa*T))*(16*theta - 8*var)
             + 2*theta*kappa*T*(-4*kappa*rho*sigma+sigma**2+4*kappa**2)
             + sigma**2*((theta - 2*var) * np.exp(-2*kappa*T) + theta*(6*np.exp(-kappa*T) - 7) + 2*var)
             + 8*kappa**2*(var-theta)*(1-np.exp(-kappa*T)))
 
-        a = c1-L*np.sqrt(abs(c2))
-        b = c1+L*np.sqrt(abs(c2))
-        x = np.log(S/K)
-        k = np.arange(N)
+
+        a = x + c1-L*np.sqrt(abs(c2))
+        b = x + c1+L*np.sqrt(abs(c2))
+        # print "a, b", a.shape
+        k = np.arange(N)[np.newaxis,:]
+        # print "k", k.shape
 
         NPOINTS = max(len(S), len(K))
 
         U = 2./(b-a)*(self.xi(k,a,b,0,b) - self.psi(k,a,b,0,b))
-        U_tiled = np.tile(U[:,np.newaxis], (1, NPOINTS))
+        # print "U", U.shape, fp(U,prec)
+        # U_tiled = np.tile(U, (NPOINTS,1))
+        U_tiled = U
+        # print "U_tiled", U_tiled.shape
 
-        unit = np.hstack((.5, np.ones(N-1)))
+        # print(S, K, r, var, T, kappa, theta, sigma, rho)
+        # print "p1 =", p1
+        # print "p2 =", p2
+        # print "p3 =", p3
+        # print "p4 =", p4
+        # print "p5 =", p5
 
-        CF_tiled = np.tile(
-            self.CF(k*np.pi/(b-a), r, var, T, kappa, theta, sigma, rho)[:,np.newaxis],
-            (1,NPOINTS))
-        ret = unit.dot(
-            (CF_tiled * np.exp(1j*k[:,np.newaxis]*np.pi*(x-a)/(b-a))) * U_tiled)
-        ret = K * np.exp(-r*T) * ret.real
+        cf = self.CF(k*np.pi/(b-a), r, var, T, kappa, theta, sigma, rho)
+        cf[:,0] *= 0.5
+        # print "CF", cf.shape, fp(cf, prec)
+        # CF_tiled = np.tile(cf, (NPOINTS,1))
+        CF_tiled = cf
+        # print "CF_tiled", CF_tiled.shape
+        ret = (CF_tiled * np.exp(1j*k*np.pi*(x-a)/(b-a))) * U_tiled
+        # print "ret", ret.shape
+        # print K * np.exp(-r*T) * ret.real
+        ret = K * np.exp(-r*T) * ret.real.sum(axis=-1)
         return np.maximum(0, ret)
 
 
@@ -234,12 +260,11 @@ class HestonFundamental(object):
         return np.maximum(0, self.spot * P1 - self.strike * P2 * discount)
 
 def hs_call(s, k, r, vol, t, kappa, theta, sigma, rho, HFUNC=HestonCos):
-    ret = np.empty((len(s), len(vol)))
-    h = HFUNC(s, k, r, 0, t, kappa, theta, sigma, rho)
-    for j in range(len(vol)):
-        h.vol = vol[j]
-        ret[:,j] = h.solve()
-    return ret
+    h = HFUNC(s, k, r, vol, t, kappa, theta, sigma, rho).solve()
+    # for j in range(len(vol)):
+        # h.vol = vol[j]
+        # ret[:,j] = h.solve()
+    return h
 
 
 def hs_stream(s, k, r, v, dt, kappa, theta, sigma, rho, HFUNC=HestonCos):
@@ -289,11 +314,11 @@ def call(s=100, k=99, r=0.06, vol=0.2, t=1, kappa=1, theta=None,
             x = None
         ret.append(x)
     if method & COS:
-        try:
-            x = HestonCos(s,k,r,vol,t,kappa,theta,sigma,rho,N=NCOS).solve()
-        except ValueError, e:
-            print "COS failed:", e
-            x = None
+        # try:
+        x = HestonCos(s,k,r,vol,t,kappa,theta,sigma,rho,N=NCOS).solve()
+        # except ValueError, e:
+            # print "COS failed:", e
+            # x = None
         # except TypeError, e:
             # print "COS failed:", e
             # x = None
