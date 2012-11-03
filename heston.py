@@ -8,7 +8,6 @@ import time
 
 import scipy.stats
 import scipy.integrate
-import scipy.weave
 import numpy as np
 
 from visualize import fp
@@ -16,8 +15,6 @@ prec = 3
 
 
 I = 1j
-
-fp = lambda x, y: None
 
 BLACKSCHOLES, FUNDAMENTAL, COS = [2**i for i in range(3)]
 HESTON = FUNDAMENTAL | COS
@@ -101,9 +98,8 @@ class HestonCos(object):
         ret = (np.sin(k*np.pi*(d-a) / (b-a))
                - np.sin(k*np.pi*(c-a) / (b-a))
               ) * (b-a) / (k * np.pi)
-        # print "psi ret", ret.shape
-        # print "psi d-c", (d-c).shape
-        ret = np.dstack(((d-c), ret[:,:,1:]))
+
+        ret = np.hstack(((d-c), ret[:,1:]))
         return ret
 
     def CF(self, omega, r, var, T, kappa, theta, sigma, rho):
@@ -121,8 +117,8 @@ class HestonCos(object):
         global U, a, b, U_tiled, CF_tiled, cf
         N = self.N
         L = 12
-        x = np.log(S/K)[np.newaxis,:,np.newaxis]
-        var = var[:,np.newaxis,np.newaxis]
+        x = np.log(S/K)[:,np.newaxis]
+        # var = var[:,np.newaxis,np.newaxis]
         c1 = r*T + (1 - np.exp(-kappa*T))*(theta-var)/(2*kappa) - 0.5*theta*T
         c2 = 0.125*kappa**(-3) * (sigma*T*kappa*np.exp(-kappa*T)*(var-theta)*(8*kappa*rho - 4*sigma)
             + kappa*rho*sigma*(1-np.exp(-kappa*T))*(16*theta - 8*var)
@@ -134,29 +130,35 @@ class HestonCos(object):
         a = x + c1-L*np.sqrt(abs(c2))
         b = x + c1+L*np.sqrt(abs(c2))
         # print "a, b", a.shape
-        k = np.arange(N)[np.newaxis,np.newaxis,:]
+        k = np.arange(N)[np.newaxis,:]
         # print "k", k.shape
-        # print "var", var.shape
 
         NPOINTS = max(len(S), len(K))
 
         U = 2./(b-a)*(self.xi(k,a,b,0,b) - self.psi(k,a,b,0,b))
         # print "U", U.shape, fp(U,prec)
         # U_tiled = np.tile(U, (NPOINTS,1))
-        # U_tiled = U
+        U_tiled = U
         # print "U_tiled", U_tiled.shape
 
         # print(S, K, r, var, T, kappa, theta, sigma, rho)
+        # print "p1 =", p1
+        # print "p2 =", p2
+        # print "p3 =", p3
+        # print "p4 =", p4
+        # print "p5 =", p5
 
         cf = self.CF(k*np.pi/(b-a), r, var, T, kappa, theta, sigma, rho)
-        cf[:,:,0] *= 0.5
+        cf[:,0] *= 0.5
         # print "CF", cf.shape, fp(cf, prec)
-        ret = (cf * np.exp(1j*k*np.pi*(x-a)/(b-a))) * U
+        # CF_tiled = np.tile(cf, (NPOINTS,1))
+        CF_tiled = cf
+        # print "CF_tiled", CF_tiled.shape
+        ret = (CF_tiled * np.exp(1j*k*np.pi*(x-a)/(b-a))) * U_tiled
         # print "ret", ret.shape
         # print K * np.exp(-r*T) * ret.real
         ret = K * np.exp(-r*T) * ret.real.sum(axis=-1)
-        ret[np.isnan(ret)] = 0
-        return np.maximum(0, ret).T
+        return np.maximum(0, ret)
 
 
 
