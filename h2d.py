@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
-import scipy.weave
 import numpy as np
+import numexpr as ne
 
 I = 1j
 
@@ -71,39 +71,50 @@ class HestonCos(object):
 
 
     def xi(self,k,a,b,c,d):
-        k_pi_recip_b_a = k*np.pi/(b-a)
+        pi = np.pi
+        cos = np.cos
+        sin = np.sin
+        exp = np.exp
+        k_pi_recip_b_a = ne.evaluate("k*pi/(b-a)")
         caba = (c-a) * k_pi_recip_b_a
         daba = (d-a) * k_pi_recip_b_a
-        expd = np.exp(d)
-        expc = np.exp(c)
-        return (
-            (
-               (np.cos(daba) + k_pi_recip_b_a * np.sin(daba)) * expd
-             - (np.cos(caba) + k_pi_recip_b_a * np.sin(caba)) * expc
-            )
-           / (1+(k_pi_recip_b_a)**2)
-        )
+        expd = ne.evaluate("exp(d)")
+        expc = ne.evaluate("exp(c)")
+        return ne.evaluate("""(
+            ((cos(daba) + k_pi_recip_b_a * sin(daba)) * expd
+            - (cos(caba) + k_pi_recip_b_a * sin(caba)) * expc)
+            / (1+(k_pi_recip_b_a)**2))""")
 
     def psi(self, k, a, b, c, d):
+        sin = np.sin
         b_a = b - a
         kpi = k * np.pi
         k_pi_recip_b_a = kpi/(b_a)
         caba = (c-a) * k_pi_recip_b_a
         daba = (d-a) * k_pi_recip_b_a
-        ret = (np.sin(daba) - np.sin(caba)) * b_a / kpi
+        ret = ne.evaluate("(sin(daba) - sin(caba)) * b_a / kpi")
         ret = np.dstack(((d-c), ret[:,:,1:]))
         return ret
 
     def CF(self, omega, r, var, T, kappa, theta, sigma, rho):
-        p1 = kappa - 1j*rho*sigma*omega
-        D = np.sqrt(p1**2 + (omega**2 + 1j*omega)*sigma**2)
-        p0 = np.exp(-D*T)
-        p1p = p1 + D
-        p1 = p1 - D
-        G = p1 / (p1p)
+        pi = np.pi
+        cos = np.cos
+        sin = np.sin
+        exp = np.exp
+        sqrt = np.sqrt
+        log = np.log
+        p10 = ne.evaluate("kappa - (1j*rho*sigma)*omega")
+        D = ne.evaluate("sqrt(p10**2 + (omega**2 + 1j*omega)*sigma**2)")
+        p1p = p10 + D
+        p1m = p10 - D
+        G = p1m / p1p
+        p0 = ne.evaluate("exp(-D*T)")
         p2 = 1-G*p0
-        return (np.exp(1j*omega*r*T + var/sigma**2 * ((1-p0)/p2)*p1)
-                * np.exp((kappa*theta)/sigma**2 * (T*p1 - 2*np.log(p2/(1-G)))))
+        I = 1j
+        return ne.evaluate("""(
+              exp(I*omega*r*T + var/sigma**2 * ((1-p0)/p2)*p1m)
+            * exp(  (kappa*theta)/sigma**2
+                  * (T*p1m - 2*log(p2/(1-G)))))""")
 
     def COS(self, S, K, r, var, T, kappa, theta, sigma, rho):
         # Axes: [var, S, cosines]
@@ -113,39 +124,32 @@ class HestonCos(object):
         x = np.log(S/K)[np.newaxis,:,np.newaxis]
         var = var[:,np.newaxis,np.newaxis]
         var_theta = var - theta
-        c1 = r*T + (-var_theta)*((1 - np.exp(-kappa*T)*/(2*kappa)) - 0.5*theta*T
+        c1 = r*T + (-var_theta)*(1 - np.exp(-kappa*T))/(2*kappa) - 0.5*theta*T
 
         p1 = (sigma*T*kappa*np.exp(-kappa*T)*(8*kappa*rho - 4*sigma)) * (var_theta)
         p2 = (kappa*rho*sigma*(1-np.exp(-kappa*T))*8)*(-var_theta + var)
         p3 = 2*theta*kappa*T*(-4*kappa*rho*sigma+sigma**2+4*kappa**2)
         p4 = sigma**2*((-var_theta - var) * np.exp(-2*kappa*T) + theta*(6*np.exp(-kappa*T) - 7) + 2*var)
         p5 = (8*kappa**2*(1-np.exp(-kappa*T)))*(var_theta)
-        c2 = 0.125*kappa**(-3) * (p1 + p2 + p3 + p4 + p5)
+        c2 = ne.evaluate("0.125*kappa**(-3) * (p1 + p2 + p3 + p4 + p5)")
 
 
         a = x + c1-L*np.sqrt(abs(c2))
         b = x + c1+L*np.sqrt(abs(c2))
-        # print "a, b", a.shape
         k = np.arange(N)[np.newaxis,np.newaxis,:]
-        # print "k", k.shape
-        # print "var", var.shape
 
         NPOINTS = max(len(S), len(K))
 
-        U = 2./(b-a)*(self.xi(k,a,b,0,b) - self.psi(k,a,b,0,b))
-        # print "U", U.shape, fp(U,prec)
-        # U_tiled = np.tile(U, (NPOINTS,1))
-        # U_tiled = U
-        # print "U_tiled", U_tiled.shape
-
-        # print(S, K, r, var, T, kappa, theta, sigma, rho)
+        XI = self.xi(k,a,b,0,b)
+        PSI = self.psi(k,a,b,0,b)
+        U = ne.evaluate("2./(b-a)*(XI - PSI)")
 
         cf = self.CF(k*np.pi/(b-a), r, var, T, kappa, theta, sigma, rho)
         cf[:,:,0] *= 0.5
-        # print "CF", cf.shape, fp(cf, prec)
-        ret = (cf * np.exp(1j*k*np.pi*(x-a)/(b-a))) * U
-        # print "ret", ret.shape
-        # print K * np.exp(-r*T) * ret.real
+        I = 1j
+        pi = np.pi
+        ret = ne.evaluate("(cf * exp(I*k*pi*(x-a)/(b-a))) * U")
+
         ret = K * np.exp(-r*T) * ret.real.sum(axis=-1)
         ret[np.isnan(ret)] = 0
         return np.maximum(0, ret).T
