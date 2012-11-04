@@ -9,6 +9,7 @@ import time
 import scipy.stats
 import scipy.integrate
 import numpy as np
+import numexpr as ne
 
 from visualize import fp
 prec = 3
@@ -86,96 +87,92 @@ class HestonCos(object):
 
 
     def xi(self,k,a,b,c,d):
-        return (
-            1./(1+(k*np.pi/(b-a))**2) *
-            (np.cos(k*np.pi*(d-a)/(b-a)) * np.exp(d)
-             - np.cos(k*np.pi*(c-a)/(b-a)) * np.exp(c)
-             + k*np.pi/(b-a) * np.sin(k*np.pi*(d-a)/(b-a)) * np.exp(d)
-             - k*np.pi/(b-a) * np.sin(k*np.pi*(c-a)/(b-a)) * np.exp(c))
-        )
+        pi = np.pi
+        cos = np.cos
+        sin = np.sin
+        exp = np.exp
+        k_pi_recip_b_a = ne.evaluate("k*pi/(b-a)")
+        caba = (c-a) * k_pi_recip_b_a
+        daba = (d-a) * k_pi_recip_b_a
+        expd = ne.evaluate("exp(d)")
+        expc = ne.evaluate("exp(c)")
+        return ne.evaluate("""(
+            ((cos(daba) + k_pi_recip_b_a * sin(daba)) * expd
+            - (cos(caba) + k_pi_recip_b_a * sin(caba)) * expc)
+            / (1+(k_pi_recip_b_a)**2))""")
 
     def psi(self, k, a, b, c, d):
-        ret = (np.sin(k*np.pi*(d-a) / (b-a))
-               - np.sin(k*np.pi*(c-a) / (b-a))
-              ) * (b-a) / (k * np.pi)
-
-        ret = np.hstack(((d-c), ret[1:]))
+        sin = np.sin
+        b_a = b - a
+        kpi = k * np.pi
+        k_pi_recip_b_a = kpi/(b_a)
+        caba = (c-a) * k_pi_recip_b_a
+        daba = (d-a) * k_pi_recip_b_a
+        ret = ne.evaluate("(sin(daba) - sin(caba)) * b_a / kpi")
+        ret = np.dstack(((d-c), ret[:,:,1:]))
         return ret
 
     def CF(self, omega, r, var, T, kappa, theta, sigma, rho):
-        D = np.sqrt((kappa - 1j*rho*sigma*omega)**2 + (omega**2 + 1j*omega)*sigma**2)
-        G = (kappa - 1j*rho*sigma*omega - D) / (kappa - 1j*rho*sigma*omega + D)
-        # print "D", D.shape, fp(D, prec)
-        # print "G", G.shape, fp(G, prec)
-        return (np.exp(1j * omega * r * T + var/sigma**2 *
-            ((1-np.exp(-D*T))/(1-G*np.exp(-D*T)))*(kappa - 1j*rho*sigma*omega - D))
-            * np.exp((kappa*theta)/sigma**2 * (T*(kappa - 1j*rho*sigma*omega - D) -
-                                          2*np.log((1-G*np.exp(-D*T))/(1-G)))))
+        pi = np.pi
+        cos = np.cos
+        sin = np.sin
+        exp = np.exp
+        sqrt = np.sqrt
+        log = np.log
+        p10 = ne.evaluate("kappa - (1j*rho*sigma)*omega")
+        D = ne.evaluate("sqrt(p10**2 + (omega**2 + 1j*omega)*sigma**2)")
+        p1p = p10 + D
+        p1m = p10 - D
+        G = p1m / p1p
+        p0 = ne.evaluate("exp(-D*T)")
+        p2 = 1-G*p0
+        return ne.evaluate("""(
+              exp(I*omega*r*T + var/sigma**2 * ((1-p0)/p2)*p1m)
+            * exp(  (kappa*theta)/sigma**2
+                  * (T*p1m - 2*log(p2/(1-G)))))""")
 
     def COS(self, S, K, r, var, T, kappa, theta, sigma, rho):
         # Axes: [var, S, cosines]
         global U, a, b, U_tiled, CF_tiled, cf
         N = self.N
         L = 12
-        x = np.log(S/K)
-        # var = var[:,np.newaxis,np.newaxis]
-        c1 = r*T + (1 - np.exp(-kappa*T))*(theta-var)/(2*kappa) - 0.5*theta*T
-        c2 = 0.125*kappa**(-3) * (sigma*T*kappa*np.exp(-kappa*T)*(var-theta)*(8*kappa*rho - 4*sigma)
-            + kappa*rho*sigma*(1-np.exp(-kappa*T))*(16*theta - 8*var)
-            + 2*theta*kappa*T*(-4*kappa*rho*sigma+sigma**2+4*kappa**2)
-            + sigma**2*((theta - 2*var) * np.exp(-2*kappa*T) + theta*(6*np.exp(-kappa*T) - 7) + 2*var)
-            + 8*kappa**2*(var-theta)*(1-np.exp(-kappa*T)))
+        x = np.log(S/K)[np.newaxis,:,np.newaxis]
+        var = var[:,np.newaxis,np.newaxis]
+        var_theta = var - theta
+        c1 = r*T + (-var_theta)*(1 - np.exp(-kappa*T))/(2*kappa) - 0.5*theta*T
+
+        p1 = (sigma*T*kappa*np.exp(-kappa*T)*(8*kappa*rho - 4*sigma)) * (var_theta)
+        p2 = (kappa*rho*sigma*(1-np.exp(-kappa*T))*8)*(-var_theta + var)
+        p3 = 2*theta*kappa*T*(-4*kappa*rho*sigma+sigma**2+4*kappa**2)
+        p4 = sigma**2*((-var_theta - var) * np.exp(-2*kappa*T) + theta*(6*np.exp(-kappa*T) - 7) + 2*var)
+        p5 = (8*kappa**2*(1-np.exp(-kappa*T)))*(var_theta)
+        c2 = ne.evaluate("0.125*kappa**(-3) * (p1 + p2 + p3 + p4 + p5)")
 
 
         a = x + c1-L*np.sqrt(abs(c2))
         b = x + c1+L*np.sqrt(abs(c2))
-        # print "a, b", a.shape
-        k = np.arange(N)
-        # print "k", k.shape
+        k = np.arange(N)[np.newaxis,np.newaxis,:]
 
+        NPOINTS = max(len(S), len(K))
 
-        U = 2./(b-a)*(self.xi(k,a,b,0,b) - self.psi(k,a,b,0,b))
-        # print "U", U.shape, fp(U,prec)
-        # U_tiled = np.tile(U, (NPOINTS,1))
-        U_tiled = U
-        # print "U_tiled", U_tiled.shape
-
-        # print(S, K, r, var, T, kappa, theta, sigma, rho)
-        # print "p1 =", p1
-        # print "p2 =", p2
-        # print "p3 =", p3
-        # print "p4 =", p4
-        # print "p5 =", p5
+        XI = self.xi(k,a,b,0,b)
+        PSI = self.psi(k,a,b,0,b)
+        U = ne.evaluate("2./(b-a)*(XI - PSI)")
 
         cf = self.CF(k*np.pi/(b-a), r, var, T, kappa, theta, sigma, rho)
-        cf[0] *= 0.5
-        # print "CF", cf.shape, fp(cf, prec)
-        # CF_tiled = np.tile(cf, (NPOINTS,1))
-        CF_tiled = cf
-        # print "CF_tiled", CF_tiled.shape
-        ret = (CF_tiled * np.exp(1j*k*np.pi*(x-a)/(b-a))) * U_tiled
-        # print "ret", ret.shape
-        # print K * np.exp(-r*T) * ret.real
+        cf[:,:,0] *= 0.5
+        pi = np.pi
+        ret = ne.evaluate("(cf * exp(I*k*pi*(x-a)/(b-a))) * U")
+
         ret = K * np.exp(-r*T) * ret.real.sum(axis=-1)
-        return np.maximum(0, ret)
+        ret[np.isnan(ret)] = 0
+        return np.maximum(0, ret).T
 
 
-
-
-# hc = HestonCos(100,99,0.06, 0.2, 1, 1, 0.2, 0.001, 0)
 
 
 class HestonFundamental(object):
-
     def __init__(self, s, k, r, v, t, kappa, theta, sigma, rho):
-        # if hasattr(s, '__iter__') and hasattr(k, '__iter__'):
-            # raise TypeError("Can only have np.array(k) or np.array(s), not both.")
-        # elif hasattr(k, '__iter__'):
-            # k = np.array(k, copy=False)
-        # elif hasattr(s, '__iter__'):
-            # s = np.array(s, copy=False)
-        # else:
-            # k = np.array(k,)
         self.spot = s
         self.logspot = np.log(s)
         self.strike = k
@@ -259,15 +256,7 @@ class HestonFundamental(object):
         return np.maximum(0, self.spot * P1 - self.strike * P2 * discount)
 
 def hs_call(s, k, r, vol, t, kappa, theta, sigma, rho, HFUNC=HestonCos):
-    h = HFUNC(0, k, r, 0, t, kappa, theta, sigma, rho)
-    ret = np.zeros((len(s), len(vol)))
-    for i in range(len(s)):
-        h.S = s[i]
-        for j in range(len(vol)):
-            h.vol = vol[j]
-            ret[i,j] = h.solve()
-    return ret
-
+    return HFUNC(0, k, r, 0, t, kappa, theta, sigma, rho).solve()
 
 def hs_stream(s, k, r, v, dt, kappa, theta, sigma, rho, HFUNC=HestonCos):
     ret = np.empty((len(s), len(v)))
@@ -275,12 +264,6 @@ def hs_stream(s, k, r, v, dt, kappa, theta, sigma, rho, HFUNC=HestonCos):
     yield bs_call_delta(s[:,np.newaxis], k, r, v[np.newaxis,:], 0)[0]
     for i in it.count(1):
         yield hs_call(s, k, r, v, i*dt, kappa, theta, sigma, rho)
-        # h.T = i*dt
-        # for j in range(len(v)):
-            # h.vol = v[j]
-            # ret[:,j] = h.solve()
-        # # print h
-        # yield ret
 
 def bs_call(s,k,r,v,t):
     return bs_call_delta(s,k,r,v,t)[0]
@@ -291,47 +274,10 @@ def bs_call_delta(s, k, r, vol, t):
     d2 = d1 - vol*np.sqrt(t)
     return (N(d1)*s - N(d2)*k*np.exp(-r * t), N(d1))
 
-def call(s=100, k=99, r=0.06, vol=0.2, t=1, kappa=1, theta=None,
-         sigma=1e-4, rho=0, method=COS, NCOS=2**8):
-    if theta is None:
-        theta = vol**2
-    # s = np.array(s, dtype=float, copy=True)
-    ret = []
-    # return HestonSolver(s,k,r,vol,t,kappa,theta,sigma,rho).solve()
-    if method & BLACKSCHOLES:
-        try:
-            x = np.array(bs_call_delta(s, k, r, vol, t))[:1]
-        except ValueError, e:
-            print "BlackScholes failed:", e
-            x = None
-        ret.append(x)
-    if method & FUNDAMENTAL:
-        try:
-            x = HestonFundamental(s,k,r,vol,t,kappa,theta,sigma,rho).solve()
-        except ValueError, e:
-            print "Fundamental failed:", e
-            x = None
-        except TypeError, e:
-            print "Fundamental failed:", e
-            x = None
-        ret.append(x)
-    if method & COS:
-        # try:
-        x = HestonCos(s,k,r,vol,t,kappa,theta,sigma,rho,N=NCOS).solve()
-        # except ValueError, e:
-            # print "COS failed:", e
-            # x = None
-        # except TypeError, e:
-            # print "COS failed:", e
-            # x = None
-        ret.append(x)
-    return ret
-
-# print call(s=np.array((90,100,110)), k=90)
-# print call(s=np.array((90,100,110)), k=99, method=ALL)
-# print call(s=np.array((90,100,110)), k=110)
-# print call(s=110, k=np.array((90,100,110)))
-# print call(s=100, k=np.array((90,99,110)))
-# print call(s=90, k=np.array((90,100,110)))
-
-#PLot for v= 0, v = 0.1, etc
+def bench():
+    global ret
+    spots = np.linspace(1,1200,200)
+    vols  = np.linspace(0,10,200)
+    ret = np.zeros((len(spots), len(vols)))
+    h = HestonCos(spots, 100, 0.06, vols, 1, 1, 0.04, 0.2, 0)
+    ret = h.solve()
