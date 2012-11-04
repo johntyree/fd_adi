@@ -1,10 +1,27 @@
 #!/usr/bin/env python
 
+import sys
+import time
+
 import numpy as np
 import pylab
 import scipy.sparse
 import scipy.optimize
-import time
+
+def tic(label=None):
+    global TIC_START
+    if label is not None:
+        print label,
+    sys.stdout.flush()
+    TIC_START = time.time()
+
+def toc(label=None):
+    t = time.time() - TIC_START
+    if label is not None:
+        print label,
+    print "%fs" % t
+    sys.stdout.flush()
+    return t
 
 def D(dim):
     """Discrete first derivative operator with no boundary."""
@@ -101,48 +118,56 @@ def cubic_sigmoid_space(exact, high, density, n):
 def nonuniform_backward_coefficients(deltas):
     """The coefficients for tridiagonal matrices operating on a non-uniform
     grid.
-    THIS IS WRONG. CHECK THE ALIGNMENT.
 
-    L = spl.dia_matrix((fst, (1,0,-1)), shape=(fst.shape[1], fst.shape[1]))
+    L = spl.dia_matrix((fst, (0,-1,-2)), shape=(fst.shape[1], fst.shape[1]))
     """
     d = deltas.copy()
     fst = np.zeros((3,len(d)))
     snd = fst.copy()
-    for i in range(1,len(d)-1):
-        fst[0,i] =            d[i]  / (d[i+1]*(d[i]+d[i+1]))
-        fst[1,i-1] = (-d[i] + d[i+1]) /         (d[i]*d[i+1])
-        fst[2,i-2] =         -d[i+1]  / (d[i  ]*(d[i]+d[i+1]))
+    for i in range(2,len(d)-1):
+        fst[0,i]   = (d[i-1]+2*d[i])  / (d[i]*(d[i-1]+d[i]));
+        fst[1,i-1] = (-d[i-1] - d[i]) / (d[i-1]*d[i]);
+        fst[2,i-2] = d[i]             / (d[i-1]*(d[i-1]+d[i]));
 
-        snd[0,i+1] = 2  / (d[i+1]*(d[i]+d[i+1]))
-        snd[1,i]   = -2 /       (d[i]*d[i+1])
-        snd[2,i-1] = 2  / (d[i  ]*(d[i]+d[i+1]))
+        denom = (0.5*(d[i]+d[i-1])*d[i]*d[i-1]);
+        snd[0,i]   = d[i-1] / denom;
+        snd[1,i-1] = -(d[i]+d[i-1]) / denom;
+        snd[2,i-2] = d[i] / denom;
+
+
+    L1 = scipy.sparse.dia_matrix((fst.copy(), (0, -1, -2)), shape=(len(d),len(d)))
+    L2 = scipy.sparse.dia_matrix((snd.copy(), (0, -1, -2)), shape=(len(d),len(d)))
+    return L1,L2
     return fst, snd
 
 
 def nonuniform_forward_coefficients(deltas):
     """The coefficients for tridiagonal matrices operating on a non-uniform
     grid.
-    THIS IS WRONG. CHECK THE ALIGNMENT.
 
-    L = spl.dia_matrix((fst, (1,0,-1)), shape=(fst.shape[1], fst.shape[1]))
+    L = spl.dia_matrix((fst, (2,1,0)), shape=(fst.shape[1], fst.shape[1]))
     """
     d = deltas.copy()
     fst = np.zeros((3,len(d)))
     snd = fst.copy()
-    for i in range(1,len(d)-1):
-        fst[0,i+1] =            d[i]  / (d[i+1]*(d[i]+d[i+1]))
-        fst[1,i]   = (-d[i] + d[i+1]) /         (d[i]*d[i+1])
-        fst[2,i-1] =         -d[i+1]  / (d[i  ]*(d[i]+d[i+1]))
+    for i in range(1,len(d)-2):
+        fst[0,i+2] = -d[i+1]           / (d[i+2]*(d[i+1]+d[i+2]))
+        fst[1,i+1] = (d[i+1] + d[i+2])  /         (d[i+1]*d[i+2])
+        fst[2,i]   = (-2*d[i+1]-d[i+2]) / (d[i+1]*(d[i+1]+d[i+2]))
 
-        snd[0,i+1] = 2  / (d[i+1]*(d[i]+d[i+1]))
-        snd[1,i]   = -2 /       (d[i]*d[i+1])
-        snd[2,i-1] = 2  / (d[i  ]*(d[i]+d[i+1]))
-    return fst, snd
+        denom = (0.5*(d[i+2]+d[i+1])*d[i+2]*d[i+1]);
+        snd[0,i+2] =   d[i+1]         / denom
+        snd[1,i+1] = -(d[i+2]+d[i+1]) / denom
+        snd[2,i]   =   d[i+2]         / denom
+
+    L1 = scipy.sparse.dia_matrix((fst.copy(), (2, 1, 0)), shape=(len(d),len(d)))
+    L2 = scipy.sparse.dia_matrix((snd.copy(), (2, 1, 0)), shape=(len(d),len(d)))
+    return L1,L2
 
 
 def nonuniform_center_coefficients(deltas):
-    """The coefficients for tridiagonal matrices operating on a non-uniform
-    grid.
+    """
+    The coefficients for tridiagonal matrices operating on a non-uniform grid.
 
     L = spl.dia_matrix((fst, (1,0,-1)), shape=(fst.shape[1], fst.shape[1]))
     """
@@ -157,4 +182,38 @@ def nonuniform_center_coefficients(deltas):
         snd[0,i+1] = 2  / (d[i+1]*(d[i]+d[i+1]))
         snd[1,i]   = -2 /       (d[i]*d[i+1])
         snd[2,i-1] = 2  / (d[i  ]*(d[i]+d[i+1]))
+    L1 = scipy.sparse.dia_matrix((fst.copy(), (1, 0, -1)), shape=(len(d),len(d)))
+    L2 = scipy.sparse.dia_matrix((snd.copy(), (1, 0, -1)), shape=(len(d),len(d)))
+    return L1, L2
     return fst, snd
+
+def nonuniform_center_forward_coefficients(deltas, upwind_from=None):
+    d = deltas.copy()
+    if upwind_from is None:
+        return nonuniform_center_coefficients(d)
+    u = upwind_from
+
+    C1, C2 = nonuniform_center_coefficients(d)
+    F1, F2 = nonuniform_forward_coefficients(d)
+    U1 = np.zeros((4, len(d)))
+    U1[0,:u+2] = 0
+    U1[0,u+2:] = F1.data[0,u+2:]
+
+    U1[1,:u+1] = C1.data[0,:u+1]
+    U1[1,u+1:] = F1.data[1,u+1:]
+
+    U1[2,:u] = C1.data[1,:u]
+    U1[2,u:] = F1.data[2,u:]
+
+    U1[3,:u-1] = C1.data[0,:u-1]
+    U1[3,u-1:] = 0.0
+
+    U1 = scipy.sparse.dia_matrix((U1, (2, 1, 0, -1)), shape=(len(d),len(d)))
+    return U1
+
+
+def cs(deltas):
+    B1,B2 = nonuniform_backward_coefficients(deltas)
+    C1,C2 = nonuniform_center_coefficients(deltas)
+    F1,F2 = nonuniform_forward_coefficients(deltas)
+    return F1,F2,C1,C2,B1,B2
