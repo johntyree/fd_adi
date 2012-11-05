@@ -125,14 +125,14 @@ def nonuniform_backward_coefficients(deltas):
     fst = np.zeros((3,len(d)))
     snd = fst.copy()
     for i in range(2,len(d)-1):
-        fst[0,i]   = (d[i-1]+2*d[i])  / (d[i]*(d[i-1]+d[i]));
-        fst[1,i-1] = (-d[i-1] - d[i]) / (d[i-1]*d[i]);
-        fst[2,i-2] = d[i]             / (d[i-1]*(d[i-1]+d[i]));
+        fst[0, i]   = (d[i-1]+2*d[i])  / (d[i]*(d[i-1]+d[i]));
+        fst[1, i-1] = (-d[i-1] - d[i]) / (d[i-1]*d[i]);
+        fst[2, i-2] = d[i]             / (d[i-1]*(d[i-1]+d[i]));
 
         denom = (0.5*(d[i]+d[i-1])*d[i]*d[i-1]);
-        snd[0,i]   = d[i-1] / denom;
-        snd[1,i-1] = -(d[i]+d[i-1]) / denom;
-        snd[2,i-2] = d[i] / denom;
+        snd[0, i]   = d[i-1] / denom;
+        snd[1, i-1] = -(d[i]+d[i-1]) / denom;
+        snd[2, i-2] = d[i] / denom;
 
 
     L1 = scipy.sparse.dia_matrix((fst.copy(), (0, -1, -2)), shape=(len(d),len(d)))
@@ -185,7 +185,76 @@ def nonuniform_center_coefficients(deltas):
     L1 = scipy.sparse.dia_matrix((fst.copy(), (1, 0, -1)), shape=(len(d),len(d)))
     L2 = scipy.sparse.dia_matrix((snd.copy(), (1, 0, -1)), shape=(len(d),len(d)))
     return L1, L2
-    return fst, snd
+
+def nonuniform_complete_coefficients(deltas, boundary=None, downwind_from=None):
+    """
+    The coefficients for tridiagonal matrices. Boundary can be one of 'low',
+    'high', or 'both'. downwind_from is the index of the first element for which
+    backwards differencing will be applied.
+    """
+    d = deltas.copy()
+
+    U1 = np.zeros((5, len(d)))
+    U2 = np.zeros((5, len(d)))
+
+    # Indexing is getting complicated so we'll do it like this
+    # U[m,:] is the center diag
+    # U[m-x,:] is the x'th diag above center
+    # Note diag m starts at 0, m-1 starts at +1, m-2 starts at +2...
+    #                          m+1 ENDS   at -1, m+2 ENDS at -2...
+    m = 2
+
+    C1, C2 = nonuniform_center_coefficients(d)
+    F1, F2 = nonuniform_forward_coefficients(d)
+    B1, B2 = nonuniform_backward_coefficients(d)
+
+    # If we don't use downwinding, then just copy the center coefficients
+    if downwind_from is None:
+        U1[m-1,:] = C1.data[0,:]
+        U1[m,:]   = C1.data[1,:]
+        U1[m+1,:] = C1.data[2,:]
+
+        U2[m-1,:] = C2.data[0,:]
+        U2[m,:]   = C2.data[1,:]
+        U2[m+1,:] = C2.data[2,:]
+    elif downwind_from < 2:
+        raise ValueError("Can't use backward differencing at bottom boundary."
+                         " (downwind_from == %i < 2)" % downwind_from)
+    else:
+        u = downwind_from
+
+        U1[m-2, :u+2] = 0
+        U1[m-2, u+2:] = 0
+        U2[m-2, :u+2] = 0
+        U2[m-2, u+2:] = 0
+
+        U1[m-1, :u+1] = C1.data[0,:u+1]
+        U1[m-1, u+1:] = 0
+        U2[m-1, :u+1] = C2.data[0,:u+1]
+        U2[m-1, u+1:] = 0
+
+        U1[m+0, :u] = C1.data[1,:u]
+        U1[m+0, u:] = B1.data[0,u:]
+        U2[m+0, :u] = C2.data[1,:u]
+        U2[m+0, u:] = B2.data[0,u:]
+
+        U1[m+1, :u-1] = C1.data[2,:u-1]
+        U1[m+1, u-1:] = B1.data[1,u-1:]
+        U2[m+1, :u-1] = C2.data[2,:u-1]
+        U2[m+1, u-1:] = B2.data[1,u-1:]
+
+        U1[m+2, :u-2] = 0
+        U1[m+2, u-2:] = B1.data[2,u-2:]
+        U2[m+2, :u-2] = 0
+        U2[m+2, u-2:] = B2.data[2,u-2:]
+
+        # U1[m, 0] = -1 / d[-1] # Use first order approximation for the first row
+        # U1[m-1, 1] =  1 / d[-1]
+
+    U1 = scipy.sparse.dia_matrix((U1, (2, 1, 0, -1,-2)), shape=(len(d),len(d)))
+    U2 = scipy.sparse.dia_matrix((U2, (2, 1, 0, -1,-2)), shape=(len(d),len(d)))
+    return U1, U2
+
 
 def nonuniform_center_forward_coefficients(deltas, upwind_from=None):
     d = deltas.copy()
@@ -195,25 +264,38 @@ def nonuniform_center_forward_coefficients(deltas, upwind_from=None):
 
     C1, C2 = nonuniform_center_coefficients(d)
     F1, F2 = nonuniform_forward_coefficients(d)
+
     U1 = np.zeros((4, len(d)))
     U1[0,:u+2] = 0
     U1[0,u+2:] = F1.data[0,u+2:]
-
     U1[1,:u+1] = C1.data[0,:u+1]
     U1[1,u+1:] = F1.data[1,u+1:]
-
     U1[2,:u] = C1.data[1,:u]
     U1[2,u:] = F1.data[2,u:]
-
-    U1[3,:u-1] = C1.data[0,:u-1]
+    U1[3,:u-1] = C1.data[2,:u-1]
     U1[3,u-1:] = 0.0
+    U1[2,-2] = -1 / d[-1] # Use first order approximation for the last row
+    U1[1,-1] =  1 / d[-1]
+
+    U2 = np.zeros((4, len(d)))
+    U2[0,:u+2] = 0
+    U2[0,u+2:] = F2.data[0,u+2:]
+    U2[1,:u+1] = C2.data[0,:u+1]
+    U2[1,u+1:] = F2.data[1,u+1:]
+    U2[2,:u] = C2.data[1,:u]
+    U2[2,u:] = F2.data[2,u:]
+    U2[3,:u-1] = C2.data[2,:u-1]
+    U2[3,u-1:] = 0.0
+
 
     U1 = scipy.sparse.dia_matrix((U1, (2, 1, 0, -1)), shape=(len(d),len(d)))
-    return U1
+    U2 = scipy.sparse.dia_matrix((U2, (2, 1, 0, -1)), shape=(len(d),len(d)))
+    return U1, U2
 
 
-def cs(deltas):
+def cs(deltas, upwind_from=None):
     B1,B2 = nonuniform_backward_coefficients(deltas)
     C1,C2 = nonuniform_center_coefficients(deltas)
     F1,F2 = nonuniform_forward_coefficients(deltas)
-    return F1,F2,C1,C2,B1,B2
+    U1,U2 = nonuniform_center_forward_coefficients(delta, upwind_from=upwind_from)
+    return F1,F2,C1,C2,B1,B2,U1,U2
