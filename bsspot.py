@@ -47,10 +47,12 @@ import scipy.stats
 import scipy.linalg as spl
 import scipy.sparse as sps
 from pylab import *
-from utils import sinh_space,exponential_space,center_diff,D,D2,nonuniform_center_coefficients
+import utils
 from visualize import fp, wireframe
 from heston import bs_call_delta, hs_call
 from time import time
+
+# ion()
 
 
 # TEMPORARY PARAMETERS
@@ -62,20 +64,22 @@ k = 100.0
 r = 0.06
 t = 1
 v0 = 0.2
-dt = 1/100.0
+dt = 1/10.0
 
 kappa = 1
-theta = 0.2
+theta = 0.02
 sigma = 0.2
 rho = 0
 
-nspots = 200
-nvols = 200
+nspots = 100
+nvols = 400
 
-spotdensity = 10.0  # infinity is linear?
-varexp = 3
-spots = sinh_space(k, 2000, spotdensity, nspots)
-vars = exponential_space(0.00, v0, 10., varexp, nvols)
+spotdensity = 100.0  # infinity is linear?
+varexp = 4
+spots = utils.sinh_space(k, 2000, spotdensity, nspots)
+spot = spots[min(abs(spots - spot)) == abs(spots - spot)][0]
+k = spots[min(abs(spots - k)) == abs(spots - k)][0]
+vars = utils.exponential_space(0.00, v0, 10., varexp, nvols)
 # plot(spots); title("Spots"); show()
 # plot(vars); title("Vars"); show()
 
@@ -84,6 +88,7 @@ trimv = (v0*0.1 < vars) & (vars < v0*2.0)
 # trims = slice(None)
 # trimv = slice(None)
 
+tr = lambda x: x[trims,:][:,trimv]
 
 ids = isclose(spots[trims], spot)
 idv = isclose(vars[trimv], v0)
@@ -98,86 +103,111 @@ Vi = init(spots, nvols, k)
 V = np.copy(Vi)
 bs, delta = [x for x in bs_call_delta(spots[:,newaxis], k, r,
                                             np.sqrt(vars)[newaxis,:], t)]
+utils.tic("Heston Analytical:")
 hs = hs_call(spots, k, r, np.sqrt(vars),
              t, kappa, theta, sigma, rho)
+utils.toc()
+hs[isnan(hs)] = 0.0
+
+if len(sys.argv) > 1:
+    if sys.argv[1] == '0':
+        print "Bail out with arg 0."
+        sys.exit()
 
 L1_ = []
 R1_ = []
-start = time()
-print "Building As(s)",
+utils.tic("Building As(s):")
 sys.stdout.flush()
-fst, snd = nonuniform_center_coefficients(dss)
+# As_, Ass_ = utils.nonuniform_center_coefficients(dss)
+As_, Ass_ = utils.nonuniform_complete_coefficients(dss)
+assert(not isnan(As_.data).any())
+assert(not isnan(Ass_.data).any())
 for j, v in enumerate(vars):
+    # Be careful not to overwrite our operators
+    As, Ass = As_.copy(), Ass_.copy()
+    m = 2
+
     mu_s = r*spots
     gamma2_s = 0.5*v*spots**2
-
-
-    As = sps.dia_matrix((fst.copy(), (1, 0, -1)), shape=(nspots,nspots))
 
     Rs = np.zeros(nspots)
     Rs[-1] = 1
 
-    As.data[0,1:]  *= mu_s[:-1]
-    As.data[1,:]   *= mu_s
-    As.data[2,:-1] *= mu_s[1:]
-    Rs *= mu_s
 
-    Ass = sps.dia_matrix((snd.copy(), (1, 0, -1)), shape=(nspots,nspots))
-    Ass.data[1, -1] = -2/dss[-1]**2
-    Ass.data[2, -2] =  2/dss[-1]**2
+    As.data[m-2, 2:]  *= mu_s[:-2]
+    As.data[m-1, 1:]  *= mu_s[:-1]
+    As.data[m, :]     *= mu_s
+    As.data[m+1, :-1] *= mu_s[1:]
+    As.data[m+2, :-2] *= mu_s[2:]
+
+    Rs *= mu_s
 
     Rss = np.zeros(nspots)
     Rss[-1] = 2*dss[-1]/dss[-1]**2
 
-    Ass.data[0,1:]  *= gamma2_s[:-1]
-    Ass.data[1,:]   *= gamma2_s
-    Ass.data[2,:-1] *= gamma2_s[1:]
+
+    Ass.data[m,   -1] = -2/dss[-1]**2
+    Ass.data[m+1, -2] =  2/dss[-1]**2
+
+    Ass.data[m-2, 2:]  *= gamma2_s[:-2]
+    Ass.data[m-1, 1:]  *= gamma2_s[:-1]
+    Ass.data[m, :]     *= gamma2_s
+    Ass.data[m+1, :-1] *= gamma2_s[1:]
+    Ass.data[m+2, :-2] *= gamma2_s[2:]
+
     Rss *= gamma2_s
 
     L1_.append(As.copy())
     L1_[j].data += Ass.data
-    L1_[j].data[1,:] -= (1 - rate_Spot_Var)*r
+    L1_[j].data[m,:] -= (1 - rate_Spot_Var)*r
 
     R1_.append((Rs + Rss).copy())
-print time() - start
+utils.toc()
 
 mu_v = kappa*(theta - vars)
 gamma2_v = 0.5*sigma**2*vars
 
 L2_ = []
 R2_ = []
-fst, snd = nonuniform_center_coefficients(dvs)
-start = time()
-print "Building Av(v)",
-sys.stdout.flush()
+downwind_from = min(find(vars > theta))
+# downwind_from = None
+print "Downwind from:", downwind_from
+utils.tic("Building Av(v):")
+# Avc_, Avvc_ = utils.nonuniform_center_coefficients(dvs)
+Av_, Avv_ = utils.nonuniform_complete_coefficients(dvs, downwind_from=downwind_from)
+assert(not isnan(Av_.data).any())
+assert(not isnan(Avv_.data).any())
 for i, s in enumerate(spots):
-    Av = sps.dia_matrix((fst.copy(), (1, 0, -1)), shape=(nvols,nvols))
-    Av.data[0, 1] = -1 / dvs[1]
-    Av.data[1, 0] =  1 / dvs[1]
-    # Av.data[0, 1:]  =  1 / dvs[1:]
-    # Av.data[1,:-1]  = -1 / dvs[1:]
-    # Av.data[2,:]   *= 0
-    # Av.data[2,:-1] *= mu_v[1:]
+    # Be careful not to overwrite our operators
+    Av, Avv = Av_.copy(), Avv_.copy()
 
-    Av.data[1,-1] = -1  # This is to cancel out the previous value so we can
-                        # set the dirichlet boundary condition in R.
-                        # Then we have U_i + -U_i + R
+    m = 2
 
-    Av.data[0,1:]  *= mu_v[:-1]
-    Av.data[1,:]   *= mu_v
-    Av.data[2,:-1] *= mu_v[1:]
+    Av.data[m, 0]   = -1 / dvs[1]
+    Av.data[m-1, 1] =  1 / dvs[1]
+
+    Av.data[m-2, 2:]  *= mu_v[:-2]
+    Av.data[m-1, 1:]  *= mu_v[:-1]
+    Av.data[m, :]     *= mu_v
+    Av.data[m+1, :-1] *= mu_v[1:]
+    Av.data[m+2, :-2] *= mu_v[2:]
+
+    Av.data[m, -1] = -1  # This is to cancel out the previous value so we can
+                          # set the dirichlet boundary condition using R.
+                          # Then we have U_i + -U_i + R
 
     Rv = np.zeros(nvols)
-    Rv[-1] = s - k
     Rv *= mu_v
+    Rv[-1] = s-k
 
-    Avv = sps.dia_matrix((snd.copy(), (1, 0, -1)), shape=(nvols,nvols))
-    Avv.data[0, 1] =  2/dvs[1]**2
-    Avv.data[1, 0] = -2/dvs[1]**2
+    Avv.data[m, 0]   = -2/dvs[1]**2
+    Avv.data[m-1, 1] =  2/dvs[1]**2
 
-    Avv.data[0, 1:]  *= gamma2_v[:-1]
-    Avv.data[1, :]   *= gamma2_v
-    Avv.data[2, :-1] *= gamma2_v[1:]
+    Avv.data[m-2, 2:]  *= gamma2_v[:-2]
+    Avv.data[m-1, 1:]  *= gamma2_v[:-1]
+    Avv.data[m, :]     *= gamma2_v
+    Avv.data[m+1, :-1] *= gamma2_v[1:]
+    Avv.data[m+2, :-2] *= gamma2_v[2:]
 
 
     Rvv = np.zeros(nvols)
@@ -186,10 +216,10 @@ for i, s in enumerate(spots):
 
     L2_.append(Av.copy())
     L2_[i].data += Avv.data
-    L2_[i].data[1,:] -= rate_Spot_Var*r
+    L2_[i].data[m,:] -= rate_Spot_Var*r
 
     R2_.append(Rv + Rvv)
-print time() - start
+utils.toc()
 
 def impl(V,L1,R1x,L2,R2x,dt,n):
     V = V.copy()
@@ -198,20 +228,21 @@ def impl(V,L1,R1x,L2,R2x,dt,n):
     L2i = [x.copy() for x in L2]
     R2  = [x.copy() for x in R2x]
 
+    m = 2
+
     # L  = (As + Ass - r*np.eye(nspots))*-dt + np.eye(nspots)
     for j in xrange(nvols):
         L1i[j].data *= -dt
-        L1i[j].data[1,:] += 1
+        L1i[j].data[m,:] += 1
         R1[j] *= dt
     for i in xrange(nspots):
         L2i[i].data *= -dt
-        L2i[i].data[1,:] += 1
+        L2i[i].data[m,:] += 1
         R2[i] *= dt
 
-    start = time()
     print_step = max(1, int(n / 10))
     to_percent = 100.0/n
-    print "Impl:",
+    utils.tic("Impl:")
     for k in xrange(n):
         if not k % print_step:
             if isnan(V).any():
@@ -219,10 +250,17 @@ def impl(V,L1,R1x,L2,R2x,dt,n):
                 return zeros_like(V)
             print int(k*to_percent),
         for j in xrange(nvols):
-            V[:,j] = spl.solve_banded((1,1), L1i[j].data, V[:,j] + R1[j], overwrite_b=True)
-        for i in xrange(len(R2)):
-            V[i,:] = spl.solve_banded((1,1), L2i[i].data, V[i,:] + R2[i], overwrite_b=True)
-    print "  (%fs)" % (time() - start)
+            # V[:,j] = spl.solve_banded((1,1), L1i[j].data, V[:,j] + R1[j], overwrite_b=True)
+            V[:,j] = spl.solve_banded((abs(min(L1i[j].offsets)),abs(max(L1i[j].offsets))),
+                                      L1i[j].data, V[:,j] + R1[j], overwrite_b=True)
+        for i in xrange(nspots):
+            # V[i,:] = spl.solve_banded((1,1),
+                                      # L2i[i].data, V[i,:] + R2[i], overwrite_b=True)
+            # V[i,:] = spl.solve_banded((1,1),
+                                      # L2i[i].data[1:4,:], V[i,:] + R2[i], overwrite_b=True)
+            V[i,:] = spl.solve_banded((abs(min(L2i[i].offsets)),abs(max(L2i[i].offsets))),
+                                      L2i[i].data, V[i,:] + R2[i], overwrite_b=True)
+    utils.toc()
     return V
 
 def crank(V,L1,R1x,L2,R2x,dt,n):
@@ -251,10 +289,9 @@ def crank(V,L1,R1x,L2,R2x,dt,n):
         L2i[i].data[1,:] += 1
 
 
-    start = time()
     print_step = max(1, int(n / 10))
     to_percent = 100.0/n
-    print "Crank:",
+    utils.tic("Crank:")
     for k in xrange(n):
         if not k % print_step:
             if isnan(V).any():
@@ -264,11 +301,11 @@ def crank(V,L1,R1x,L2,R2x,dt,n):
         for j in xrange(nvols):
             V[:,j] = L1e[j].dot(V[:,j]) + R1[j]
         for i in xrange(len(R2)):
-            V[i,:] = spl.solve_banded((1,1), L2i[i].data, V[i,:] + R2[i], overwrite_b=True)
+            V[i,:] = spl.solve_banded((2,2), L2i[i].data, V[i,:] + R2[i], overwrite_b=True)
             V[i,:] = L2e[i].dot(V[i,:]) + R2[i]
         for j in xrange(nvols):
             V[:,j] = spl.solve_banded((1,1), L1i[j].data, V[:,j] + R1[j], overwrite_b=True)
-    print "  (%fs)" % (time() - start)
+    utils.toc()
     return V
 
 
@@ -299,21 +336,18 @@ def p2(V, analytical, spots, vars, marker_idx=0, label=""):
 p = p2
 
 V = impl(Vi,L1_, R1_, L2_, R2_, dt, int(t/dt))
-V = V[trims,:][:,trimv]
-print V[ids,:][:,idv] - bs[ids,:][:,idv]
-p(V, hs[trims,:][:,trimv], spots[trims], vars[trimv], 1, "impl")
+print tr(V)[ids,idv] - tr(hs)[ids,idv]
+p(tr(V), tr(hs), spots[trims], vars[trimv], 1, "impl")
 
-V = crank(Vi,L1_, R1_, L2_, R2_, dt, int(t/dt))
-V = V[trims,:][:,trimv]
-print V[ids,:][:,idv] - bs[ids,:][:,idv]
-p(V, hs[trims,:][:,trimv], spots[trims], vars[trimv], 2, "crank")
+# V = crank(Vi,L1_, R1_, L2_, R2_, dt, int(t/dt))
+# print tr(V)[ids,idv] - tr(hs)[ids,idv]
+# p(tr(V), tr(hs), spots[trims], vars[trimv], 2, "crank")
 
 # ## Rannacher smoothing to damp oscilations at the discontinuity
 # V = impl(Vi,L1_, R1_, L2_, R2_, 0.5*dt, 4)
 # V = crank(Vi,L1_, R1_, L2_, R2_, dt, int(t/dt)-2)
-# V = V[trims,:][:,trimv]
-# print V[ids,:][:,idv] - bs[ids,:][:,idv]
-# p(V, hs[trims,:][:,trimv], spots[trims], vars[trimv], 3, "smooth")
+# print tr(V)[ids,idv] - tr(hs)[ids,idv]
+# p(tr(V), tr(hs), spots[trims], vars[trimv], 3, "smooth")
 
 if p is p1:
     show()
