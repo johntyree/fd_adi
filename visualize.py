@@ -4,6 +4,7 @@ import numpy as np
 import pylab
 from mpl_toolkits.mplot3d import axes3d
 from utils import center_diff
+import time
 
 def filterprint(A, prec=1, fmt="f", predicate=lambda x: x == 0, blank='- '):
     """
@@ -68,7 +69,7 @@ def wireframe(domain, xs=None, ys=None, ax=None):
     return wframe, ax
 
 
-def surface(domain, xs, ys, ax=None):
+def surface(domain, xs=None, ys=None, ax=None):
     """Convenience func for plotting a surface."""
     if xs is None:
         xs = np.arange(domain.shape[0])
@@ -88,7 +89,7 @@ def surface(domain, xs, ys, ax=None):
                               cmap=pylab.cm.jet)
     return wframe, ax
 
-def anim(plotter, domains, xs, ys, FPS=2):
+def anim(plotter, domains, xs=None, ys=None, FPS=2):
     """
     A very simple 'animation' of a 3D plot. This works best with QT backend for
     some reason and not at all with inline :(.
@@ -98,7 +99,7 @@ def anim(plotter, domains, xs, ys, FPS=2):
     """
     SPF = 1.0 / FPS
     pylab.ion()
-    tstart = time.time()
+    start = time.time()
     oldcol = None
     ax = None
     try:
@@ -111,13 +112,16 @@ def anim(plotter, domains, xs, ys, FPS=2):
             oldcol, ax = plotter(Z, xs, ys, ax)
             pylab.xlabel("#%02i" % (i,))
 
-            time.sleep(max(j, SPF - frame_time))
-            draw()
+            # time.sleep(max(0, SPF - frame_time))
+            pylab.draw()
     except StopIteration:
+        stop = time.time()
         pass
     pylab.ioff()
+    pylab.draw()
+    pylab.show()
 
-    print 'FPS: %f' % (100 / (time.time() - tstart))
+    print 'FPS: %f' % (100 / (stop - start))
 
 
 
