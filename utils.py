@@ -186,7 +186,8 @@ def nonuniform_center_coefficients(deltas):
     L2 = scipy.sparse.dia_matrix((snd.copy(), (1, 0, -1)), shape=(len(d),len(d)))
     return L1, L2
 
-def nonuniform_complete_coefficients(deltas, boundary=None, downwind_from=None):
+def nonuniform_complete_coefficients(deltas, boundary=None, up_or_down=None,
+                                     flip_idx=None):
     """
     The coefficients for tridiagonal matrices. Boundary can be one of 'low',
     'high', or 'both'. downwind_from is the index of the first element for which
@@ -196,6 +197,18 @@ def nonuniform_complete_coefficients(deltas, boundary=None, downwind_from=None):
 
     U1 = np.zeros((5, len(d)))
     U2 = np.zeros((5, len(d)))
+
+    upwind_from = None
+    downwind_from = None
+    if up_or_down is not None and flip_idx is not None:
+        up_or_down = up_or_down.lower()
+        if up_or_down.startswith('down'):
+            downwind_from = flip_idx
+            print "Using downwinding:",
+        elif up_or_down.startswith('up'):
+            upwind_from = flip_idx
+            print "Using upwinding:",
+
 
     # Indexing is getting complicated so we'll do it like this
     # U[m,:] is the center diag
@@ -208,8 +221,81 @@ def nonuniform_complete_coefficients(deltas, boundary=None, downwind_from=None):
     F1, F2 = nonuniform_forward_coefficients(d)
     B1, B2 = nonuniform_backward_coefficients(d)
 
-    # If we don't use downwinding, then just copy the center coefficients
-    if downwind_from is None:
+    if downwind_from is not None and upwind_from is not None:
+        raise NotImplementedError("One or both of downwind_from and upwind_from"
+                                  "must be None.")
+    elif downwind_from is not None:
+        if downwind_from < 2:
+            raise ValueError("Can't use backward differencing at top boundary."
+                             " (downwind_from == %i < 2)" % downwind_from)
+        else:
+            u = downwind_from
+
+            U1[m-2, :u+2] = 0
+            U1[m-2, u+2:] = 0
+            U2[m-2, :u+2] = 0
+            U2[m-2, u+2:] = 0
+
+            U1[m-1, :u+1] = C1.data[0,:u+1]
+            U1[m-1, u+1:] = 0
+            U2[m-1, :u+1] = C2.data[0,:u+1]
+            U2[m-1, u+1:] = 0
+
+            U1[m+0, :u] = C1.data[1,:u]
+            U1[m+0, u:] = B1.data[0,u:]
+            U2[m+0, :u] = C2.data[1,:u]
+            U2[m+0, u:] = B2.data[0,u:]
+
+            U1[m+1, :u-1] = C1.data[2,:u-1]
+            U1[m+1, u-1:] = B1.data[1,u-1:]
+            U2[m+1, :u-1] = C2.data[2,:u-1]
+
+            U2[m+1, u-1:] = B2.data[1,u-1:]
+
+            U1[m+2, :u-2] = 0
+            U1[m+2, u-2:] = B1.data[2,u-2:]
+            U2[m+2, :u-2] = 0
+            U2[m+2, u-2:] = B2.data[2,u-2:]
+
+    elif upwind_from is not None:
+        if upwind_from > len(d)-2:
+            raise ValueError("Can't use foward differencing at bottom boundary."
+                             " (upwind_from == %i > len(d)-2)" % upwind_from)
+        else:
+            u = upwind_from
+
+            U1[m-2, :u+2]  = 0
+            U1[m-2,  u+2:] = F1.data[0,u+2:]
+            U2[m-2, :u+2]  = 0
+            U2[m-2,  u+2:] = F2.data[0,u+2:]
+
+            U1[m-1, :u+1]  = C1.data[0,:u+1]
+            U1[m-1,  u+1:] = F1.data[1, u+1:]
+            U2[m-1, :u+1]  = C2.data[0,:u+1]
+            U2[m-1,  u+1:] = F2.data[1, u+1:]
+
+            U1[m+0, :u]  = C1.data[1,:u]
+            U1[m+0,  u:] = F1.data[2,u:]
+            U2[m+0, :u]  = C2.data[1,:u]
+            U2[m+0,  u:] = F2.data[2,u:]
+
+            U1[m+1, :u-1]  = C1.data[2,:u-1]
+            U1[m+1,  u-1:] = 0
+            U2[m+1, :u-1]  = C2.data[2,:u-1]
+
+            U2[m+1,  u-1:] = 0
+
+            U1[m+2, :u-2]  = 0
+            U1[m+2,  u-2:] = 0
+            U2[m+2, :u-2]  = 0
+            U2[m+2,  u-2:] = 0
+
+            # Use first order approximation for the last (inner) row
+            U1[m, -2] = -1 / d[-1]
+            U1[m-1, -1] =  1 / d[-1]
+
+    # If we don't use anything special, then just copy the center coefficients
+    elif downwind_from is None and upwind_from is None:
         U1[m-1,:] = C1.data[0,:]
         U1[m,:]   = C1.data[1,:]
         U1[m+1,:] = C1.data[2,:]
@@ -217,39 +303,9 @@ def nonuniform_complete_coefficients(deltas, boundary=None, downwind_from=None):
         U2[m-1,:] = C2.data[0,:]
         U2[m,:]   = C2.data[1,:]
         U2[m+1,:] = C2.data[2,:]
-    elif downwind_from < 2:
-        raise ValueError("Can't use backward differencing at bottom boundary."
-                         " (downwind_from == %i < 2)" % downwind_from)
+
     else:
-        u = downwind_from
-
-        U1[m-2, :u+2] = 0
-        U1[m-2, u+2:] = 0
-        U2[m-2, :u+2] = 0
-        U2[m-2, u+2:] = 0
-
-        U1[m-1, :u+1] = C1.data[0,:u+1]
-        U1[m-1, u+1:] = 0
-        U2[m-1, :u+1] = C2.data[0,:u+1]
-        U2[m-1, u+1:] = 0
-
-        U1[m+0, :u] = C1.data[1,:u]
-        U1[m+0, u:] = B1.data[0,u:]
-        U2[m+0, :u] = C2.data[1,:u]
-        U2[m+0, u:] = B2.data[0,u:]
-
-        U1[m+1, :u-1] = C1.data[2,:u-1]
-        U1[m+1, u-1:] = B1.data[1,u-1:]
-        U2[m+1, :u-1] = C2.data[2,:u-1]
-        U2[m+1, u-1:] = B2.data[1,u-1:]
-
-        U1[m+2, :u-2] = 0
-        U1[m+2, u-2:] = B1.data[2,u-2:]
-        U2[m+2, :u-2] = 0
-        U2[m+2, u-2:] = B2.data[2,u-2:]
-
-        # U1[m, 0] = -1 / d[-1] # Use first order approximation for the first row
-        # U1[m-1, 1] =  1 / d[-1]
+        raise NotImplementedError("The universe has terminated.")
 
     U1 = scipy.sparse.dia_matrix((U1, (2, 1, 0, -1,-2)), shape=(len(d),len(d)))
     U2 = scipy.sparse.dia_matrix((U2, (2, 1, 0, -1,-2)), shape=(len(d),len(d)))
