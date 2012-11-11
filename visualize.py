@@ -91,37 +91,41 @@ def surface(domain, xs=None, ys=None, ax=None):
 
 def anim(plotter, domains, xs=None, ys=None, FPS=2):
     """
-    A very simple 'animation' of a 3D plot. This works best with QT backend for
-    some reason and not at all with inline :(.
+    A very simple 'animation' of a 3D plot. This does not work with inline.
 
-        %pylab qt
-        anim(wireframe, [V1, V2....], spots, vols, FPS=1)
+        %pylab
+        anim(surface, [V1, V2....], xs, ys, FPS=1)
     """
     SPF = 1.0 / FPS
-    pylab.ion()
     start = time.time()
     oldcol = None
     ax = None
+    pylab.ion()
     try:
         for i, Z in enumerate(domains):
+            frame_start = time.time()
             # Remove old line collection before drawing
             if oldcol is not None:
                 ax.collections.remove(oldcol)
 
-            frame_time = time.time()
             oldcol, ax = plotter(Z, xs, ys, ax)
             pylab.xlabel("#%02i" % (i,))
 
-            # time.sleep(max(0, SPF - frame_time))
+            frame_time = time.time() - frame_start
+            if i > 0:
+                time.sleep(max(0, SPF - frame_time))
             pylab.draw()
-    except StopIteration:
-        stop = time.time()
+    except KeyboardInterrupt:
         pass
-    pylab.ioff()
-    pylab.draw()
-    pylab.show()
+    except StopIteration:
+        pass
+    finally:
+        stop = time.time()
+        pylab.ioff()
+        pylab.draw()
+        pylab.show()
 
-    print 'FPS: %f' % (100 / (stop - start))
+    # print 'FPS: %f' % ((i+1) / (stop - start))
 
 
 
