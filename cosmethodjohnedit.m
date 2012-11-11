@@ -1,52 +1,43 @@
 % kappa = mean_reversion
 % theta = long term mean
-% sigma = vol of variance
+% sigma = var of variance
 % rho   = correlation
 function P = cosmethodjohnedit(S, K, r, vol, T, kappa, theta, sigma, rho)
 
-    % tic
-    P=COS(S,K,r,vol,T,kappa,theta,sigma,rho)';
-    % toc
+    var = vol*vol;
+    P=COS(S,K,r,var,T,kappa,theta,sigma,rho)';
 end
 
 
-function ret = COS(S,K,r,vol,T,kappa,theta,sigma,rho)
+function ret = COS(S,K,r,var,T,kappa,theta,sigma,rho)
     N = 2^8;
-    
+
     L = 12;
     x= log(S./K);  %scaled log-asset price
     mu=r;
 
     %Cumulants
-    c1=mu*T+(1-exp(-kappa*T))*(theta-vol)/(2*kappa)-0.5*theta*T;
-    p1=sigma*T*kappa*exp(-kappa*T)*(vol-theta)*(8*kappa*rho-4*sigma);
-    p2=kappa*rho*sigma*(1-exp(-kappa*T))*(16*theta-8*vol);
+    c1=mu*T+(1-exp(-kappa*T))*(theta-var)/(2*kappa)-0.5*theta*T;
+    p1=sigma*T*kappa*exp(-kappa*T)*(var-theta)*(8*kappa*rho-4*sigma);
+    p2=kappa*rho*sigma*(1-exp(-kappa*T))*(16*theta-8*var);
     p3=2*theta*kappa*T*(-4*kappa*rho*sigma+sigma^2+4*kappa^2);
-    p4=sigma^2*((theta-2*vol)*exp(-2*kappa*T)+theta*(6*exp(-kappa*T)-7)+2*vol);
-    p5=8*kappa^2*(vol-theta)*(1-exp(-kappa*T));
+    p4=sigma^2*((theta-2*var)*exp(-2*kappa*T)+theta*(6*exp(-kappa*T)-7)+2*var);
+    p5=8*kappa^2*(var-theta)*(1-exp(-kappa*T));
     c2=1/(8*kappa^3)*(p1+p2+p3+p4+p5);
-
-    [S,K,r,vol,T,kappa,theta,sigma,rho]
-    p1
-    p2
-    p3
-    p4
-    p5
-    c1
-    c2
+    L=10;
     %Interval [a,b]
     a=x+c1-L*sqrt(abs(c2));
     b=x+c1+L*sqrt(abs(c2));
-    k=0:N-1; 
-    omega=k'*pi/(b-a);  
+    k=0:N-1;
+    omega=k'*pi/(b-a);
 
     %Characteristic function
-    cf=ChFHeston(omega,vol,theta,kappa,rho,sigma,mu,T);
+    cf=ChFHeston(omega,var,theta,kappa,rho,sigma,mu,T);
     cf(1)=0.5*cf(1);
 
-    %Option price  
-    Re=real(repmat(cf,1,length(x)).*exp(1i*omega*(x'-a))) ;  
-    Vk=2/(b-a)*(chi(0,b,N,a,b)'-psi(0,b,N,a,b)'); 
+    %Option price
+    Re=real(repmat(cf,1,length(x)).*exp(1i*omega*(x'-a))) ;
+    Vk=2/(b-a)*(chi(0,b,N,a,b)'-psi(0,b,N,a,b)');
     ret=K.*exp(-r*T).*(Re'*Vk);
 end
 

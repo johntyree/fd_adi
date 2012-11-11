@@ -14,18 +14,19 @@ function ret = COS(S,K,r,vol,T,kappa,theta,sigma,rho)
     N = 2^8;
     % Truncation range
     L = 12;
-    c1 = r*T + (1 - exp(-kappa * T)) * (theta - vol^2)/(2*kappa) - 0.5*theta*T
+    c1 = r*T + (1 - exp(-kappa * T)) * (theta - vol^2)/(2*kappa) - 0.5*theta*T;
 
     c2 = 1/(8*kappa^3) * (...
         sigma*T*kappa*exp(-kappa*T)*(vol-theta)*(8*kappa*rho - 4*sigma) ...
        + kappa*rho*sigma*(1-exp(-kappa*T))*(16*theta-8*vol)...
        + 2*theta*kappa*T*(-4*kappa*rho*sigma + sigma^2 + 4*kappa^2)
        + sigma^2*((theta - 2*vol)*exp(-2*kappa*T) + theta*(6*exp(-kappa*T)-7) + 2*vol)...
-       + 8 * kappa^2 * (vol - theta) * (1-exp(-kappa*T)))
+       + 8 * kappa^2 * (vol - theta) * (1-exp(-kappa*T)));
 
     x = log(S./K);
     a = x+c1-L*sqrt(abs(c2));
     b = x+c1+L*sqrt(abs(c2));
+
     k=(0:N-1)';
     U = 2/(b-a)*(xi(k,a,b,0,b) - psi(k,a,b,0,b));
     unit= [.5 ones(1,N-1)];
