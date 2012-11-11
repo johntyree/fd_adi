@@ -96,6 +96,11 @@ trimv = (0.01 < vars) & (vars <  1) #v0*2.0)
 # trims = slice(None)
 # trimv = slice(None)
 
+up_or_down_spot = 'up'
+up_or_down_var = 'down'
+flip_idx_var = min(find(vars > theta))
+flip_idx_spot = 2
+
 tr = lambda x: x[trims,:][:,trimv]
 tr3 = lambda x: x[:,trims,:][:,:,trimv]
 
@@ -135,9 +140,11 @@ if len(sys.argv) > 1:
 L1_ = []
 R1_ = []
 utils.tic("Building As(s):")
-sys.stdout.flush()
-# As_, Ass_ = utils.nonuniform_center_coefficients(dss)
-As_, Ass_ = utils.nonuniform_complete_coefficients(dss)
+print "(Up/Down)wind from:", flip_idx_spot
+As_ = utils.nonuniform_complete_coefficients(dss, up_or_down=up_or_down_spot,
+                                                        flip_idx=flip_idx_spot)[0]
+Ass_ = utils.nonuniform_complete_coefficients(dss)[1]
+# As_, Ass_ = utils.nonuniform_forward_coefficients(dss)
 assert(not isnan(As_.data).any())
 assert(not isnan(Ass_.data).any())
 for j, v in enumerate(vars):
@@ -187,12 +194,12 @@ gamma2_v = 0.5*sigma**2*vars
 
 L2_ = []
 R2_ = []
-downwind_from = min(find(vars > theta))
-# downwind_from = None
-print "Downwind from:", downwind_from
 utils.tic("Building Av(v):")
+print "(Up/Down)wind from:", flip_idx_var
 # Avc_, Avvc_ = utils.nonuniform_center_coefficients(dvs)
-Av_, Avv_ = utils.nonuniform_complete_coefficients(dvs, downwind_from=downwind_from)
+Av_ = utils.nonuniform_complete_coefficients(dvs, up_or_down=up_or_down_var,
+                                                   flip_idx=flip_idx_var)[0]
+Avv_ = utils.nonuniform_complete_coefficients(dvs)[1]
 assert(not isnan(Av_.data).any())
 assert(not isnan(Avv_.data).any())
 for i, s in enumerate(spots):
