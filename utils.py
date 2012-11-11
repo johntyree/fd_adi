@@ -61,6 +61,8 @@ def sinh_space(exact, high, density, size):
     """Sigmoidal space with high density around 'exact'. Use ~ 0.93."""
     # def g(x, K, c, p): return K + c/p * np.sinh(p*x + np.arcsinh(-p*K/c))
     # c = float(density)
+    if size == 1:
+        return array([exact])
     density = float(density)
     K = float(exact)
     Smax = float(high)
@@ -73,17 +75,19 @@ def sinh_space(exact, high, density, size):
     space = K + density * np.sinh(eps)
     return space
 
-def exponential_space(low, exact, high, ex, n):
+def exponential_space(low, exact, high, ex, size):
     """Ex is the exponent used to map to the new space."""
-    v = np.zeros(n)
+    if size == 1:
+        return array([exact])
+    v = np.zeros(size)
     l = pow(low,1./ex)
     h = pow(high,1./ex)
     x = pow(exact,1./ex)
-    dv = (h - l) / (n-1)
+    dv = (h - l) / (size-1)
 
     j = 0
     d = 1e100
-    for i in range(n):
+    for i in range(size):
         if (l + i*dv > x):
         # if abs(i*dv - x) < d:
             # d = abs(i*dv - x)
@@ -93,21 +97,23 @@ def exponential_space(low, exact, high, ex, n):
         print "Did not find thingy."
         assert(j != 0)
     dx = x - (l + j*dv)
-    h += (n-1) * dx/j
-    dv = (h - l) / (n-1)
-    for i in range(n):
+    h += (size-1) * dx/j
+    dv = (h - l) / (size-1)
+    for i in range(size):
         v[i] = l + pow(i*dv, ex)
     return v
 
-def cubic_sigmoid_space(exact, high, density, n):
+def cubic_sigmoid_space(exact, high, density, size):
     """Cheap and bad sigmoid curve. Use sinh instead."""
+    if size == 1:
+        return array([exact])
     if density == 0:
-        return linspace(exact - (high - exact), high, n)
+        return linspace(exact - (high - exact), high, size)
 
-    y = np.zeros(n)
-    dx = 1.0/(n-1)
+    y = np.zeros(size)
+    dx = 1.0/(size-1)
     scale = (float(high)-exact)/(density**3 + density)
-    for i in range(n):
+    for i in range(size):
         x = (2*(i*dx)-1)*density
         y[i] = exact + (x**3+x)*scale
 
