@@ -247,7 +247,18 @@ for i, s in enumerate(spots):
     R2_.append(Rv + Rvv)
 utils.toc()
 
-def impl(V,L1,R1x,L2,R2x,dt,n):
+
+def force_boundary(V, values=None, t=None):
+    # m1 = hs_call(spots, k, r, sqrt(np.array((vars[0], vars[-1]))), t, kappa, theta, sigma, rho)
+    # m2 = hs_call(np.array((spots[0], spots[-1])), k, r, sqrt(vars), t, kappa, theta, sigma, rho)
+    m = values
+    m1 = m2 = m
+    V[0,:] = m2[0,:] # top
+    V[:,0] = m1[:,0] # left
+    V[-1,:] = m2[-1,:] # bottom
+    V[:,-1] = m1[:,-1] # right
+
+def impl(V, L1, R1x, L2, R2x, dt, n, crumbs=[], callback=None):
     V = V.copy()
     L1i = [x.copy() for x in L1]
     R1  = [x.copy() for x in R1x]
@@ -273,23 +284,21 @@ def impl(V,L1,R1x,L2,R2x,dt,n):
         if not k % print_step:
             if isnan(V).any():
                 print "Impl fail @ t = %f (%i steps)" % (dt*k, k)
-                return zeros_like(V)
+                return crumbs
             print int(k*to_percent),
+        if callback is not None:
+            callback(V, (n-k)*dt)
         for j in xrange(nvols):
-            # V[:,j] = spl.solve_banded((1,1), L1i[j].data, V[:,j] + R1[j], overwrite_b=True)
             V[:,j] = spl.solve_banded((abs(min(L1i[j].offsets)),abs(max(L1i[j].offsets))),
                                       L1i[j].data, V[:,j] + R1[j], overwrite_b=True)
         for i in xrange(nspots):
-            # V[i,:] = spl.solve_banded((1,1),
-                                      # L2i[i].data, V[i,:] + R2[i], overwrite_b=True)
-            # V[i,:] = spl.solve_banded((1,1),
-                                      # L2i[i].data[1:4,:], V[i,:] + R2[i], overwrite_b=True)
             V[i,:] = spl.solve_banded((abs(min(L2i[i].offsets)),abs(max(L2i[i].offsets))),
                                       L2i[i].data, V[i,:] + R2[i], overwrite_b=True)
+        crumbs.append(V.copy())
     utils.toc()
-    return V
+    return crumbs
 
-def crank(V,L1,R1x,L2,R2x,dt,n):
+def crank(V, L1, R1x, L2, R2x, dt, n, crumbs=[], callback=None):
     V = V.copy()
     dt *= 0.5
 
@@ -300,19 +309,21 @@ def crank(V,L1,R1x,L2,R2x,dt,n):
     L2i = [x.copy() for x in L2]
     R2  = [x.copy() for x in R2x]
 
+    m = 2
+
+    # L  = (As + Ass - r*np.eye(nspots))*-dt + np.eye(nspots)
     for j in xrange(nvols):
         L1e[j].data *= dt
-        L1e[j].data[1,:] += 1
-        R1[j]  *= dt
+        L1e[j].data[m,:] += 1
         L1i[j].data *= -dt
-        L1i[j].data[1,:] += 1
-
+        L1i[j].data[m,:] += 1
+        R1[j] *= dt
     for i in xrange(nspots):
         L2e[i].data *= dt
-        L2e[i].data[1,:] += 1
-        R2[i] *= dt
+        L2e[i].data[m,:] += 1
         L2i[i].data *= -dt
-        L2i[i].data[1,:] += 1
+        L2i[i].data[m,:] += 1
+        R2[i] *= dt
 
 
     print_step = max(1, int(n / 10))
@@ -322,17 +333,22 @@ def crank(V,L1,R1x,L2,R2x,dt,n):
         if not k % print_step:
             if isnan(V).any():
                 print "Crank fail @ t = %f (%i steps)" % (dt*k, k)
-                return zeros_like(V)
+                return crumbs
             print int(k*to_percent),
+        if callback is not None:
+            callback(V, ((n-k)*dt))
         for j in xrange(nvols):
             V[:,j] = L1e[j].dot(V[:,j]) + R1[j]
         for i in xrange(len(R2)):
-            V[i,:] = spl.solve_banded((2,2), L2i[i].data, V[i,:] + R2[i], overwrite_b=True)
+            V[i,:] = spl.solve_banded((abs(min(L2i[i].offsets)),abs(max(L2i[i].offsets))),
+                                      L2i[i].data, V[i,:] + R2[i], overwrite_b=True)
             V[i,:] = L2e[i].dot(V[i,:]) + R2[i]
         for j in xrange(nvols):
-            V[:,j] = spl.solve_banded((1,1), L1i[j].data, V[:,j] + R1[j], overwrite_b=True)
+            V[:,j] = spl.solve_banded((abs(min(L1i[j].offsets)),abs(max(L1i[j].offsets))),
+                                      L1i[j].data, V[:,j] + R1[j], overwrite_b=True)
+        crumbs.append(V.copy())
     utils.toc()
-    return V
+    return crumbs
 
 
 # Trim for plotting
