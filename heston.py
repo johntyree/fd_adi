@@ -77,7 +77,7 @@ class HestonCos(object):
         if cache:
             # print "Seeking:", fname
             if os.path.isfile(fname):
-                # print "Loading:", fname
+                print "Loading:", fname
                 return np.load(fname)
 
         ret = np.zeros_like(self.S)
@@ -94,6 +94,19 @@ class HestonCos(object):
                         self.sigma,
                         self.rho,
                        )
+        # Value should be monotonic w.r.t. underlying and volatility. If not, we
+        # assume the method is breaking down and correct for it.
+        # print "Setting price to 0 for spot <", self.S[flattenbelow]
+        diffs = np.diff(ret, axis=0)
+        mask = np.vstack((diffs[0, :], diffs)) <= 0
+        ret = np.where(mask, 0, ret)
+        # del diffs, mask
+        # diffs2 = np.diff(ret, n=2, axis=1)
+        # diffs2 = np.hstack((diffs2[:, :1], diffs2[:, :1], diffs2))
+        # mask = diffs2 / self.S > 0.1
+        # diffs = np.cumsum(np.where(mask, 0, diffs2), axis=1)
+        # mask = diffs / self.S < -0.1
+        # ret = np.cumsum(np.where(mask, 0, diffs), axis=1)
         if cache:
             if not os.path.isdir(cache_dir):
                 os.mkdir(cache_dir)
@@ -270,8 +283,13 @@ class HestonFundamental(object):
 
         return np.maximum(0, self.spot * P1 - self.strike * P2 * discount)
 
-def hs_call(s, k, r, vol, t, kappa, theta, sigma, rho, HFUNC=HestonCos):
-    return HFUNC(0, k, r, 0, t, kappa, theta, sigma, rho).solve()
+def hs_call(s, k, r, vols, t, kappa, theta, sigma, rho, HFUNC=HestonCos):
+    if s[0] == 0:
+        ret = HFUNC(s[1:], k, r, vols, t, kappa, theta, sigma, rho).solve()
+        ret = np.vstack((np.zeros((1, len(vols))), ret))
+    else:
+        ret = HFUNC(s, k, r, vols, t, kappa, theta, sigma, rho).solve()
+    return ret
 
 def hs_stream(s, k, r, v, dt, kappa, theta, sigma, rho, HFUNC=HestonCos):
     ret = np.empty((len(s), len(v)))
@@ -285,7 +303,7 @@ def bs_call(s,k,r,v,t):
 
 def bs_call_delta(s, k, r, vol, t):
     N = scipy.stats.distributions.norm.cdf
-    d1 = (np.log(s/k) + (r+0.5*vol**2) * t) / (vol * np.sqrt(t))
+    d1 = (np.log(s/k) + (r+0.5*vol**2) * t) / (np.maximum(1e-10, vol) * np.sqrt(t))
     d2 = d1 - vol*np.sqrt(t)
     return (N(d1)*s - N(d2)*k*np.exp(-r * t), N(d1))
 
