@@ -176,22 +176,38 @@ class HestonCos(object):
         p5 = (8*kappa**2*(1-np.exp(-kappa*T)))*(var_theta)
         c2 = ne.evaluate("0.125*kappa**(-3) * (p1 + p2 + p3 + p4 + p5)")
 
+        # print (S, K, r, var, T, kappa, theta, sigma, rho)
+        # print "x", x
+        # print "p1", p1
+        # print "p2", p2
+        # print "p3", p3
+        # print "p4", p4
+        # print "p5", p5
 
         a = x + c1-L*np.sqrt(abs(c2))
         b = x + c1+L*np.sqrt(abs(c2))
         k = np.arange(N)[np.newaxis,np.newaxis,:]
 
+        # print "a", a
+        # print "b", b
+        # print "c1", c1
+        # print "c2", c2
+
         NPOINTS = max(len(S), len(K))
 
         XI = self.xi(k,a,b,0,b)
+        # print "xi:", XI
         PSI = self.psi(k,a,b,0,b)
+        # print "psi:", PSI
         U = ne.evaluate("2./(b-a)*(XI - PSI)")
 
         cf = self.CF(k*np.pi/(b-a), r, var, T, kappa, theta, sigma, rho)
         cf[:,:,0] *= 0.5
+        # print "cf:", cf
         pi = np.pi
-        ret = ne.evaluate("(cf * exp(I*k*pi*(x-a)/(b-a))) * U")
+        ret = ne.evaluate("(cf * exp(I*k*pi*(x-a)/(b-a))) * U").real
 
+        # print "ret:", ret
         ret = K * np.exp(-r*T) * ret.real.sum(axis=-1)
         ret[np.isnan(ret)] = 0
         return np.maximum(0, ret).T
@@ -314,3 +330,10 @@ def bench():
     ret = np.zeros((len(spots), len(vols)))
     h = HestonCos(spots, 100, 0.06, vols, 1, 1, 0.04, 0.2, 0)
     ret = h.solve()
+
+def main():
+    print HestonCos((100,),99,0.06,(0.0,), 1, 1, 0.04, 0.001, 0).solve(cache=False)
+
+
+if __name__ == "__main__":
+    main()
