@@ -2,7 +2,7 @@
 """Description."""
 
 # import sys
-# import os
+import os
 import itertools as it
 import time
 
@@ -50,25 +50,36 @@ class HestonCos(object):
         self.theta = theta
         self.sigma = sigma
         self.rho   = rho
-        self.N = 2**8
+        self.N = N
 
     def __str__(self):
         return '\n'.join([
-        "Heston COS Object: %s" % id(self)
-        ,"S    : %s" % self.S
-        ,"K    : %s" % self.K
+        "Heston cos object: %s" % id(self), self.param_str()])
+
+    def param_str(self):
+        return '\n'.join([
+         "s    : %s" % self.S
+        ,"k    : %s" % self.K
         ,"r    : %s" % self.r
         ,"vol  : %s" % self.vol
-        ,"T    : %s" % self.T
+        ,"t    : %s" % self.T
         ,"kappa: %s" % self.kappa
         ,"theta: %s" % self.theta
         ,"sigma: %s" % self.sigma
         ,"rho  : %s" % self.rho
-        ,"     : %s" % self.N])
+        ,"N    : %s" % self.N])
 
 
 
-    def solve(self):
+    def solve(self, cache=True):
+        cache_dir = 'heston_cache'
+        fname = os.path.join(cache_dir, "x"+str(hash(self.param_str()))+".npy")
+        if cache:
+            # print "Seeking:", fname
+            if os.path.isfile(fname):
+                # print "Loading:", fname
+                return np.load(fname)
+
         ret = np.zeros_like(self.S)
         # ok = np.exp(np.log(self.S)) * 5*np.sqrt(self.vol) > self.K
         # ok = slice(None)
@@ -83,6 +94,10 @@ class HestonCos(object):
                         self.sigma,
                         self.rho,
                        )
+        if cache:
+            if not os.path.isdir(cache_dir):
+                os.mkdir(cache_dir)
+            np.save(fname, ret)
         return ret
 
 
