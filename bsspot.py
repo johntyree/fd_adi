@@ -224,10 +224,10 @@ for i, s in enumerate(spots):
 
     Rv = np.zeros(nvols)
     Rv *= mu_v
-    Rv[-1] = s-k
+    Rv[-1] = maximum(0, s - k)
 
-    Avv.data[m, 0]   = -2/dvs[1]**2
     Avv.data[m-1, 1] =  2/dvs[1]**2
+    Avv.data[m, 0]   = -2/dvs[1]**2
 
     Avv.data[m-2, 2:]  *= gamma2_v[:-2]
     Avv.data[m-1, 1:]  *= gamma2_v[:-1]
