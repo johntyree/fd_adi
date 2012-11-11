@@ -55,40 +55,49 @@ from time import time
 # ion()
 
 
-# TEMPORARY PARAMETERS
-rate_Spot_Var = 0.5
-
-
+# Contract parameters
 spot = 80.0
 k = 100.0
-r = 0.06
+r = 0.03
 t = 1
-v0 = 0.2
-dt = 1/10.0
+v0 = 0.04
+dt = 1/40.0
 
 kappa = 1
-theta = 0.02
-sigma = 0.2
+theta = v0
+sigma = 0.4
 rho = 0
 
-nspots = 100
-nvols = 400
 
-spotdensity = 100.0  # infinity is linear?
+# Grid parameters
+rate_Spot_Var = 0.5 # Proportion to solve in the var step
+
+spot_max = 500.0
+var_max = 5.0
+
+nspots = 500
+nvols = 500
+
+spotdensity = 5.0  # infinity is linear?
 varexp = 4
-spots = utils.sinh_space(k, 2000, spotdensity, nspots)
+
+spots = utils.sinh_space(k, spot_max, spotdensity, nspots)
 spot = spots[min(abs(spots - spot)) == abs(spots - spot)][0]
 k = spots[min(abs(spots - k)) == abs(spots - k)][0]
-vars = utils.exponential_space(0.00, v0, 10., varexp, nvols)
+vars = utils.exponential_space(0.00, v0, var_max, varexp, nvols)
+# vars = [v0]
+# spots = linspace(0.0, spot_max, nspots)
+# vars = linspace(0.0, var_max, nvols)
 # plot(spots); title("Spots"); show()
 # plot(vars); title("Vars"); show()
 
 trims = (0 < spots) & (spots < k*2.0)
-trimv = (v0*0.1 < vars) & (vars < v0*2.0)
+trimv = (0.01 < vars) & (vars <  1) #v0*2.0)
 # trims = slice(None)
 # trimv = slice(None)
 
 tr = lambda x: x[trims,:][:,trimv]
+tr3 = lambda x: x[:,trims,:][:,:,trimv]
 
 ids = isclose(spots[trims], spot)
 idv = isclose(vars[trimv], v0)
