@@ -208,8 +208,9 @@ for i, s in enumerate(spots):
 
     m = 2
 
-    Av.data[m, 0]   = -1 / dvs[1]
-    Av.data[m-1, 1] =  1 / dvs[1]
+    Av.data[m-2,2] = -dvs[1]           / (dvs[2]*(dvs[1]+dvs[2]))
+    Av.data[m-1,1] = (dvs[1] + dvs[2])  /         (dvs[1]*dvs[2])
+    Av.data[m,0]   = (-2*dvs[1]-dvs[2]) / (dvs[1]*(dvs[1]+dvs[2]))
 
     Av.data[m-2, 2:]  *= mu_v[:-2]
     Av.data[m-1, 1:]  *= mu_v[:-1]
