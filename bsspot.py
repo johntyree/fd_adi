@@ -48,7 +48,7 @@ import scipy.linalg as spl
 import scipy.sparse as sps
 from pylab import *
 import utils
-from visualize import fp, wireframe
+from visualize import fp, wireframe, surface, anim
 from heston import bs_call_delta, hs_call
 from time import time
 
@@ -94,6 +94,9 @@ ids = isclose(spots[trims], spot)
 idv = isclose(vars[trimv], v0)
 dss = np.hstack((np.nan, np.diff(spots)))
 dvs = np.hstack((nan, np.diff(vars)))
+# flip_idx_var = None
+
+BADANALYTICAL = False
 
 def init(spots, nvols, k):
     return tile(np.maximum(0,spots-k), (nvols,1)).T
@@ -104,10 +107,16 @@ V = np.copy(Vi)
 bs, delta = [x for x in bs_call_delta(spots[:,newaxis], k, r,
                                             np.sqrt(vars)[newaxis,:], t)]
 utils.tic("Heston Analytical:")
+# hss = array([hs_call(spots, k, r, np.sqrt(vars),
+             # dt*i, kappa, theta, sigma, rho) for i in range(int(t/dt)+1)])
+# hs = hss[-1]
 hs = hs_call(spots, k, r, np.sqrt(vars),
              t, kappa, theta, sigma, rho)
 utils.toc()
 hs[isnan(hs)] = 0.0
+if max(hs.flat) > spots[-1]*2:
+    BADANALYTICAL = True
+    print "Warning: Analytical solution looks like trash."
 
 if len(sys.argv) > 1:
     if sys.argv[1] == '0':
@@ -317,6 +326,8 @@ line_width = 2
 markers = ['--', '--', ':', '--']
 
 def p1(V, analytical, spots, vars, marker_idx, label):
+    if BADANALYTICAL:
+        label += " - bad analytical!"
     plot((spots/k*100)[front:-back],
          (V-analytical)[front:-back],
          markers[marker_idx], lw=line_width, label=label)
@@ -326,28 +337,70 @@ def p1(V, analytical, spots, vars, marker_idx, label):
     legend(loc=0)
 
 def p2(V, analytical, spots, vars, marker_idx=0, label=""):
-    wireframe(V-analytical, spots, vars)
+    surface(V-analytical, spots, vars)
+    if BADANALYTICAL:
+        label += " - bad analytical!"
     title("Error in Price (%s)" % label)
     xlabel("Var")
     ylabel("% of strike")
     show()
 
+def p3(V, analytical, spots, vars, marker_idx=0, label=""):
+    surface((V-analytical)/analytical, spots, vars)
+    if BADANALYTICAL:
+        label += " - bad analytical!"
+    title("Relative Error in Price (%s)" % label)
+    xlabel("Var")
+    ylabel("% of strike")
+    show()
 
-p = p2
 
-V = impl(Vi,L1_, R1_, L2_, R2_, dt, int(t/dt))
-print tr(V)[ids,idv] - tr(hs)[ids,idv]
-p(tr(V), tr(hs), spots[trims], vars[trimv], 1, "impl")
 
-# V = crank(Vi,L1_, R1_, L2_, R2_, dt, int(t/dt))
-# print tr(V)[ids,idv] - tr(hs)[ids,idv]
-# p(tr(V), tr(hs), spots[trims], vars[trimv], 2, "crank")
+p = p3
+vis = lambda V=V, p=p2: p(V, hs, spots, vars, 0, "")
+vis2 = lambda V=V, p=p2: p(tr(V), tr(hs), spots[trims], vars[trimv], 0, "")
 
-# ## Rannacher smoothing to damp oscilations at the discontinuity
-# V = impl(Vi,L1_, R1_, L2_, R2_, 0.5*dt, 4)
-# V = crank(Vi,L1_, R1_, L2_, R2_, dt, int(t/dt)-2)
-# print tr(V)[ids,idv] - tr(hs)[ids,idv]
-# p(tr(V), tr(hs), spots[trims], vars[trimv], 3, "smooth")
+
+# Vs = impl(Vi,L1_, R1_, L2_, R2_,
+           # dt, int(t/dt)
+          # , crumbs=[Vi]
+          # # , callback=lambda v, t: force_boundary(v, hs)
+         # )
+# Vi = Vs[0]
+# print tr(Vi)[ids,idv] - tr(hs)[ids,idv]
+
+Vs = crank(Vi, L1_, R1_, L2_, R2_,
+           dt, int(t/dt)
+           , crumbs=[Vi]
+           # , callback=lambda v, t: force_boundary(v, hs)
+          )
+Vc = Vs[-1]
+print tr(Vc)[ids,idv] - tr(hs)[ids,idv]
+
+## Rannacher smoothing to damp oscilations at the discontinuity
+Vs = impl(Vi,L1_, R1_, L2_, R2_,
+         dt, 4
+         , crumbs=[Vi]
+         # , callback=lambda v, t: force_boundary(v, hs)
+        )
+Vs.extend(crank(Vs[-1], L1_, R1_, L2_, R2_,
+          dt, int(t/dt)-4
+          , crumbs=[]
+          # , callback=lambda v, t: force_boundary(v, hs)
+         )
+        )
+Vr = Vs[-1]
+print tr(Vr)[ids,idv] - tr(hs)[ids,idv]
+
+
+# p(tr(Vi), tr(hs), spots[trims], vars[trimv], 1, "impl")
+p(tr(Vc), tr(hs), spots[trims], vars[trimv], 2, "crank")
+p(tr(Vr), tr(hs), spots[trims], vars[trimv], 3, "smooth")
+# p(Vi, hs, spots, vars, 1, "impl")
+p(Vc, hs, spots, vars, 1, "crank")
+p(Vr, hs, spots, vars, 1, "smooth")
+
+
 
 if p is p1:
     show()
