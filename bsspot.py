@@ -38,9 +38,6 @@
 # At other large dt, everything is ok again.
 # dt = 1/2.0 ... 1/8.0 .. 1/11.0.. etc
 
-# At small dt, impl and crank are both ok, but with big dip at strike and low
-# vol. Err O(0.05)
-
 import sys
 import numpy as np
 import scipy.stats
@@ -61,24 +58,24 @@ k = 100.0
 r = 0.03
 t = 1
 v0 = 0.04
-dt = 1/40.0
+dt = 1 / 200.0
 
 kappa = 1
-theta = v0
+theta = 0.04
 sigma = 0.4
 rho = 0
 
 
 # Grid parameters
-rate_Spot_Var = 0.5 # Proportion to solve in the var step
+rate_Spot_Var = 0.5  # Proportion to solve in the var step
 
-spot_max = 500.0
-var_max = 5.0
+spot_max = 1500.0
+var_max = 13.0
 
-nspots = 500
-nvols = 500
+nspots = 200
+nvols = 200
 
-spotdensity = 5.0  # infinity is linear?
+spotdensity = 10.0  # infinity is linear?
 varexp = 4
 
 spots = utils.sinh_space(k, spot_max, spotdensity, nspots)
@@ -91,8 +88,8 @@ vars = utils.exponential_space(0.00, v0, var_max, varexp, nvols)
 # plot(spots); title("Spots"); show()
 # plot(vars); title("Vars"); show()
 
-trims = (0 < spots) & (spots < k*2.0)
-trimv = (0.01 < vars) & (vars <  1) #v0*2.0)
+trims = (k * .2 < spots) & (spots < k * 2.0)
+trimv = (0.01 < vars) & (vars < 1)  # v0*2.0)
 # trims = slice(None)
 # trimv = slice(None)
 
@@ -101,8 +98,8 @@ up_or_down_var = 'down'
 flip_idx_var = min(find(vars > theta))
 flip_idx_spot = 2
 
-tr = lambda x: x[trims,:][:,trimv]
-tr3 = lambda x: x[:,trims,:][:,:,trimv]
+tr = lambda x: x[trims, :][:, trimv]
+tr3 = lambda x: x[:, trims, :][:, :, trimv]
 
 ids = isclose(spots[trims], spot)
 idv = isclose(vars[trimv], v0)
@@ -112,14 +109,15 @@ dvs = np.hstack((nan, np.diff(vars)))
 
 BADANALYTICAL = False
 
+
 def init(spots, nvols, k):
-    return tile(np.maximum(0,spots-k), (nvols,1)).T
+    return tile(np.maximum(0, spots - k), (nvols, 1)).T
 
 
 Vi = init(spots, nvols, k)
 V = np.copy(Vi)
-bs, delta = [x for x in bs_call_delta(spots[:,newaxis], k, r,
-                                            np.sqrt(vars)[newaxis,:], t)]
+bs, delta = [x for x in bs_call_delta(spots[:, newaxis], k, r,
+                                      np.sqrt(vars)[newaxis, :], t)]
 utils.tic("Heston Analytical:")
 # hss = array([hs_call(spots, k, r, np.sqrt(vars),
              # dt*i, kappa, theta, sigma, rho) for i in range(int(t/dt)+1)])
@@ -128,7 +126,7 @@ hs = hs_call(spots, k, r, np.sqrt(vars),
              t, kappa, theta, sigma, rho)
 utils.toc()
 hs[isnan(hs)] = 0.0
-if max(hs.flat) > spots[-1]*2:
+if max(hs.flat) > spots[-1] * 2:
     BADANALYTICAL = True
     print "Warning: Analytical solution looks like trash."
 
@@ -142,7 +140,7 @@ R1_ = []
 utils.tic("Building As(s):")
 print "(Up/Down)wind from:", flip_idx_spot
 As_ = utils.nonuniform_complete_coefficients(dss, up_or_down=up_or_down_spot,
-                                                        flip_idx=flip_idx_spot)[0]
+                                             flip_idx=flip_idx_spot)[0]
 Ass_ = utils.nonuniform_complete_coefficients(dss)[1]
 # As_, Ass_ = utils.nonuniform_forward_coefficients(dss)
 assert(not isnan(As_.data).any())
@@ -152,45 +150,43 @@ for j, v in enumerate(vars):
     As, Ass = As_.copy(), Ass_.copy()
     m = 2
 
-    mu_s = r*spots
-    gamma2_s = 0.5*v*spots**2
+    mu_s = r * spots
+    gamma2_s = 0.5 * v * spots ** 2
 
     Rs = np.zeros(nspots)
     Rs[-1] = 1
 
-
-    As.data[m-2, 2:]  *= mu_s[:-2]
-    As.data[m-1, 1:]  *= mu_s[:-1]
-    As.data[m, :]     *= mu_s
-    As.data[m+1, :-1] *= mu_s[1:]
-    As.data[m+2, :-2] *= mu_s[2:]
+    As.data[m - 2, 2:] *= mu_s[:-2]
+    As.data[m - 1, 1:] *= mu_s[:-1]
+    As.data[m, :] *= mu_s
+    As.data[m + 1, :-1] *= mu_s[1:]
+    As.data[m + 2, :-2] *= mu_s[2:]
 
     Rs *= mu_s
 
     Rss = np.zeros(nspots)
-    Rss[-1] = 2*dss[-1]/dss[-1]**2
+    Rss[-1] = 2 * dss[-1] / dss[-1] ** 2
 
+    Ass.data[m, -1] = -2 / dss[-1] ** 2
+    Ass.data[m + 1, -2] = 2 / dss[-1] ** 2
 
-    Ass.data[m,   -1] = -2/dss[-1]**2
-    Ass.data[m+1, -2] =  2/dss[-1]**2
-
-    Ass.data[m-2, 2:]  *= gamma2_s[:-2]
-    Ass.data[m-1, 1:]  *= gamma2_s[:-1]
-    Ass.data[m, :]     *= gamma2_s
-    Ass.data[m+1, :-1] *= gamma2_s[1:]
-    Ass.data[m+2, :-2] *= gamma2_s[2:]
+    Ass.data[m - 2, 2:] *= gamma2_s[:-2]
+    Ass.data[m - 1, 1:] *= gamma2_s[:-1]
+    Ass.data[m, :] *= gamma2_s
+    Ass.data[m + 1, :-1] *= gamma2_s[1:]
+    Ass.data[m + 2, :-2] *= gamma2_s[2:]
 
     Rss *= gamma2_s
 
     L1_.append(As.copy())
     L1_[j].data += Ass.data
-    L1_[j].data[m,:] -= (1 - rate_Spot_Var)*r
+    L1_[j].data[m, :] -= (1 - rate_Spot_Var) * r
 
     R1_.append((Rs + Rss).copy())
 utils.toc()
 
-mu_v = kappa*(theta - vars)
-gamma2_v = 0.5*sigma**2*vars
+mu_v = kappa * (theta - vars)
+gamma2_v = 0.5 * sigma ** 2 * vars
 
 L2_ = []
 R2_ = []
@@ -198,7 +194,7 @@ utils.tic("Building Av(v):")
 print "(Up/Down)wind from:", flip_idx_var
 # Avc_, Avvc_ = utils.nonuniform_center_coefficients(dvs)
 Av_ = utils.nonuniform_complete_coefficients(dvs, up_or_down=up_or_down_var,
-                                                   flip_idx=flip_idx_var)[0]
+                                             flip_idx=flip_idx_var)[0]
 Avv_ = utils.nonuniform_complete_coefficients(dvs)[1]
 assert(not isnan(Av_.data).any())
 assert(not isnan(Avv_.data).any())
@@ -208,15 +204,15 @@ for i, s in enumerate(spots):
 
     m = 2
 
-    Av.data[m-2,2] = -dvs[1]           / (dvs[2]*(dvs[1]+dvs[2]))
-    Av.data[m-1,1] = (dvs[1] + dvs[2])  /         (dvs[1]*dvs[2])
-    Av.data[m,0]   = (-2*dvs[1]-dvs[2]) / (dvs[1]*(dvs[1]+dvs[2]))
+    Av.data[m - 2, 2] = -dvs[1] / (dvs[2] * (dvs[1] + dvs[2]))
+    Av.data[m - 1, 1] = (dvs[1] + dvs[2]) / (dvs[1] * dvs[2])
+    Av.data[m, 0] = (-2 * dvs[1] - dvs[2]) / (dvs[1] * (dvs[1] + dvs[2]))
 
-    Av.data[m-2, 2:]  *= mu_v[:-2]
-    Av.data[m-1, 1:]  *= mu_v[:-1]
-    Av.data[m, :]     *= mu_v
-    Av.data[m+1, :-1] *= mu_v[1:]
-    Av.data[m+2, :-2] *= mu_v[2:]
+    Av.data[m - 2, 2:] *= mu_v[:-2]
+    Av.data[m - 1, 1:] *= mu_v[:-1]
+    Av.data[m, :] *= mu_v
+    Av.data[m + 1, :-1] *= mu_v[1:]
+    Av.data[m + 2, :-2] *= mu_v[2:]
 
     Av.data[m, -1] = -1  # This is to cancel out the previous value so we can
                           # set the dirichlet boundary condition using R.
@@ -226,23 +222,22 @@ for i, s in enumerate(spots):
     Rv *= mu_v
     Rv[-1] = maximum(0, s - k)
 
-    Avv.data[m-1, 1] =  2/dvs[1]**2
-    Avv.data[m, 0]   = -2/dvs[1]**2
+    Avv.data[m - 1, 1] = 2 / dvs[1] ** 2
+    Avv.data[m, 0] = -2 / dvs[1] ** 2
 
-    Avv.data[m-2, 2:]  *= gamma2_v[:-2]
-    Avv.data[m-1, 1:]  *= gamma2_v[:-1]
-    Avv.data[m, :]     *= gamma2_v
-    Avv.data[m+1, :-1] *= gamma2_v[1:]
-    Avv.data[m+2, :-2] *= gamma2_v[2:]
-
+    Avv.data[m - 2, 2:] *= gamma2_v[:-2]
+    Avv.data[m - 1, 1:] *= gamma2_v[:-1]
+    Avv.data[m, :] *= gamma2_v
+    Avv.data[m + 1, :-1] *= gamma2_v[1:]
+    Avv.data[m + 2, :-2] *= gamma2_v[2:]
 
     Rvv = np.zeros(nvols)
-    Rvv[0] = 2*dvs[1]/dvs[1]**2
+    Rvv[0] = 2 * dvs[1] / dvs[1] ** 2
     Rvv *= gamma2_v
 
     L2_.append(Av.copy())
     L2_[i].data += Avv.data
-    L2_[i].data[m,:] -= rate_Spot_Var*r
+    L2_[i].data[m, :] -= rate_Spot_Var * r
 
     R2_.append(Rv + Rvv)
 utils.toc()
@@ -253,99 +248,108 @@ def force_boundary(V, values=None, t=None):
     # m2 = hs_call(np.array((spots[0], spots[-1])), k, r, sqrt(vars), t, kappa, theta, sigma, rho)
     m = values
     m1 = m2 = m
-    V[0,:] = m2[0,:] # top
-    V[:,0] = m1[:,0] # left
-    V[-1,:] = m2[-1,:] # bottom
-    V[:,-1] = m1[:,-1] # right
+    V[0, :] = m2[0, :]  # top
+    V[:, 0] = m1[:, 0]  # left
+    V[-1, :] = m2[-1, :]  # bottom
+    V[:, -1] = m1[:, -1]  # right
+
 
 def impl(V, L1, R1x, L2, R2x, dt, n, crumbs=[], callback=None):
     V = V.copy()
     L1i = [x.copy() for x in L1]
-    R1  = [x.copy() for x in R1x]
+    R1 = [x.copy() for x in R1x]
     L2i = [x.copy() for x in L2]
-    R2  = [x.copy() for x in R2x]
+    R2 = [x.copy() for x in R2x]
 
     m = 2
 
     # L  = (As + Ass - r*np.eye(nspots))*-dt + np.eye(nspots)
     for j in xrange(nvols):
         L1i[j].data *= -dt
-        L1i[j].data[m,:] += 1
+        L1i[j].data[m, :] += 1
         R1[j] *= dt
     for i in xrange(nspots):
         L2i[i].data *= -dt
-        L2i[i].data[m,:] += 1
+        L2i[i].data[m, :] += 1
         R2[i] *= dt
 
     print_step = max(1, int(n / 10))
-    to_percent = 100.0/n
+    to_percent = 100.0 / n
     utils.tic("Impl:")
     for k in xrange(n):
         if not k % print_step:
             if isnan(V).any():
-                print "Impl fail @ t = %f (%i steps)" % (dt*k, k)
+                print "Impl fail @ t = %f (%i steps)" % (dt * k, k)
                 return crumbs
-            print int(k*to_percent),
+            print int(k * to_percent),
         if callback is not None:
-            callback(V, (n-k)*dt)
+            callback(V, (n - k) * dt)
         for j in xrange(nvols):
-            V[:,j] = spl.solve_banded((abs(min(L1i[j].offsets)),abs(max(L1i[j].offsets))),
-                                      L1i[j].data, V[:,j] + R1[j], overwrite_b=True)
+            V[:, j] = spl.solve_banded(
+                (abs(min(L1i[j].offsets)), abs(max(L1i[j].offsets))),
+                L1i[j].data, V[:, j] + R1[j], overwrite_b=True)
         for i in xrange(nspots):
-            V[i,:] = spl.solve_banded((abs(min(L2i[i].offsets)),abs(max(L2i[i].offsets))),
-                                      L2i[i].data, V[i,:] + R2[i], overwrite_b=True)
+            V[i, :] = spl.solve_banded(
+                (abs(min(L2i[i].offsets)), abs(max(L2i[i].offsets))),
+                L2i[i].data, V[i, :] + R2[i], overwrite_b=True)
         crumbs.append(V.copy())
     utils.toc()
     return crumbs
+
+
+
+def flatten_tensor(mats):
+    diags = np.hstack([x.data for x in mats])
+    flatmat = sps.dia_matrix((diags, mats[0].offsets), shape=(diags.shape[1], diags.shape[1]))
+    return flatmat
 
 def crank(V, L1, R1x, L2, R2x, dt, n, crumbs=[], callback=None):
     V = V.copy()
     dt *= 0.5
 
-    L1e = [x.copy() for x in L1]
-    L1i = [x.copy() for x in L1]
-    R1  = [x.copy() for x in R1x]
-    L2e = [x.copy() for x in L2]
-    L2i = [x.copy() for x in L2]
-    R2  = [x.copy() for x in R2x]
+    L1e = flatten_tensor(L1)
+    L1i = L1e.copy()
+    R1 = np.array(R1x).T
+
+    L2e = flatten_tensor(L2)
+    L2i = L2e.copy()
+    R2 = np.array(R2x)
 
     m = 2
 
     # L  = (As + Ass - r*np.eye(nspots))*-dt + np.eye(nspots)
-    for j in xrange(nvols):
-        L1e[j].data *= dt
-        L1e[j].data[m,:] += 1
-        L1i[j].data *= -dt
-        L1i[j].data[m,:] += 1
-        R1[j] *= dt
-    for i in xrange(nspots):
-        L2e[i].data *= dt
-        L2e[i].data[m,:] += 1
-        L2i[i].data *= -dt
-        L2i[i].data[m,:] += 1
-        R2[i] *= dt
+    L1e.data *= dt
+    L1e.data[m, :] += 1
+    L1i.data *= -dt
+    L1i.data[m, :] += 1
+    R1 *= dt
 
+    L2e.data *= dt
+    L2e.data[m, :] += 1
+    L2i.data *= -dt
+    L2i.data[m, :] += 1
+    R2 *= dt
+
+    offsets1 = (abs(min(L1i.offsets)), abs(max(L1i.offsets)))
+    offsets2 = (abs(min(L2i.offsets)), abs(max(L2i.offsets)))
 
     print_step = max(1, int(n / 10))
-    to_percent = 100.0/n
+    to_percent = 100.0 / n
     utils.tic("Crank:")
     for k in xrange(n):
         if not k % print_step:
             if isnan(V).any():
-                print "Crank fail @ t = %f (%i steps)" % (dt*k, k)
+                print "Crank fail @ t = %f (%i steps)" % (dt * k, k)
                 return crumbs
-            print int(k*to_percent),
+            print int(k * to_percent),
         if callback is not None:
-            callback(V, ((n-k)*dt))
-        for j in xrange(nvols):
-            V[:,j] = L1e[j].dot(V[:,j]) + R1[j]
-        for i in xrange(len(R2)):
-            V[i,:] = spl.solve_banded((abs(min(L2i[i].offsets)),abs(max(L2i[i].offsets))),
-                                      L2i[i].data, V[i,:] + R2[i], overwrite_b=True)
-            V[i,:] = L2e[i].dot(V[i,:]) + R2[i]
-        for j in xrange(nvols):
-            V[:,j] = spl.solve_banded((abs(min(L1i[j].offsets)),abs(max(L1i[j].offsets))),
-                                      L1i[j].data, V[:,j] + R1[j], overwrite_b=True)
+            callback(V, ((n - k) * dt))
+        V = (L1e.dot(V.T.flat).reshape(V.shape[::-1]).T) + R1
+        V = spl.solve_banded(offsets2, L2i.data,
+                             (V + R2).flat, overwrite_b=True).reshape(V.shape)
+        V = L2e.dot(V.flat).reshape(V.shape) + R2
+        V = spl.solve_banded(offsets1, L1i.data,
+                             (V + R1).T.flat, overwrite_b=True).reshape(V.shape[::-1]).T
         crumbs.append(V.copy())
     utils.toc()
     return crumbs
@@ -358,19 +362,21 @@ line_width = 2
           # exp  imp   cr   smo
 markers = ['--', '--', ':', '--']
 
+
 def p1(V, analytical, spots, vars, marker_idx, label):
     if BADANALYTICAL:
         label += " - bad analytical!"
-    plot((spots/k*100)[front:-back],
-         (V-analytical)[front:-back],
+    plot((spots / k * 100)[front:-back],
+         (V - analytical)[front:-back],
          markers[marker_idx], lw=line_width, label=label)
     title("Error in Price")
     xlabel("% of strike")
     ylabel("Error")
     legend(loc=0)
 
+
 def p2(V, analytical, spots, vars, marker_idx=0, label=""):
-    surface(V-analytical, spots, vars)
+    surface(V - analytical, spots, vars)
     if BADANALYTICAL:
         label += " - bad analytical!"
     title("Error in Price (%s)" % label)
@@ -378,8 +384,9 @@ def p2(V, analytical, spots, vars, marker_idx=0, label=""):
     ylabel("% of strike")
     show()
 
+
 def p3(V, analytical, spots, vars, marker_idx=0, label=""):
-    surface((V-analytical)/analytical, spots, vars)
+    surface((V - analytical) / analytical, spots, vars)
     if BADANALYTICAL:
         label += " - bad analytical!"
     title("Relative Error in Price (%s)" % label)
@@ -388,51 +395,50 @@ def p3(V, analytical, spots, vars, marker_idx=0, label=""):
     show()
 
 
+p = p2
+evis = lambda V=V, p=p2: p(V, hs, spots, vars, 0, "")
+evis2 = lambda V=V, p=p2: p(tr(V), tr(hs), spots[trims], vars[trimv], 0, "")
+vis = lambda V=V, p=p2: p(V, 0, spots, vars, 0, "")
+vis2 = lambda V=V, p=p2: p(tr(V), 0, spots[trims], vars[trimv], 0, "")
 
-p = p3
-vis = lambda V=V, p=p2: p(V, hs, spots, vars, 0, "")
-vis2 = lambda V=V, p=p2: p(tr(V), tr(hs), spots[trims], vars[trimv], 0, "")
 
-
-# Vs = impl(Vi,L1_, R1_, L2_, R2_,
-           # dt, int(t/dt)
-          # , crumbs=[Vi]
+# Vs = impl(Vi, L1_, R1_, L2_, R2_,
+          # dt, int(t / dt), crumbs=[Vi]
           # # , callback=lambda v, t: force_boundary(v, hs)
-         # )
+          # )
 # Vi = Vs[0]
-# print tr(Vi)[ids,idv] - tr(hs)[ids,idv]
+# print tr(Vi)[ids, idv] - tr(hs)[ids, idv]
 
-Vs = crank(Vi, L1_, R1_, L2_, R2_,
-           dt, int(t/dt)
-           , crumbs=[Vi]
-           # , callback=lambda v, t: force_boundary(v, hs)
-          )
-Vc = Vs[-1]
-print tr(Vc)[ids,idv] - tr(hs)[ids,idv]
+# Vs = crank(Vi, L1_, R1_, L2_, R2_,
+           # dt, int(t / dt), crumbs=[Vi]
+           # # , callback=lambda v, t: force_boundary(v, hs)
+           # )
+# Vc = Vs[-1]
+# print tr(Vc)[ids, idv] - tr(hs)[ids, idv]
 
 ## Rannacher smoothing to damp oscilations at the discontinuity
-Vs = impl(Vi,L1_, R1_, L2_, R2_,
-         dt, 4
-         , crumbs=[Vi]
-         # , callback=lambda v, t: force_boundary(v, hs)
-        )
-Vs.extend(crank(Vs[-1], L1_, R1_, L2_, R2_,
-          dt, int(t/dt)-4
-          , crumbs=[]
+smoothing_steps = 2
+Vs = impl(Vi, L1_, R1_, L2_, R2_,
+          dt, smoothing_steps, crumbs=[Vi]
           # , callback=lambda v, t: force_boundary(v, hs)
-         )
-        )
+          )
+Vs.extend(crank(Vs[-1], L1_, R1_, L2_, R2_,
+          dt, int(t / dt) - smoothing_steps, crumbs=[]
+          # , callback=lambda v, t: force_boundary(v, hs)
+                )
+          )
 Vr = Vs[-1]
-print tr(Vr)[ids,idv] - tr(hs)[ids,idv]
+print tr(Vr)[ids, idv] - tr(hs)[ids, idv]
 
-
+ion()
 # p(tr(Vi), tr(hs), spots[trims], vars[trimv], 1, "impl")
-p(tr(Vc), tr(hs), spots[trims], vars[trimv], 2, "crank")
+# p(tr(Vc), tr(hs), spots[trims], vars[trimv], 2, "crank")
 p(tr(Vr), tr(hs), spots[trims], vars[trimv], 3, "smooth")
+ioff()
+show()
 # p(Vi, hs, spots, vars, 1, "impl")
-p(Vc, hs, spots, vars, 1, "crank")
-p(Vr, hs, spots, vars, 1, "smooth")
-
+# p(Vc, hs, spots, vars, 1, "crank")
+# p(Vr, hs, spots, vars, 1, "smooth")
 
 
 if p is p1:
