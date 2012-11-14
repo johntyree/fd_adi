@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+# coding: utf8
 
 import numpy as np
 import pylab
@@ -6,40 +7,63 @@ from mpl_toolkits.mplot3d import axes3d
 from utils import center_diff
 import time
 
-def filterprint(A, prec=1, fmt="f", predicate=lambda x: x == 0, blank='- '):
+def filterprint(domain, prec=1, fmt="f", predicate=lambda x: x == 0, blank='- '):
     """
     Pretty print a NumPy array, hiding values which match a predicate
     (default: x == 0). predicate must be callable.
+
+    Aliased to fp.
+
+    Print an array with three decimal places in scientific notation when the
+    value is larger than 2, and '-' otherwise.
+
+        fp(domain, 3, 'e', lambda x: x > 2)
+
     """
-    if hasattr(A, "todense"):
-        A = A.todense()
-    if A.ndim == 1: # Print 1-D vectors as columns
-        A = A[:,np.newaxis]
+    if hasattr(domain, "todense"):
+        domain = domain.todense()
+    if domain.ndim == 1: # Print 1-D vectors as columns
+        domain = domain[:,np.newaxis]
     tmp = "% .{0}{1}".format(prec, fmt)
-    xdim, ydim = np.shape(A)
-    pad = max(len(tmp % x) for x in A.flat)
+    xdim, ydim = np.shape(domain)
+    pad = max(len(tmp % x) for x in domain.flat)
     fmt = "% {pad}.{prec}{fmt}".format(pad=pad, prec=prec, fmt=fmt)
     bstr = "{:>{pad}}".format(blank, pad=pad)
     for i in range(xdim):
         for j in range(ydim):
-            if not predicate(A[i,j]):
-                print fmt % A[i,j],
+            if not predicate(domain[i,j]):
+                print fmt % domain[i,j],
             else:
                 print bstr,
         print
     return
 fp = filterprint
 
-def lineplot(domain, xs, ys=None, ax=None):
+
+def lineplot(domain, xs=None, dummy=None, ax=None, style='b'):
+    """Regular plot of 1D line, à la pylab.plot(), but with a uniform interface
+    for use with anim().
+    """
+    if xs is None:
+        xs = np.arange(domain.shape[0])
+    if domain.shape != xs.shape:
+        print "Domain shape %s does match axes %s." % (domain.shape, xs.shape)
     if ax is None:
         fig = pylab.figure()
         ax = fig.add_subplot(111)
-    lines = ax.plot(xs, domain)
+    lines = ax.plot(xs, domain, style)
     return lines, ax
 
 
 def wireframe(domain, xs=None, ys=None, ax=None):
-    """Convenience func for plotting a wireframe."""
+    """
+    Plot a wireframe with countour plots projected on the "walls".
+
+    domain is a 2D array, xs and ys are both 1D vectors. The shapes must align
+    such that domain.shape == (length(xs), length(ys)).
+
+    The ax parameter is for reusing the plot for animation. Ignore it.
+    """
     if xs is None:
         xs = np.arange(domain.shape[0])
     if ys is None:
@@ -62,7 +86,7 @@ def wireframe(domain, xs=None, ys=None, ax=None):
     xmin = np.min(ys)
     ymax = np.max(xs)
     zmin = np.min(domain)
-    print xmin, ymax, zmin
+    # print xmin, ymax, zmin
     cset = ax.contour(X, Y, domain, zdir='x', offset=xmin)
     cset = ax.contour(X, Y, domain, zdir='y', offset=ymax)
     cset = ax.contour(X, Y, domain, zdir='z', offset=zmin)
@@ -70,7 +94,14 @@ def wireframe(domain, xs=None, ys=None, ax=None):
 
 
 def surface(domain, xs=None, ys=None, ax=None):
-    """Convenience func for plotting a surface."""
+    """
+    Plot the usual colored 3D surface.
+
+    domain is a 2D array, xs and ys are both 1D vectors. The shapes must align
+    such that domain.shape == (length(xs), length(ys)).
+
+    The ax parameter is for reusing the plot for animation. Ignore it.
+    """
     if xs is None:
         xs = np.arange(domain.shape[0])
     if ys is None:
@@ -91,10 +122,15 @@ def surface(domain, xs=None, ys=None, ax=None):
 
 def anim(plotter, domains, xs=None, ys=None, FPS=2):
     """
-    A very simple 'animation' of a 3D plot. This does not work with inline.
+    A very simple 'animation' of a 3D plot. This does not work with the inline
+    backend of IPython, so use TkAgg GTKAgg or something.
 
-        %pylab
-        anim(surface, [V1, V2....], xs, ys, FPS=1)
+    plotter is one of @surface@, @wireframe@, or @lineplot@.
+    domains is an iterable of domain snapshots. See the docs for the plotter for
+    clarification.
+
+        %pylab TkAgg
+        anim(surface, [domain1, domain2, ...], xs, ys, FPS=1)
     """
     SPF = 1.0 / FPS
     start = time.time()
@@ -106,7 +142,11 @@ def anim(plotter, domains, xs=None, ys=None, FPS=2):
             frame_start = time.time()
             # Remove old line collection before drawing
             if oldcol is not None:
-                ax.collections.remove(oldcol)
+                if ax.collections:
+                    ax.collections.remove(oldcol)
+                elif ax.lines:
+                    for l in oldcol:
+                        ax.lines.remove(l)
 
             oldcol, ax = plotter(Z, xs, ys, ax)
             pylab.xlabel("#%02i" % (i,))
@@ -129,68 +169,33 @@ def anim(plotter, domains, xs=None, ys=None, FPS=2):
 
 
 
-def plot_price_err(V, spots, k, vars, analytical, label=None, ids=slice(None)):
-    # Trim for plotting
-    front = 2
-    back = 2
-    assert(0 < V.ndim < 3)
-    if V.ndim == 1 or V.shape[1] == 1:
-        pylab.plot((spots/k*100)[ids][front:-back],
-             (V - analytical)[ids][front:-back], label=label)
-        pylab.xlabel("% of strike")
-        pylab.ylabel("Error")
-        pylab.title("Error in Price")
-    if V.ndim == 2 and V.shape[1] > 1:
-        assert(vars is not None)
-        # if ids is None:
-            # ids = slice(len(spots))
-        wireframe((V-analytical)[ids,:] , (spots/k*100)[ids],(vars))
-        pylab.xlabel("Var")
-        pylab.ylabel("% of strike")
-        pylab.title("Error in Price: {0}".format(label))
-    pylab.legend(loc=0)
-
-
-def plot_price(V, spots, k, vars, label=None, ids=slice(None)):
-    # Trim for plotting
-    front = 2
-    back = 2
-    assert(0 < V.ndim < 3)
-    if V.ndim == 1 or V.shape[1] == 1:
-        pylab.plot((spots/k*100)[ids][front:-back],
-             V[ids,front:-back], label=label)
-        pylab.xlabel("% of strike")
-        pylab.ylabel("Price")
-        pylab.title("Price")
-    if V.ndim == 2 and V.shape[1] > 1:
-        assert(vars is not None)
-        if ids is None:
-            ids = slice(len(spots))
-        wireframe(V[ids,:] , (spots/k*100)[ids],(vars))
-        pylab.xlabel("Var")
-        pylab.ylabel("% of strike")
-        pylab.title("Price: {0}".format(label))
-    pylab.legend(loc=0)
-
-
-def plot_dUds_err(V, bs, spots, vars, plotter=wireframe):
-    dUds = center_diff(V,axis=0)/center_diff(vars)
-    dbsds = center_diff(bs,axis=0)/center_diff(vars)
-    plotter(dUds - dbsds, spots, vars)
+def plot_dUds_err(domain, analytical, spots, vars, plotter=wireframe):
+    """
+    Plot the error in the derivative down each columns.
+    """
+    dUds = center_diff(domain,axis=0)/center_diff(vars)
+    danalyticalds = center_diff(analytical,axis=0)/center_diff(vars)
+    plotter(dUds - danalyticalds, spots, vars)
     pylab.title("Error in $\Delta$")
     pylab.xlabel("Var")
     pylab.ylabel("% of strike")
 
-def plot_dUdv(V, spots, vars, plotter=wireframe):
-    dUdv = center_diff(V,axis=1)/center_diff(vars)
+def plot_dUdv(domain, spots, vars, plotter=wireframe):
+    """
+    Plot the error in the derivative across each row.
+    """
+    dUdv = center_diff(domain,axis=1)/center_diff(vars)
     plotter(dUdv, spots, vars)
     pylab.title("First deriv w.r.t. var")
     pylab.xlabel("Var")
     pylab.ylabel("% of strike")
     pylab.show()
 
-def plot_d2Udv2(V, spots, vars, plotter=wireframe):
-    d2Udv2 = center_diff(V,n=2,axis=1)/center_diff(vars, 2)
+def plot_d2Udv2(domain, spots, vars, plotter=wireframe):
+    """
+    Plot the error in the second derivative across each row.
+    """
+    d2Udv2 = center_diff(domain,n=2,axis=1)/center_diff(vars, 2)
     plotter(d2Udv2, spots, vars)
     pylab.title("Second deriv w.r.t. var")
     pylab.xlabel("Var")

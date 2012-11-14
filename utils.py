@@ -9,6 +9,13 @@ import scipy.sparse
 import scipy.optimize
 
 def tic(label=None):
+    """
+    Matlab-style timing function.
+
+        In []: tic('foo:'); sleep(10); toc();
+            foo: 10.0004s
+        Out[]: 10.0004
+    """
     global TIC_START
     if label is not None:
         print label,
@@ -16,6 +23,13 @@ def tic(label=None):
     TIC_START = time.time()
 
 def toc(label=None):
+    """
+    Matlab-style timing function.
+
+        In []: tic('foo:'); sleep(10); toc();
+            foo: 10.0004s
+        Out[]: 10.0004
+    """
     t = time.time() - TIC_START
     if label is not None:
         print label,
@@ -24,14 +38,32 @@ def toc(label=None):
     return t
 
 def D(dim):
-    """Discrete first derivative operator with no boundary."""
+    """
+    Discrete first derivative operator with no boundary.
+    Returns a DIAmatrix object looking like:
+
+         0  0  0  0  0
+        -1  0  1  0  0
+         0 -1  0  1  0
+         0  0 -1  0  1
+         0  0  0  0  0
+    """
     operator = np.zeros((3, dim))
     operator[0,2:]  =  0.5
     operator[2,:-2] = -0.5
     return scipy.sparse.dia_matrix((operator, (1,0,-1)), shape=(dim,dim))
 
 def D2(dim):
-    """Discrete second derivative operator with no boundary."""
+    """
+    Discrete second derivative operator with no boundary.
+    Returns a DIAmatrix object looking like:
+
+         0  0  0  0  0
+         1 -2  1  0  0
+         0  1 -2  1  0
+         0  0  1 -2  1
+         0  0  0  0  0
+    """
     operator = np.zeros((3, dim))
     operator[0,2:]  =  1
     operator[1,1:-1]  = -2
@@ -58,7 +90,11 @@ def center_diff(domain, n=1, axis=-1):
     return xs
 
 def sinh_space(exact, high, density, size):
-    """Sigmoidal space with high density around 'exact'. Use ~ 0.93."""
+    """
+    Sigmoidal space with high density around 'exact'.
+
+    Play with the density value because it's really dependent on exact and high.
+    """
     # def g(x, K, c, p): return K + c/p * np.sinh(p*x + np.arcsinh(-p*K/c))
     # c = float(density)
     if size == 1:
@@ -76,7 +112,10 @@ def sinh_space(exact, high, density, size):
     return space
 
 def exponential_space(low, exact, high, ex, size):
-    """Ex is the exponent used to map to the new space."""
+    """
+    Exponential space like y = x**ex. The exact value will be satisfied by
+    adjust the high value upwards as necessary.
+    """
     if size == 1:
         return array([exact])
     v = np.zeros(size)
@@ -94,7 +133,7 @@ def exponential_space(low, exact, high, ex, size):
             j = i-1
             break
     if (j == 0):
-        print "Did not find thingy."
+        print "Did not find suitable value."
         assert(j != 0)
     dx = x - (l + j*dv)
     h += (size-1) * dx/j
@@ -122,8 +161,8 @@ def cubic_sigmoid_space(exact, high, density, size):
 
 
 def nonuniform_backward_coefficients(deltas):
-    """The coefficients for tridiagonal matrices operating on a non-uniform
-    grid.
+    """
+    The coefficients for tridiagonal matrices operating on a non-uniform grid.
 
     L = spl.dia_matrix((fst, (0,-1,-2)), shape=(fst.shape[1], fst.shape[1]))
     """
@@ -148,8 +187,8 @@ def nonuniform_backward_coefficients(deltas):
 
 
 def nonuniform_forward_coefficients(deltas):
-    """The coefficients for tridiagonal matrices operating on a non-uniform
-    grid.
+    """
+    The coefficients for tridiagonal matrices operating on a non-uniform grid.
 
     L = spl.dia_matrix((fst, (2,1,0)), shape=(fst.shape[1], fst.shape[1]))
     """
@@ -198,6 +237,9 @@ def nonuniform_complete_coefficients(deltas, boundary=None, up_or_down=None,
     The coefficients for tridiagonal matrices. Boundary can be one of 'low',
     'high', or 'both'. downwind_from is the index of the first element for which
     backwards differencing will be applied.
+
+
+    L = spl.dia_matrix((fst, (1,0,-1)), shape=(fst.shape[1], fst.shape[1]))
     """
     d = deltas.copy()
 
