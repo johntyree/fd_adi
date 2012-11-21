@@ -23,6 +23,7 @@ def tic(label=None):
     sys.stdout.flush()
     TIC_START = time.time()
 
+
 def toc(label=None):
     """
     Matlab-style timing function.
@@ -37,6 +38,7 @@ def toc(label=None):
     print "%fs" % t
     sys.stdout.flush()
     return t
+
 
 def D(dim):
     """
@@ -53,6 +55,7 @@ def D(dim):
     operator[0,2:]  =  0.5
     operator[2,:-2] = -0.5
     return scipy.sparse.dia_matrix((operator, (1,0,-1)), shape=(dim,dim))
+
 
 def D2(dim):
     """
@@ -90,6 +93,7 @@ def center_diff(domain, n=1, axis=-1):
             t = xs; xs = dx; dx = t
     return xs
 
+
 def sinh_space(exact, high, density, size):
     """
     Sigmoidal space with high density around 'exact'.
@@ -111,6 +115,7 @@ def sinh_space(exact, high, density, size):
     eps = np.arcsinh(-K/density) + np.arange(size)*deps
     space = K + density * np.sinh(eps)
     return space
+
 
 def exponential_space(low, exact, high, ex, size):
     """
@@ -143,6 +148,7 @@ def exponential_space(low, exact, high, ex, size):
         v[i] = l + pow(i*dv, ex)
     return v
 
+
 def cubic_sigmoid_space(exact, high, density, size):
     """Cheap and bad sigmoid curve. Use sinh instead."""
     if size == 1:
@@ -158,9 +164,6 @@ def cubic_sigmoid_space(exact, high, density, size):
         y[i] = exact + (x**3+x)*scale
 
     return y
-
-
-from visualize import fp
 
 
 def nonuniform_backward_coefficients(deltas):
@@ -184,9 +187,12 @@ def nonuniform_backward_coefficients(deltas):
         snd[m+2, i-2] = d[i]           / denom
 
     # Use first order approximation for the first (inner) row
-    fst[m,   1] =  1 / d[-1]
-    fst[m+1, 0] = -1 / d[-1]
+    # fst[m,   1] =  1 / d[-1]
+    # fst[m+1, 0] = -1 / d[-1]
     # fst[m+2, 0] = 0
+    fst[m-1, 2] = 2  / (d[i+1]*(d[i]+d[i+1]))
+    fst[m  , 1] = -2 /       (d[i]*d[i+1])
+    fst[m+1, 0] = 2  / (d[i  ]*(d[i]+d[i+1]))
 
     # Use centered approximation for the first (inner) row
     snd[m-1, 2] =  2 / (d[i+1]*(d[i]+d[i+1]))
@@ -219,9 +225,12 @@ def nonuniform_forward_coefficients(deltas):
         snd[m,i]   =   d[i+2]         / denom
 
     # Use first order approximation for the last (inner) row
-    fst[m-2,  0] = 0
-    fst[m-1,   -1] =  1 / d[-1]
-    fst[m, -2] = -1 / d[-1]
+    # fst[m-2,  0] = 0
+    # fst[m-1,   -1] =  1 / d[-1]
+    # fst[m, -2] = -1 / d[-1]
+    fst[m-1, -1] = 2  / (d[i+1]*(d[i]+d[i+1]))
+    fst[m  ,-2] = -2 /       (d[i]*d[i+1])
+    fst[m+1,-3] = 2  / (d[i  ]*(d[i]+d[i+1]))
 
     # Use centered approximation for the last (inner) row
     snd[m-1, -1] = 2  / (d[i+1]*(d[i]+d[i+1]))
