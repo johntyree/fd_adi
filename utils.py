@@ -7,6 +7,10 @@ import numpy as np
 import pylab
 import scipy.sparse
 import scipy.optimize
+import inspect
+
+def attr_dict(a):
+    return dict(inspect.getmembers(a))
 
 
 def tic(label=None):
@@ -190,9 +194,9 @@ def nonuniform_backward_coefficients(deltas):
     # fst[m,   1] =  1 / d[-1]
     # fst[m+1, 0] = -1 / d[-1]
     # fst[m+2, 0] = 0
-    fst[m-1, 2] = 2  / (d[i+1]*(d[i]+d[i+1]))
-    fst[m  , 1] = -2 /       (d[i]*d[i+1])
-    fst[m+1, 0] = 2  / (d[i  ]*(d[i]+d[i+1]))
+    fst[m-1,2] =          d[1]  / (d[2]*(d[1]+d[2]))
+    fst[m,  1] = (-d[1] + d[2]) /       (d[1]*d[2])
+    fst[m+1,0] =         -d[2]  / (d[1]*(d[1]+d[2]))
 
     # Use centered approximation for the first (inner) row
     snd[m-1, 2] =  2 / (d[i+1]*(d[i]+d[i+1]))
@@ -228,12 +232,12 @@ def nonuniform_forward_coefficients(deltas):
     # fst[m-2,  0] = 0
     # fst[m-1,   -1] =  1 / d[-1]
     # fst[m, -2] = -1 / d[-1]
-    fst[m-1, -1] = 2  / (d[i+1]*(d[i]+d[i+1]))
-    fst[m  ,-2] = -2 /       (d[i]*d[i+1])
-    fst[m+1,-3] = 2  / (d[i  ]*(d[i]+d[i+1]))
+    fst[m-1,-1] =           d[-2]  / (d[-1]*(d[-2]+d[-1]))
+    fst[m,  -2] = (-d[-2] + d[-1]) /        (d[-2]*d[-1])
+    fst[m+1,-3] =          -d[-1]  / (d[-2]*(d[-2]+d[-1]))
 
     # Use centered approximation for the last (inner) row
-    snd[m-1, -1] = 2  / (d[i+1]*(d[i]+d[i+1]))
+    snd[m-1, -1] = 2 / (d[i+1]*(d[i]+d[i+1]))
     snd[m  ,-2] = -2 /       (d[i]*d[i+1])
     snd[m+1,-3] = 2  / (d[i  ]*(d[i]+d[i+1]))
 
