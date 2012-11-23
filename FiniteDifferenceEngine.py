@@ -93,14 +93,13 @@ class FiniteDifferenceEngine(object):
 
 
     def make_discrete_operators(self):
-        # TODO: Hardcoding in the boundary conditions... :(
         ndim = self.grid.ndim
         coeffs = self.coefficients
         bounds = self.boundaries
         order = 2
         # key = dim, val = [Bool, Bool] # upper lower
         dirichlets = {}
-        def wrapfunc(f, args, dim):
+        def wrapscalarfunc(f, args, dim):
             x = list(args)
             x.insert(dim, None)
             def newf(i):
@@ -108,7 +107,12 @@ class FiniteDifferenceEngine(object):
                 # print "Args for dim %i: %s" % (dim, x)
                 return f(self.t, *x)
             return newf
+        def evalvectorfunc(f, args, dim):
+            x = list(args)
+            x.insert(dim, self.grid.mesh[dim])
+            return f(self.t, *x)
 
+        wrapfunc = evalvectorfunc
         for d in coeffs.keys():
             # Don't need an operator for the 0th derivative
             if d == ():
@@ -140,8 +144,8 @@ class FiniteDifferenceEngine(object):
                 # Here we wrap the functions with the appropriate values for
                 # this particular dimension.
                 b = bounds[d]
-                lowfunc = wrapfunc(b[0][1], a, dim)
-                highfunc = wrapfunc(b[1][1], a, dim)
+                lowfunc = wrapscalarfunc(b[0][1], a, dim)
+                highfunc = wrapscalarfunc(b[1][1], a, dim)
                 # print "old b(%s) -> (%s, %s)" % (d, b[0][1](0), b[1][1](-1))
                 # print b
                 b = ((b[0][0], lowfunc(0)), (b[1][0], highfunc(-1)))
@@ -152,9 +156,8 @@ class FiniteDifferenceEngine(object):
                 if dim == 1:
                     g = bounds[d][1][1]
                     f = wrapfunc(g, a, dim)
-                    # import pdb; pdb.set_trace() ### XXX BREAKPOINT
 
-                B.scale(wrapfunc(coeffs[d], a, dim))
+                B.vectorized_scale(wrapfunc(coeffs[d], a, dim))
                 # If it's a dirichlet boundary we mark it because we have to
                 # handle it absolutely last
                 lf = hf = None
@@ -215,7 +218,7 @@ class FiniteDifferenceEngine(object):
 
 
 class BandedOperator(object):
-    def __init__(self, (data, offsets), residual=None, inplace=True):
+    def __init__(self, data_offsets, residual=None, inplace=True):
         """
         A linear operator for discrete derivatives.
         Consist of a banded matrix (B.D) and a residual vector (B.R) for things
@@ -224,6 +227,7 @@ class BandedOperator(object):
             U2 = L*U1 + Rj  -->   U2 = B.apply(U1)
             U2 = L.I * (U1 - R) --> U2 = B.solve(U1)
         """
+        data, offsets = data_offsets
         if not inplace:
             data = data.copy()
             offsets = tuple(offsets)
@@ -653,6 +657,30 @@ class BandedOperator(object):
             # Don't touch the residual.
         return B
 
+    def vectorized_scale(self, vec):
+        """
+        @vec@ is the correpsonding mesh vector of the current dimension.
+
+        Also applies to the residual vector self.R.
+
+        See FiniteDifferenceEngine.coefficients.
+        """
+        for row, o in enumerate(self.offsets):
+            if o < 0:
+                self.data[row, :o] *= vec[-o:]
+            elif o > 0:
+                self.data[row, o:] *= vec[:-o]
+            else:
+                self.data[row] *= vec
+        self.R *= vec
+
+        # (2 to end)     (begin to end-1)
+        # As.data[m - 2, 2:] *= mu_s[:-2]
+        # As.data[m - 1, 1:] *= mu_s[:-1]
+        # As.data[m, :] *= mu_s
+        # As.data[m + 1, :-1] *= mu_s[1:]
+        # As.data[m + 2, :-2] *= mu_s[2:]
+
 
     def scale(self, func):
         """
@@ -673,13 +701,6 @@ class BandedOperator(object):
                     self.data[row, i-abs(o)] *= func(i)
         for i in xrange(self.shape[0]):
             self.R[i] *= func(i)
-
-                  # (2 to end)     (begin to end-1)
-        # As.data[m - 2, 2:] *= mu_s[:-2]
-        # As.data[m - 1, 1:] *= mu_s[:-1]
-        # As.data[m, :] *= mu_s
-        # As.data[m + 1, :-1] *= mu_s[1:]
-        # As.data[m + 2, :-2] *= mu_s[2:]
 
 def impl(V, L1, R1x, L2, R2x, dt, n, crumbs=[], callback=None):
     V = V.copy()

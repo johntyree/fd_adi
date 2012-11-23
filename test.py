@@ -492,6 +492,61 @@ class something(unittest.TestCase):
         assert (B2.data is not origB2.data)
         assert (B2.data != origB2.data).any() # Operations changed our operator
 
+    def test_operatorvectorizedscale(self):
+        no_nan = np.nan_to_num
+        vec = self.vec
+        def coeff(high,low=None):
+            if low is not None:
+                high, low = low, high
+            return np.linspace(0, 1, len(vec))[low:high]
+        def fcoeff(i):
+            return np.linspace(0, 1, len(vec))[i]
+        def f0(x): return x*0
+        def fx(x): return x
+        data = np.ones((5,len(vec)))
+        data[0][:2] = 0
+        data[1][0] = 0
+        data[3][-1] = 0
+        data[4][-2:] = 0
+        offsets = [2,1,0,-1,-2]
+        res = np.ones_like(vec)
+        oldB = FD.BandedOperator((data, offsets), res)
+
+        newB = oldB.copy()
+        vecB = oldB.copy()
+        newB.scale(f0)
+        vecB.vectorized_scale(f0(vec))
+        assert (no_nan(newB.data) == 0).all()
+        assert (no_nan(vecB.data) == 0).all()
+        assert newB == vecB
+
+        manualB = oldB.copy()
+        newB = oldB.copy()
+        vecB = oldB.copy()
+        manualB.data[0][2:] *= coeff(len(vec)-2)
+        manualB.data[1][1:] *= coeff(len(vec)-1)
+        manualB.data[2] *= coeff(len(vec))
+        manualB.data[3][:-1] *= coeff(1, len(vec))
+        manualB.data[4][:-2] *= coeff(2, len(vec))
+        manualB.R *= coeff(len(vec))
+        newB.scale(fcoeff)
+        vecB.vectorized_scale(coeff(len(vec)))
+        # print "manual"
+        # fp(manualB.data)
+        # print
+        # print "new"
+        # fp(newB.data)
+        # print
+        # print "vec"
+        # print fp(vecB.data)
+        # print
+        # print "manualR"
+        # print manualB.R
+        # print
+        # print "newR"
+        # print newB.R
+        assert manualB == newB
+        assert manualB == vecB
 
     def test_operatorscale(self):
         no_nan = np.nan_to_num
