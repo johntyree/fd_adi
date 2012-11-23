@@ -4,9 +4,9 @@
 # Defaults: spot = k = 100
 #           v0 = 0.2
 #           dt = 1/100.0
-#           kappa = 1
-#           theta = v0
-#           sigma = 0.2
+#           H.mean_reversion = 1
+#           H.mean_variance = v0
+#           H.vol_of_variance = 0.2
 #           rho = 0
 #           nspots = 200
 #           nvols = 200
@@ -14,21 +14,21 @@
 # Pretty much everything goes to infinity at high vol boundary. Trimming shows
 # the interesting area looks reasonable.
 
-# High theta oscillates wildly at (vol < v0)
-# theta = 3.2
+# High H.mean_variance oscillates wildly at (vol < v0)
+# H.mean_variance = 3.2
 
-# For low theta, Analytical has problems at low vol and spot (FD ok)
-# theta = 0.01
+# For low H.mean_variance, Analytical has problems at low vol and spot (FD ok)
+# H.mean_variance = 0.01
 
-# At high sigma, FD explodes around strike at low vol. Analytical jagged but
+# At high H.vol_of_variance, FD explodes around strike at low vol. Analytical jagged but
 # better.
-# sigma = 3
-# Still well behaved at sigma = 1
+# H.vol_of_variance = 3
+# Still well behaved at H.vol_of_variance = 1
 
 # Crank explodes around strike at low vol if nvols is low. Implicit ok.
 # nvols = 40
-# sigma = 1
-# With sigma at 0.2 again, both explode.
+# H.vol_of_variance = 1
+# With H.vol_of_variance at 0.2 again, both explode.
 
 # Well behaved when nspots is low
 # nspots = 40
@@ -40,48 +40,42 @@
 
 import sys
 import numpy as np
-import scipy.stats
+# import scipy.stats
 import scipy.linalg as spl
 import scipy.sparse as sps
-from pylab import *
+from pylab import plot, title, xlabel, ylabel, legend, show, ion, ioff
+import pylab
 import utils
-from visualize import fp, wireframe, surface, anim
+from visualize import surface
 from heston import bs_call_delta, hs_call
-from time import time
 
 from Option import HestonOption
 from Grid import Grid
+import FiniteDifferenceEngine as FD
+
+# Debug imports
+from visualize import fp, anim, wireframe
+
 
 # ion()
 
 H = HestonOption( spot=100
-          , strike=99
-          , interest_rate=0.06
-          , volatility = 0.2
-          , tenor=1.0
-          , dt=1/100.0
-          , mean_reversion = 1
-          , mean_variance = 0.04
-          , vol_of_variance = 0.4
-          , correlation = 0
-          )
-
-# Contract parameters
-# spot = 80.0
-# k = 100.0
-# r = 0.03
-# t = 1
-# v0 = 0.04
-# dt = 1 / 100.0
-
-# Grid parameters
-rate_Spot_Var = 0.5  # Proportion to solve in the var step
+                 , strike=99
+                 , interest_rate=0.06
+                 , volatility = 0.2
+                 , tenor=1.0
+                 , dt=1/100.0
+                 , mean_reversion = 1
+                 , mean_variance = 0.04
+                 , vol_of_variance = 0.4
+                 , correlation = 0
+                 )
 
 spot_max = 1500.0
 var_max = 13.0
 
 nspots = 100
-nvols = 100
+nvols = 50
 
 spotdensity = 7.0  # infinity is linear?
 varexp = 4
@@ -89,8 +83,8 @@ varexp = 4
 spots = utils.sinh_space(H.strike, spot_max, spotdensity, nspots)
 vars = utils.exponential_space(0.00, H.variance.value, var_max, varexp, nvols)
 # vars = [v0]
-# spots = linspace(0.0, spot_max, nspots)
-# vars = linspace(0.0, var_max, nvols)
+# spots = np.linspace(0.0, spot_max, nspots)
+# vars = np.linspace(0.0, var_max, nvols)
 # plot(spots); title("Spots"); show()
 # plot(vars); title("Vars"); show()
 
@@ -100,39 +94,37 @@ def init(spots, vars):
     return np.maximum(0, spots - H.strike)
 Gi = Grid(mesh=(spots, vars), initializer=init)
 G = Gi.copy()
+V_init = G.domain.copy()
 
 trims = (H.strike * .2 < spots) & (spots < H.strike * 2.0)
 trimv = (0.01 < vars) & (vars < 1)  # v0*2.0)
-# trims = slice(None)
-# trimv = slice(None)
+trims = slice(None)
+trimv = slice(None)
 
 # Does better without upwinding here
 up_or_down_spot = ''
-up_or_down_var = 'down'
-flip_idx_var = min(find(vars > H.mean_variance))
+up_or_down_var = ''
+flip_idx_var = min(pylab.find(vars > H.mean_variance))
 flip_idx_spot = 2
 
 tr = lambda x: x[trims, :][:, trimv]
 tr3 = lambda x: x[:, trims, :][:, :, trimv]
 
-ids = isclose(spots[trims], H.spot)
-idv = isclose(vars[trimv], H.variance.value)
-# dss = np.hstack((np.nan, np.diff(spots)))
-# dvs = np.hstack((nan, np.diff(vars)))
-# flip_idx_var = None
+ids = np.isclose(spots[trims], H.spot)
+idv = np.isclose(vars[trimv], H.variance.value)
+dss = np.hstack((np.nan, np.diff(spots)))
+dvs = np.hstack((np.nan, np.diff(vars)))
+flip_idx_var = None
 
 BADANALYTICAL = False
 
-bs, delta = [x for x in bs_call_delta(spots[:, newaxis], H.strike, H.interest_rate.value,
-                                      np.sqrt(vars)[newaxis, :], H.tenor)]
+bs, delta = [x for x in bs_call_delta(spots[:, np.newaxis], H.strike, H.interest_rate.value,
+                                      np.sqrt(vars)[np.newaxis, :], H.tenor)]
 utils.tic("Heston Analytical:")
-# hss = array([hs_call(spots, k, r, np.sqrt(vars),
-             # dt*i, kappa, theta, sigma, rho) for i in range(int(t/dt)+1)])
-# hs = hss[-1]
 hs = hs_call(spots, H.strike, H.interest_rate.value, np.sqrt(vars),
              H.tenor, H.mean_reversion, H.mean_variance, H.vol_of_variance, H.correlation)
 utils.toc()
-hs[isnan(hs)] = 0.0
+hs = np.nan_to_num(hs)
 if max(hs.flat) > spots[-1] * 2:
     BADANALYTICAL = True
     print "Warning: Analytical solution looks like trash."
@@ -141,7 +133,37 @@ if len(sys.argv) > 1:
     if sys.argv[1] == '0':
         print "Bail out with arg 0."
         sys.exit()
-sys.exit()
+
+def mu_s(t, *dim):
+    return H.interest_rate.value * dim[0]
+def gamma2_s(t, *dim):
+    return 0.5 * dim[1] * dim[0]**2
+def mu_v(t, *dim):
+    return H.mean_reversion * (H.mean_variance - dim[1])
+def gamma2_v(t, *dim):
+    return 0.5 * H.vol_of_variance**2 * dim[1]
+coeffs = {()   : lambda t: -H.interest_rate.value,
+          (0,) : mu_s,
+          (0,0): gamma2_s,
+          (1,) : mu_v,
+          (1,1): gamma2_v}
+bounds = {
+                # D: U = 0              VN: dU/dS = 1
+        (0,)  : ((0, lambda *args: 0.0), (1, lambda *args: 1.0)),
+                # D: U = 0              Free boundary
+        (0,0) : ((0, lambda *args: 0.0), (None, lambda *x: None)),
+                # Free boundary at low variance
+        (1,)  : ((None, lambda *x: None),
+                # D intrinsic value at high variance
+                (0.0, lambda t, *dim: np.maximum(0.0, dim[0]-H.strike))),
+                # Free boundary
+        (1,1) : ((None, lambda *x: None),
+                # D intrinsic value at high variance
+                (0.0, lambda t, *dim: np.maximum(0.0, dim[0]-H.strike)))
+     }
+utils.tic("Building FD Engine")
+F = FD.FiniteDifferenceEngineADI(G, coefficients=coeffs, boundaries=bounds)
+utils.toc()
 
 L1_ = []
 R1_ = []
@@ -151,15 +173,21 @@ As_ = utils.nonuniform_complete_coefficients(dss, up_or_down=up_or_down_spot,
                                              flip_idx=flip_idx_spot)[0]
 Ass_ = utils.nonuniform_complete_coefficients(dss)[1]
 # As_, Ass_ = utils.nonuniform_forward_coefficients(dss)
-assert(not isnan(As_.data).any())
-assert(not isnan(Ass_.data).any())
+assert(not np.isnan(As_.data).any())
+assert(not np.isnan(Ass_.data).any())
 for j, v in enumerate(vars):
     # Be careful not to overwrite our operators
     As, Ass = As_.copy(), Ass_.copy()
     m = 2
 
-    mu_s = r * spots
+    mu_s = H.interest_rate.value * spots
     gamma2_s = 0.5 * v * spots ** 2
+    for i, z in enumerate(mu_s):
+        # print z, coeffs[0,](0, spots[i])
+        assert z == coeffs[0,](0, spots[i])
+    for i, z in enumerate(gamma2_s):
+        # print z, coeffs[0,0](0, spots[i], v)
+        assert z == coeffs[0,0](0, spots[i], v)
 
     Rs = np.zeros(nspots)
     Rs[-1] = 1
@@ -188,13 +216,15 @@ for j, v in enumerate(vars):
 
     L1_.append(As.copy())
     L1_[j].data += Ass.data
-    L1_[j].data[m, :] -= (1 - rate_Spot_Var) * r
+    L1_[j].data[m, :] -= 0.5 * H.interest_rate.value
+    L1_[j].data[m, 0] = -1
 
     R1_.append((Rs + Rss).copy())
+    R1_[j][0] = 0
 utils.toc()
 
-mu_v = kappa * (theta - vars)
-gamma2_v = 0.5 * sigma ** 2 * vars
+mu_v = H.mean_reversion * (H.mean_variance - vars)
+gamma2_v = 0.5 * H.vol_of_variance ** 2 * vars
 
 L2_ = []
 R2_ = []
@@ -204,8 +234,8 @@ print "(Up/Down)wind from:", flip_idx_var
 Av_ = utils.nonuniform_complete_coefficients(dvs, up_or_down=up_or_down_var,
                                              flip_idx=flip_idx_var)[0]
 Avv_ = utils.nonuniform_complete_coefficients(dvs)[1]
-assert(not isnan(Av_.data).any())
-assert(not isnan(Avv_.data).any())
+assert(not np.isnan(Av_.data).any())
+assert(not np.isnan(Avv_.data).any())
 for i, s in enumerate(spots):
     # Be careful not to overwrite our operators
     Av, Avv = Av_.copy(), Avv_.copy()
@@ -222,13 +252,8 @@ for i, s in enumerate(spots):
     Av.data[m + 1, :-1] *= mu_v[1:]
     Av.data[m + 2, :-2] *= mu_v[2:]
 
-    Av.data[m, -1] = -1  # This is to cancel out the previous value so we can
-                          # set the dirichlet boundary condition using R.
-                          # Then we have U_i + -U_i + R
-
     Rv = np.zeros(nvols)
     Rv *= mu_v
-    Rv[-1] = maximum(0, s - k)
 
     Avv.data[m - 1, 1] = 2 / dvs[1] ** 2
     Avv.data[m, 0] = -2 / dvs[1] ** 2
@@ -245,15 +270,21 @@ for i, s in enumerate(spots):
 
     L2_.append(Av.copy())
     L2_[i].data += Avv.data
-    L2_[i].data[m, :] -= rate_Spot_Var * r
+    L2_[i].data[m, :] -= 0.5 * H.interest_rate.value
+
+    L2_[i].data[m, -1] = -1  # This is to cancel out the previous value so we can
+                        # set the dirichlet boundary condition using R.
+                        # Then we have U_i + -U_i + R
 
     R2_.append(Rv + Rvv)
+    R2_[i][-1] = np.maximum(0, s - H.strike)
+
 utils.toc()
 
 
 def force_boundary(V, values=None, t=None):
-    # m1 = hs_call(spots, k, r, sqrt(np.array((vars[0], vars[-1]))), t, kappa, theta, sigma, rho)
-    # m2 = hs_call(np.array((spots[0], spots[-1])), k, r, sqrt(vars), t, kappa, theta, sigma, rho)
+    # m1 = hs_call(spots, H.strike, H.interest_rate, sqrt(np.array((vars[0], vars[-1]))), t, H.mean_reversion, H.mean_variance, H.vol_of_variance, rho)
+    # m2 = hs_call(np.array((spots[0], spots[-1])), H.strike, H.interest_rate, sqrt(vars), t, H.mean_reversion, H.mean_variance, H.vol_of_variance, rho)
     m = values
     m1 = m2 = m
     V[0, :] = m2[0, :]  # top
@@ -266,14 +297,16 @@ def impl(V, L1, R1x, L2, R2x, dt, n, crumbs=[], callback=None):
     V = V.copy()
 
     L1i = flatten_tensor(L1)
+    # L1i = L1.copy()
     R1 = np.array(R1x).T
 
     L2i = flatten_tensor(L2)
+    # L2i = L2.copy()
     R2 = np.array(R2x)
 
     m = 2
 
-    # L  = (As + Ass - r*np.eye(nspots))*-dt + np.eye(nspots)
+    # L  = (As + Ass - H.interest_rate*np.eye(nspots))*-dt + np.eye(nspots)
     L1i.data *= -dt
     L1i.data[m, :] += 1
     R1 *= dt
@@ -290,7 +323,7 @@ def impl(V, L1, R1x, L2, R2x, dt, n, crumbs=[], callback=None):
     utils.tic("Impl:")
     for k in xrange(n):
         if not k % print_step:
-            if isnan(V).any():
+            if np.isnan(V).any():
                 print "Impl fail @ t = %f (%i steps)" % (dt * k, k)
                 return crumbs
             print int(k * to_percent),
@@ -315,17 +348,29 @@ def crank(V, L1, R1x, L2, R2x, dt, n, crumbs=[], callback=None):
     V = V.copy()
     dt *= 0.5
 
-    L1e = flatten_tensor(L1)
+    # L1e = flatten_tensor(L1)
+    L1e = L1.copy()
     L1i = L1e.copy()
     R1 = np.array(R1x).T
 
-    L2e = flatten_tensor(L2)
+    # L2e = flatten_tensor(L2)
+    L2e = L2.copy()
     L2i = L2e.copy()
     R2 = np.array(R2x)
 
+    # print "L var"
+    # fp(L2e.data, 2)
+    # print "FD op var"
+    # fp(F.operators[1].data, 2)
+
+    # print "diff"
+    # fp(F.operators[1].data - L2e.data, 2, 'f')
+
+    # assert np.allclose(F.operators[1].data, L2e.data)
+
     m = 2
 
-    # L  = (As + Ass - r*np.eye(nspots))*-dt + np.eye(nspots)
+    # L  = (As + Ass - H.interest_rate*np.eye(nspots))*-dt + np.eye(nspots)
     L1e.data *= dt
     L1e.data[m, :] += 1
     L1i.data *= -dt
@@ -349,7 +394,7 @@ def crank(V, L1, R1x, L2, R2x, dt, n, crumbs=[], callback=None):
     transposed_shape = normal_shape[::-1]
     for k in xrange(n):
         if not k % print_step:
-            if isnan(V).any():
+            if np.isnan(V).any():
                 print "Crank fail @ t = %f (%i steps)" % (dt * k, k)
                 return crumbs
             print int(k * to_percent),
@@ -375,7 +420,7 @@ markers = ['--', '--', ':', '--']
 def p1(V, analytical, spots, vars, marker_idx, label):
     if BADANALYTICAL:
         label += " - bad analytical!"
-    plot((spots / k * 100)[front:-back],
+    plot((spots / H.strike * 100)[front:-back],
          (V - analytical)[front:-back],
          markers[marker_idx], lw=line_width, label=label)
     title("Error in Price")
@@ -404,45 +449,68 @@ def p3(V, analytical, spots, vars, marker_idx=0, label=""):
     show()
 
 
-p = p2
+p = p2; V = None
 evis = lambda V=V, p=p2: p(V, hs, spots, vars, 0, "")
 evis2 = lambda V=V, p=p2: p(tr(V), tr(hs), spots[trims], vars[trimv], 0, "")
 vis = lambda V=V, p=p2: p(V, 0, spots, vars, 0, "")
 vis2 = lambda V=V, p=p2: p(tr(V), 0, spots[trims], vars[trimv], 0, "")
 
+L1 = F.operators[0].D
+L2 = F.operators[1].D
+R1 = F.operators[0].R.reshape(V_init.T.shape)
+R2 = F.operators[1].R.reshape(V_init.shape)
+# "Old"
+# fp(flatten_tensor(L2_).data)
+# "new"
+# fp(L2.data)
+# "diff"
+# fp(L2.data - flatten_tensor(L2_).data)
+assert (flatten_tensor(L1_).data == L1.data).all()
+assert (flatten_tensor(L2_).data == L2.data).all()
+assert np.array(R1).shape == np.array(R1_).shape
+assert np.array(R2).shape == np.array(R2_).shape
+assert (np.array(R1) == np.array(R1_)).all()
+assert (np.array(R2) == np.array(R2_)).all()
 
-# Vs = impl(V_init, L1_, R1_, L2_, R2_,
-          # dt, int(t / dt), crumbs=[V_init]
-          # # , callback=lambda v, t: force_boundary(v, hs)
+# Vs = impl(V_init, L1_, R1, L2_, R2,
+          # H.dt, int(H.tenor / H.dt), crumbs=[V_init]
+          # # , callback=lambda v, H.tenor: force_boundary(v, hs)
           # )
 # Vi = Vs[-1]
 # print tr(Vi)[ids, idv] - tr(hs)[ids, idv]
+Vs = F.impl(H.tenor, H.dt, crumbs=[], callback=None)
+Vfi = Vs[-1]
+print tr(Vfi)[ids, idv] - tr(hs)[ids, idv]
 
-Vs = crank(V_init, L1_, R1_, L2_, R2_,
-           dt, int(t / dt), crumbs=[V_init]
-           # , callback=lambda v, t: force_boundary(v, hs)
-           )
-Vc = Vs[-1]
-print tr(Vc)[ids, idv] - tr(hs)[ids, idv]
+# Vs = crank(V_init, L1, R1, L2, R2,
+           # H.dt, int(H.tenor / H.dt), crumbs=[V_init]
+           # # , callback=lambda v, H.tenor: force_boundary(v, hs)
+           # )
+# Vc = Vs[-1]
+# print tr(Vc)[ids, idv] - tr(hs)[ids, idv]
+Vs = F.crank(H.tenor, H.dt, crumbs=[], callback=None)
+Vfc = Vs[-1]
+print tr(Vfc)[ids, idv] - tr(hs)[ids, idv]
 
-## Rannacher smoothing to damp oscilations at the discontinuity
-smoothing_steps = 2
-Vs = impl(V_init, L1_, R1_, L2_, R2_,
-          dt, smoothing_steps, crumbs=[V_init]
-          # , callback=lambda v, t: force_boundary(v, hs)
-          )
-Vs.extend(crank(Vs[-1], L1_, R1_, L2_, R2_,
-          dt, int(t / dt) - smoothing_steps, crumbs=[]
-          # , callback=lambda v, t: force_boundary(v, hs)
-                )
-          )
-Vr = Vs[-1]
-print tr(Vr)[ids, idv] - tr(hs)[ids, idv]
+# # Rannacher smoothing to damp oscilations at the discontinuity
+# smoothing_steps = 2
+# Vs = impl(V_init, L1_, R1_, L2_, R2_,
+          # H.dt, smoothing_steps, crumbs=[V_init]
+          # # , callback=lambda v, H.tenor: force_boundary(v, hs)
+          # )
+# Vs.extend(crank(Vs[-1], L1_, R1_, L2_, R2_,
+          # H.dt, int(H.tenor / H.dt) - smoothing_steps, crumbs=[]
+          # # , callback=lambda v, H.tenor: force_boundary(v, hs)
+                # )
+          # )
+# Vr = Vs[-1]
+# print tr(Vr)[ids, idv] - tr(hs)[ids, idv]
 
 ion()
 # p(tr(Vi), tr(hs), spots[trims], vars[trimv], 1, "impl")
-p(tr(Vc), tr(hs), spots[trims], vars[trimv], 2, "crank")
-p(tr(Vr), tr(hs), spots[trims], vars[trimv], 3, "smooth")
+# p(tr(Vfi), tr(hs), spots[trims], vars[trimv], 1, "FD impl")
+# p(tr(Vc), tr(hs), spots[trims], vars[trimv], 2, "crank")
+# p(tr(Vr), tr(hs), spots[trims], vars[trimv], 3, "smooth")
 ioff()
 show()
 # p(V_init, hs, spots, vars, 1, "impl")

@@ -443,6 +443,13 @@ class something(unittest.TestCase):
         assert B2 * 4 == B2.mul(4)
 
 
+        dt = 0.04
+        bold = B2.copy()
+        B2 *= -dt
+        B2 += 1
+        assert (bold * -dt) + 1 == B2
+
+
     def test_operatoreq(self):
         vec = self.vec
         idx = self.flip_idx

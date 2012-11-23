@@ -11,6 +11,8 @@ from bisect import bisect_left
 import numpy as np
 import scipy.sparse
 import itertools
+import utils
+import scipy.linalg as spl
 
 # In order to do the boundary conditions correctly, we MUST handle them with
 # the FiniteDifferenceEngine so that we'll have full access to grid.mesh and
@@ -240,6 +242,7 @@ class BandedOperator(object):
         self.derivative = None
         self.order = None
         self.deltas = np.array([np.nan])
+        self.solve_banded_offsets = (abs(min(offsets)), abs(max(offsets)))
 
     @classmethod
     def for_vector(cls, vector, scheme="center", derivative=1, order=1, residual=None):
@@ -277,8 +280,8 @@ class BandedOperator(object):
 
 
 
-    def apply(self, vector, overwrite=False):
-        return self.D.dot(vector) + self.R
+    def apply(self, V, overwrite=False):
+        return (self.D.dot(V.flat) + self.R).reshape(V.shape)
 
 
     def applyboundary(self, boundary):
@@ -358,9 +361,10 @@ class BandedOperator(object):
             # print "R:", B.R
 
 
-    def solve(self, vector, overwrite=False):
-        return self.D.solve_banded(self.D.offsets, self.D.data,
-                vector + self.R, overwrite_b=True)
+    def solve(self, V, overwrite=False):
+        return spl.solve_banded(self.solve_banded_offsets,
+                self.D.data, (V.flat - self.R),
+                overwrite_ab=overwrite, overwrite_b=True).reshape(V.shape)
 
     @staticmethod
     def check_derivative(d):
@@ -677,6 +681,50 @@ class BandedOperator(object):
         # As.data[m + 1, :-1] *= mu_s[1:]
         # As.data[m + 2, :-2] *= mu_s[2:]
 
+def impl(V, L1, R1x, L2, R2x, dt, n, crumbs=[], callback=None):
+    V = V.copy()
+
+    L1i = flatten_tensor(L1)
+    # L1i = L1.copy()
+    R1 = np.array(R1x).T
+
+    L2i = flatten_tensor(L2)
+    # L2i = L2.copy()
+    R2 = np.array(R2x)
+
+    m = 2
+
+    # L  = (As + Ass - H.interest_rate*np.eye(nspots))*-dt + np.eye(nspots)
+    L1i.data *= -dt
+    L1i.data[m, :] += 1
+    R1 *= dt
+
+    L2i.data *= -dt
+    L2i.data[m, :] += 1
+    R2 *= dt
+
+    offsets1 = (abs(min(L1i.offsets)), abs(max(L1i.offsets)))
+    offsets2 = (abs(min(L2i.offsets)), abs(max(L2i.offsets)))
+
+    print_step = max(1, int(n / 10))
+    to_percent = 100.0 / n
+    utils.tic("Impl:")
+    for k in xrange(n):
+        if not k % print_step:
+            if np.isnan(V).any():
+                print "Impl fail @ t = %f (%i steps)" % (dt * k, k)
+                return crumbs
+            print int(k * to_percent),
+        if callback is not None:
+            callback(V, ((n - k) * dt))
+        V = spl.solve_banded(offsets2, L2i.data,
+                             (V + R2).flat, overwrite_b=True).reshape(V.shape)
+        V = spl.solve_banded(offsets1, L1i.data,
+                             (V + R1).T.flat, overwrite_b=True).reshape(V.shape[::-1]).T
+    crumbs.append(V.copy())
+    utils.toc()
+    return crumbs
+
 
 def flatten_tensor(mats):
     diags = np.hstack([x.data for x in mats])
@@ -685,9 +733,69 @@ def flatten_tensor(mats):
     return flatmat
 
 
+
 class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
-    def __init__(self):
-        FiniteDifferenceEngine.__init__(self)
+    def __init__(self, grid, coefficients={}, boundaries={}):
+        FiniteDifferenceEngine.__init__(self, grid, coefficients=coefficients, boundaries=boundaries)
+
+    def impl(self, t, dt, crumbs=[], callback=None):
+        n = int(t / dt)
+        V = self.grid.domain.copy()
+        crumbs.append(V)
+
+        A = self.operators[0].copy() * -dt + 1
+        B = self.operators[1].copy() * -dt + 1
+
+        print_step = max(1, int(n / 10))
+        to_percent = 100.0 / n
+        utils.tic("Impl:")
+        for k in xrange(n):
+            if not k % print_step:
+                if np.isnan(V).any():
+                    print "Impl fail @ t = %f (%i steps)" % (dt * k, k)
+                    return crumbs
+                print int(k * to_percent),
+            if callback is not None:
+                callback(V, ((n - k) * dt))
+            V = B.solve(V).T
+            V = A.solve(V).T
+        crumbs.append(V.copy())
+        utils.toc()
+        return crumbs
+
+
+    def crank(self, t, dt, crumbs=[], callback=None):
+        V = self.grid.domain.copy()
+        n = int(t / dt)
+        dt *= 0.5
+        crumbs.append(V)
+
+        Ae = self.operators[0].copy() *  dt + 1
+        Ai = self.operators[0].copy() * -dt + 1
+
+        Be = self.operators[1].copy() *  dt + 1
+        Bi = self.operators[1].copy() * -dt + 1
+
+
+        print_step = max(1, int(n / 10))
+        to_percent = 100.0 / n
+        utils.tic("Crank:")
+        for k in xrange(n):
+            if not k % print_step:
+                if np.isnan(V).any():
+                    print "Crank fail @ t = %f (%i steps)" % (dt * k, k)
+                    return crumbs
+                print int(k * to_percent),
+            if callback is not None:
+                callback(V, ((n - k) * dt))
+            V = Be.apply(V).T
+            V = Ai.solve(V)
+            V = Ae.apply(V).T
+            V = Bi.solve(V)
+            crumbs.append(V.copy())
+        utils.toc()
+        return crumbs
+
 
 
 def main():
