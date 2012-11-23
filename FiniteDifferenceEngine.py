@@ -182,7 +182,6 @@ class FiniteDifferenceEngine(object):
                     B += coeffs[()](self.t) / float(ndim)
 
         # Now eveerything else is done. Enforce dirichlet boundaries
-        import pprint; pprint.pprint(dirichlets.items())
         for (dim, funcs) in dirichlets.items():
             # print "Mesh(%i) has %i ops with %i funcs:" % (dim,
                     # len(self.operators[dim]), len(funcs)), self.grid.mesh[dim]
@@ -456,9 +455,9 @@ class BandedOperator(object):
             m = offsets.index(0)
             # Inner rows
             for i in range(1,len(d)-1):
-                data[m-1,i+1] =  2 / (d[i  ]*(d[i]+d[i+1]))
+                data[m-1,i+1] =  2 / (d[i+1]*(d[i]+d[i+1]))
                 data[m  ,i  ] = -2 /       (d[i]*d[i+1])
-                data[m+1,i-1] =  2 / (d[i+1]*(d[i]+d[i+1]))
+                data[m+1,i-1] =  2 / (d[i  ]*(d[i]+d[i+1]))
         else:
             raise NotImplementedError("Derivative must be 1 or 2")
 
@@ -494,9 +493,9 @@ class BandedOperator(object):
                 data[m+1, i-1] = -(d[i]+d[i-1]) / denom;
                 data[m+2, i-2] =   d[i]         / denom;
             # Use centered approximation for the first (inner) row
-            data[m+1,0] =  2 / (d[i+1]*(d[i]+d[i+1]))
-            data[m,1]   = -2 /       (d[i]*d[i+1])
-            data[m-1,2] =  2 / (d[i  ]*(d[i]+d[i+1]))
+            data[m+1,0] =  2 / (d[1  ]*(d[1]+d[2]))
+            data[m,1]   = -2 /       (d[1]*d[2])
+            data[m-1,2] =  2 / (d[2]*(d[1]+d[2]))
         else:
             raise NotImplementedError, ("Derivative must be 1 or 2")
 

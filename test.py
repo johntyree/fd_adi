@@ -118,11 +118,6 @@ class something(unittest.TestCase):
 
     def __init__(self, other):
         unittest.TestCase.__init__(self, other)
-        spots = np.arange(5.0)
-        dss = np.hstack((np.nan, np.diff(spots)))
-        vars = np.linspace(0, 1, 3)
-        nvols = len(vars)
-        dvs = np.hstack((np.nan, np.diff(vars)))
         r = 2.0
         k = 3.0
         kappa = 1
@@ -131,8 +126,21 @@ class something(unittest.TestCase):
         rho = 0
         up_or_down_spot = ''
         up_or_down_var = ''
-        flip_idx_spot = 0
-        flip_idx_var = 0
+        flip_idx_spot = 2
+        flip_idx_var = 2
+        spot_max = 1500.0
+        var_max = 13.0
+        nspots = 5
+        nvols = 3
+        spotdensity = 7.0  # infinity is linear?
+        varexp = 4
+        spots = np.arange(5.0)
+        vars = np.linspace(0, 1, 3)
+        spots = utils.sinh_space(k, spot_max, spotdensity, nspots)
+        # vars = utils.exponential_space(0.00, 0.04, var_max, varexp, nvols)
+        dss = np.hstack((np.nan, np.diff(spots)))
+        nvols = len(vars)
+        dvs = np.hstack((np.nan, np.diff(vars)))
         nspots = len(spots)
         As_ = utils.nonuniform_complete_coefficients(dss, up_or_down=up_or_down_spot,
                                                     flip_idx=flip_idx_spot)[0]
@@ -260,7 +268,7 @@ class something(unittest.TestCase):
         self.sigma = sigma
         self.kappa = kappa
         self.theta = theta
-        self.vec = np.arange(10)
+        self.vec = spots
         self.flip_idx_spot = flip_idx_spot
         self.flip_idx_var = flip_idx_var
         self.flip_idx = 4
@@ -280,7 +288,7 @@ class something(unittest.TestCase):
 
     def test_FD_combine_dimensional_operators(self):
         G = Grid.Grid((self.spots, self.vars), initializer=lambda x0,x1: np.maximum(x0-self.strike,0))
-        print G
+        # print G
 
         def mu_s(t, *dim):
             return self.r * dim[0]
@@ -519,7 +527,6 @@ class something(unittest.TestCase):
         assert manualB == newB
 
 
-
     def test_operatorcopy(self):
         vec = self.vec
         idx = self.flip_idx
@@ -545,7 +552,6 @@ class something(unittest.TestCase):
         vec = self.vec
         idx = 1
         d = np.hstack((np.nan, np.diff(vec)))
-        bound = ((1, lambda *a: 0), (1, lambda *a: 0))
 
         oldC1 = utils.nonuniform_complete_coefficients(d, up_or_down='', flip_idx=idx)[0]
         C1 = FD.BandedOperator.for_vector(vec, scheme='center', derivative=1, order=2)
@@ -597,9 +603,9 @@ class something(unittest.TestCase):
         # fp(np.hstack((C2.offsets[:,np.newaxis], C2.data)))
 
         # print "old todense()"
-        # fp(oldC2.todense())
+        # fp(oldC2.todense(), 4)
         # print "new todense()"
-        # fp(C2.todense())
+        # fp(C2.todense(), 4)
         assert np.all(C2.todense() == oldC2.todense())
         assert np.all(C2.data == oldC2.data)
 
@@ -619,15 +625,15 @@ class something(unittest.TestCase):
 
         oldB2 = utils.nonuniform_complete_coefficients(d, up_or_down='down', flip_idx=idx)[1]
         B2 = FD.BandedOperator.for_vector(vec, scheme='backward', derivative=2, order=2)
-        # print "old data"
-        # fp(np.hstack((oldB2.offsets[:,np.newaxis], oldB2.data)))
-        # print "new data"
-        # fp(np.hstack((B2.offsets[:,np.newaxis], B2.data)))
+        print "old data"
+        fp(np.hstack((oldB2.offsets[:,np.newaxis], oldB2.data)), 3)
+        print "new data"
+        fp(np.hstack((B2.offsets[:,np.newaxis], B2.data)), 3)
 
-        # print "old todense()"
-        # fp(oldB2.todense())
-        # print "new todense()"
-        # fp(B2.todense())
+        print "old todense()"
+        fp(oldB2.todense())
+        print "new todense()"
+        fp(B2.todense())
         assert np.all(B2.todense() == oldB2.todense())
         assert np.all(B2.data == oldB2.data)
 
