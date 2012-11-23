@@ -147,8 +147,8 @@ class something(unittest.TestCase):
             As, Ass = As_.copy(), Ass_.copy()
             m = 2
 
-            mu_s = r * spots * 0 + 1 # TODO
-            gamma2_s = 0.5 * v * spots ** 2 * 0 + 1 # TODO
+            mu_s = r * spots
+            gamma2_s = 0.5 * v * spots ** 2
 
             Rs = np.zeros(nspots)
             Rs[-1] = 1
@@ -177,8 +177,7 @@ class something(unittest.TestCase):
 
             L1_.append(As.copy())
             L1_[j].data += Ass.data
-            #TODO
-            # L1_[j].data[m, :] -=  0.5 * r
+            L1_[j].data[m, :] -=  0.5 * r
             L1_[j].data[m, 0] = -1
 
             R1_.append((Rs + Rss).copy())
@@ -192,8 +191,8 @@ class something(unittest.TestCase):
         assert(not np.isnan(Av_.data).any())
         assert(not np.isnan(Avv_.data).any())
         for i, s in enumerate(spots):
-            mu_v = kappa * (theta - vars) * 0 + 1 #TODO
-            gamma2_v = 0.5 * sigma ** 2 * vars * 0 + 1 #TODO
+            mu_v = kappa * (theta - vars)
+            gamma2_v = 0.5 * sigma ** 2 * vars
 
             # Be careful not to overwrite our operators
             Av, Avv = Av_.copy(), Avv_.copy()
@@ -228,8 +227,7 @@ class something(unittest.TestCase):
 
             L2_.append(Av.copy())
             L2_[i].data += Avv.data
-            #TODO
-            # L2_[i].data[m, :] -= 0.5 * r
+            L2_[i].data[m, :] -= 0.5 * r
             L2_[i].data[m, -1] = -1  # This is to cancel out the previous value so we can
                                 # set the dirichlet boundary condition using R.
                                 # Then we have U_i + -U_i + R
@@ -259,6 +257,9 @@ class something(unittest.TestCase):
         self.nvols = nvols
         self.strike = k
         self.r = r
+        self.sigma = sigma
+        self.kappa = kappa
+        self.theta = theta
         self.vec = np.arange(10)
         self.flip_idx_spot = flip_idx_spot
         self.flip_idx_var = flip_idx_var
@@ -282,18 +283,18 @@ class something(unittest.TestCase):
         print G
 
         def mu_s(t, *dim):
-            return 1# self.r * dim[0] * 0
+            return self.r * dim[0]
 
         def gamma2_s(t, *dim):
-            return 1# 0.5 * dim[1] * dim[0]**2 * 0
+            return 0.5 * dim[1] * dim[0]**2
 
         def mu_v(t, *dim):
-            return 1
+            return self.kappa * (self.theta - dim[1])
 
         def gamma2_v(t, *dim):
-            return 1
+            return 0.5 * self.sigma**2 * dim[1]
         k = self.strike
-        coeffs = {()   : self.r,
+        coeffs = {()   : lambda t: -self.r,
                   (0,) : mu_s,
                   (0,0): gamma2_s,
                   (1,) : mu_v,
@@ -414,12 +415,24 @@ class something(unittest.TestCase):
         B2 = FD.BandedOperator.for_vector(vec, scheme='backward', derivative=2, order=2)
         B2.R += 1
         BB2 = B2
+        assert (B2 is not B2 * 1)
         assert (B2 is not B2.mul(1))
+
+        assert (B2 == B2 * 1)
         assert (B2 == B2.mul(1))
+
+        assert (B2 * 6 == (B2 * 2) * 3)
         assert (B2.mul(6) == B2.mul(2).mul(3))
 
+        B2Copy = B2.copy()
+        B2 *= 2
+        assert (BB2 is B2)
+        assert (B2Copy is not B2)
+        assert (B2Copy * 2 == B2)
         assert (BB2 is B2.mul(2, inplace=True))
         assert (BB2 is B2.mul(2, inplace=True).mul(2, inplace=True))
+
+        assert B2 * 4 == B2.mul(4)
 
 
     def test_operatoreq(self):
@@ -490,13 +503,20 @@ class something(unittest.TestCase):
         manualB.data[2] *= np.arange(len(vec))
         manualB.data[3][:-1] *= np.arange(1, len(vec))
         manualB.data[4][:-2] *= np.arange(2, len(vec))
+        manualB.R *= np.arange(len(vec))
         newB.scale(fx)
         print "manual"
         fp(manualB.data)
         print
         print "new"
         fp(newB.data)
-        assert (manualB == newB).all()
+        print
+        print "manualR"
+        print manualB.R
+        print
+        print "newR"
+        print newB.R
+        assert manualB == newB
 
 
 

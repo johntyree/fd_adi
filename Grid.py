@@ -46,7 +46,7 @@ Grid object <%(hexid)s>
     ndim: %(ndim)i
     dx  : %(dx)s
     shape: %(shape)s
-    domain: %(domain)s
+    domain:\n%(domain)s
         """) % keys
 
     @property

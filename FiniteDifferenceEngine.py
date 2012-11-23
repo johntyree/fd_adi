@@ -64,8 +64,11 @@ class FiniteDifferenceEngine(object):
         representing the value of the boundary.
 
         Ex. (Heston PDE, x0 = spot, x1 = variance)
+                    # 0'th derivative term (ex. -rU)
+                    # This can only depend on time!
+            {()    : lambda t: -self.r
                     # dirichlet: U = 0         # VN: dUdS = 1
-            {(0,)  : ((1, lambda *args: 0), (1, lambda *args:1))
+             (0,)  : ((1, lambda *args: 0), (1, lambda *args:1))
                     # dirichlet: U = 0         # Free boundary
              (0,0) : ((1, lambda *args: 0), (None, lambda *x: None)),
                     # Free boundary at low variance
@@ -95,12 +98,12 @@ class FiniteDifferenceEngine(object):
         order = 2
         # key = dim, val = [Bool, Bool] # upper lower
         dirichlets = {}
-        def wrapfunc(f, args):
+        def wrapfunc(f, args, dim):
             x = list(args)
             x.insert(dim, None)
             def newf(i):
                 x[dim] = self.grid.mesh[dim][i]
-                print "Args for dim %i: %s" % (dim, x)
+                # print "Args for dim %i: %s" % (dim, x)
                 return f(self.t, *x)
             return newf
 
@@ -110,8 +113,6 @@ class FiniteDifferenceEngine(object):
                 continue
             BandedOperator.check_derivative(d)
             dim = d[0]
-            if dim not in dirichlets:
-                dirichlets[dim] = [None, None]
             otherdims = range(ndim)
             otherdims.remove(dim)
             Bs = []
@@ -125,9 +126,11 @@ class FiniteDifferenceEngine(object):
                 raise ValueError("No main diagonal!")
             #TODO: Splice here
             # take cartesian product of other dimension values
-            argset = itertools.product(*(self.grid.mesh[i] for i in otherdims))
+            argset = list(itertools.product(*(self.grid.mesh[i] for i in otherdims)))
+            if dim not in dirichlets:
+                dirichlets[dim] = [None] * len(argset)
             # pair our current dimension with all combinations of the other dimensions
-            for a in argset:
+            for col, a in enumerate(argset):
                 # Make a new operator
                 B = Binit.copy()
 
@@ -135,22 +138,32 @@ class FiniteDifferenceEngine(object):
                 # Here we wrap the functions with the appropriate values for
                 # this particular dimension.
                 b = bounds[d]
-                lowval = wrapfunc(b[0][1], a)(0)
-                highval = wrapfunc(b[1][1], a)(-1)
+                lowfunc = wrapfunc(b[0][1], a, dim)
+                highfunc = wrapfunc(b[1][1], a, dim)
                 # print "old b(%s) -> (%s, %s)" % (d, b[0][1](0), b[1][1](-1))
                 # print b
-                b = ((b[0][0], lowval), (b[1][0], highval))
-                print "new b(%s) -> (%s (%s), %s (%s))" % (d, b[0][1], lowval, b[1][1], highval)
+                b = ((b[0][0], lowfunc(0)), (b[1][0], highfunc(-1)))
+                # print "new b(%s) -> (%s (%s), %s (%s))" % (d, b[0][1], lowval, b[1][1], highval)
                 # print b
                 # print "Boundary:", d
                 B.applyboundary(b)
-                B.scale(wrapfunc(coeffs[d], a))
+                if dim == 1:
+                    g = bounds[d][1][1]
+                    f = wrapfunc(g, a, dim)
+                    # import pdb; pdb.set_trace() ### XXX BREAKPOINT
+
+                B.scale(wrapfunc(coeffs[d], a, dim))
                 # If it's a dirichlet boundary we mark it because we have to
                 # handle it absolutely last
+                lf = hf = None
                 if b[0][0] == 0:
-                    dirichlets[dim][0] = lowval
-                if b[1][0] == 0 and not dirichlets[dim][1]:
-                    dirichlets[dim][1] = highval
+                    lf = lowfunc
+                    # bounds[dim].append(b)
+                if b[1][0] == 0:
+                    hf = highfunc
+                if lowfunc or highfunc:
+                    dirichlets[dim][col] = (lf, hf)
+                    # bounds[dim].append(b)
                 # print
                 Bs.append(B)
 
@@ -161,15 +174,28 @@ class FiniteDifferenceEngine(object):
                 for col, b in enumerate(Bs):
                     self.operators[dim][col] += b
 
+        # Now the 0th derivative
+        #TODO: This function is ONLY dependent on time. NOT MESH
+        if () in coeffs:
+            for Bs in self.operators.values():
+                for B in Bs:
+                    B += coeffs[()](self.t) / float(ndim)
+
         # Now eveerything else is done. Enforce dirichlet boundaries
-        for (dim, (low, high)) in dirichlets.items():
-            if low is not None:
-                for B in self.operators[dim]:
-                    B.R[0] = low
+        import pprint; pprint.pprint(dirichlets.items())
+        for (dim, funcs) in dirichlets.items():
+            # print "Mesh(%i) has %i ops with %i funcs:" % (dim,
+                    # len(self.operators[dim]), len(funcs)), self.grid.mesh[dim]
+            # otherdims = range(ndim)
+            # otherdims.remove(dim)
+            # argset = list(itertools.product(*(self.grid.mesh[i] for i in otherdims)))
+            for i, B in enumerate(self.operators[dim]):
+                lowfunc, highfunc = funcs[i]
+                if lowfunc:
+                    B.R[0] = lowfunc(0)
                     B.data[m, 0] = -1
-            if high is not None:
-                for B in self.operators[dim]:
-                    B.R[-1] = high
+                if highfunc:
+                    B.R[-1] = highfunc(-1)
                     B.data[m, -1] = -1
 
         for d in range(ndim):
@@ -520,6 +546,10 @@ class BandedOperator(object):
         return newOp
 
 
+    def __mul__(self, val, inplace=False):
+        return self.mul(val, inplace=inplace)
+    def __imul__(self, val, inplace=True):
+        return self.mul(val, inplace=inplace)
 
     def mul(self, val, inplace=False):
         if inplace:
@@ -639,7 +669,7 @@ class BandedOperator(object):
                 for i in xrange(abs(o),self.shape[0]):
                     self.data[row, i-abs(o)] *= func(i)
         for i in xrange(self.shape[0]):
-            self.R *= func(i)
+            self.R[i] *= func(i)
 
                   # (2 to end)     (begin to end-1)
         # As.data[m - 2, 2:] *= mu_s[:-2]
