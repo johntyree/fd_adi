@@ -49,22 +49,30 @@ from visualize import fp, wireframe, surface, anim
 from heston import bs_call_delta, hs_call
 from time import time
 
+from Option import HestonOption
+from Grid import Grid
+
 # ion()
 
+H = HestonOption( spot=100
+          , strike=99
+          , interest_rate=0.06
+          , volatility = 0.2
+          , tenor=1.0
+          , dt=1/100.0
+          , mean_reversion = 1
+          , mean_variance = 0.04
+          , vol_of_variance = 0.4
+          , correlation = 0
+          )
 
 # Contract parameters
-spot = 80.0
-k = 100.0
-r = 0.03
-t = 1
-v0 = 0.04
-dt = 1 / 100.0
-
-kappa = 1
-theta = 0.04
-sigma = 0.4
-rho = 0
-
+# spot = 80.0
+# k = 100.0
+# r = 0.03
+# t = 1
+# v0 = 0.04
+# dt = 1 / 100.0
 
 # Grid parameters
 rate_Spot_Var = 0.5  # Proportion to solve in the var step
@@ -78,53 +86,51 @@ nvols = 100
 spotdensity = 7.0  # infinity is linear?
 varexp = 4
 
-spots = utils.sinh_space(k, spot_max, spotdensity, nspots)
-spot = spots[min(abs(spots - spot)) == abs(spots - spot)][0]
-k = spots[min(abs(spots - k)) == abs(spots - k)][0]
-vars = utils.exponential_space(0.00, v0, var_max, varexp, nvols)
+spots = utils.sinh_space(H.strike, spot_max, spotdensity, nspots)
+vars = utils.exponential_space(0.00, H.variance.value, var_max, varexp, nvols)
 # vars = [v0]
 # spots = linspace(0.0, spot_max, nspots)
 # vars = linspace(0.0, var_max, nvols)
 # plot(spots); title("Spots"); show()
 # plot(vars); title("Vars"); show()
 
-trims = (k * .2 < spots) & (spots < k * 2.0)
+H.strike = spots[min(abs(spots - H.strike)) == abs(spots - H.strike)][0]
+H.spot = spots[min(abs(spots - H.spot)) == abs(spots - H.spot)][0]
+def init(spots, vars):
+    return np.maximum(0, spots - H.strike)
+Gi = Grid(mesh=(spots, vars), initializer=init)
+G = Gi.copy()
+
+trims = (H.strike * .2 < spots) & (spots < H.strike * 2.0)
 trimv = (0.01 < vars) & (vars < 1)  # v0*2.0)
-trims = slice(None)
-trimv = slice(None)
+# trims = slice(None)
+# trimv = slice(None)
 
 # Does better without upwinding here
 up_or_down_spot = ''
-up_or_down_var = ''
-flip_idx_var = min(find(vars > theta))
+up_or_down_var = 'down'
+flip_idx_var = min(find(vars > H.mean_variance))
 flip_idx_spot = 2
 
 tr = lambda x: x[trims, :][:, trimv]
 tr3 = lambda x: x[:, trims, :][:, :, trimv]
 
-ids = isclose(spots[trims], spot)
-idv = isclose(vars[trimv], v0)
-dss = np.hstack((np.nan, np.diff(spots)))
-dvs = np.hstack((nan, np.diff(vars)))
+ids = isclose(spots[trims], H.spot)
+idv = isclose(vars[trimv], H.variance.value)
+# dss = np.hstack((np.nan, np.diff(spots)))
+# dvs = np.hstack((nan, np.diff(vars)))
 # flip_idx_var = None
 
 BADANALYTICAL = False
 
-
-def init(spots, nvols, k):
-    return tile(np.maximum(0, spots - k), (nvols, 1)).T
-
-
-V_init = init(spots, nvols, k)
-V = np.copy(V_init)
-bs, delta = [x for x in bs_call_delta(spots[:, newaxis], k, r,
-                                      np.sqrt(vars)[newaxis, :], t)]
+bs, delta = [x for x in bs_call_delta(spots[:, newaxis], H.strike, H.interest_rate.value,
+                                      np.sqrt(vars)[newaxis, :], H.tenor)]
 utils.tic("Heston Analytical:")
 # hss = array([hs_call(spots, k, r, np.sqrt(vars),
              # dt*i, kappa, theta, sigma, rho) for i in range(int(t/dt)+1)])
 # hs = hss[-1]
-hs = hs_call(spots, k, r, np.sqrt(vars),
-             t, kappa, theta, sigma, rho)
+hs = hs_call(spots, H.strike, H.interest_rate.value, np.sqrt(vars),
+             H.tenor, H.mean_reversion, H.mean_variance, H.vol_of_variance, H.correlation)
 utils.toc()
 hs[isnan(hs)] = 0.0
 if max(hs.flat) > spots[-1] * 2:
@@ -135,6 +141,7 @@ if len(sys.argv) > 1:
     if sys.argv[1] == '0':
         print "Bail out with arg 0."
         sys.exit()
+sys.exit()
 
 L1_ = []
 R1_ = []
@@ -171,12 +178,6 @@ for j, v in enumerate(vars):
     Ass.data[m, -1] = -2 / dss[-1] ** 2
     Ass.data[m + 1, -2] = 2 / dss[-1] ** 2
 
-    # Attempted backward differencing... explodes.
-    # denom = (0.5*(dss[-1]+dss[-2])*dss[-1]*dss[-2])
-    # Ass.data[m    , -1] = dss[-2]         / denom
-    # Ass.data[m + 1, -2] = -(dss[-1]+dss[-2]) / denom
-    # Ass.data[m + 2, -3] = dss[-1]           / denom
-
     Ass.data[m - 2, 2:] *= gamma2_s[:-2]
     Ass.data[m - 1, 1:] *= gamma2_s[:-1]
     Ass.data[m, :] *= gamma2_s
@@ -188,12 +189,8 @@ for j, v in enumerate(vars):
     L1_.append(As.copy())
     L1_[j].data += Ass.data
     L1_[j].data[m, :] -= (1 - rate_Spot_Var) * r
-    L1_[j].data[m, 0] = -1  # This is to cancel out the previous value so we can
-                          # set the dirichlet boundary condition using R.
-                          # Then we have U_i + -U_i + R
 
     R1_.append((Rs + Rss).copy())
-    R1_[-1][0] = 0
 utils.toc()
 
 mu_v = kappa * (theta - vars)
@@ -225,8 +222,13 @@ for i, s in enumerate(spots):
     Av.data[m + 1, :-1] *= mu_v[1:]
     Av.data[m + 2, :-2] *= mu_v[2:]
 
+    Av.data[m, -1] = -1  # This is to cancel out the previous value so we can
+                          # set the dirichlet boundary condition using R.
+                          # Then we have U_i + -U_i + R
+
     Rv = np.zeros(nvols)
     Rv *= mu_v
+    Rv[-1] = maximum(0, s - k)
 
     Avv.data[m - 1, 1] = 2 / dvs[1] ** 2
     Avv.data[m, 0] = -2 / dvs[1] ** 2
@@ -244,14 +246,8 @@ for i, s in enumerate(spots):
     L2_.append(Av.copy())
     L2_[i].data += Avv.data
     L2_[i].data[m, :] -= rate_Spot_Var * r
-    L2_[i].data[m, -1] = -1  # This is to cancel out the previous value so we can
-                          # set the dirichlet boundary condition using R.
-                          # Then we have U_i + -U_i + R
-
 
     R2_.append(Rv + Rvv)
-    R2_[i][-1] = maximum(0, s - k)
-
 utils.toc()
 
 
@@ -429,24 +425,24 @@ Vs = crank(V_init, L1_, R1_, L2_, R2_,
 Vc = Vs[-1]
 print tr(Vc)[ids, idv] - tr(hs)[ids, idv]
 
-# ## Rannacher smoothing to damp oscilations at the discontinuity
-# smoothing_steps = 2
-# Vs = impl(V_init, L1_, R1_, L2_, R2_,
-          # dt, smoothing_steps, crumbs=[V_init]
-          # # , callback=lambda v, t: force_boundary(v, hs)
-          # )
-# Vs.extend(crank(Vs[-1], L1_, R1_, L2_, R2_,
-          # dt, int(t / dt) - smoothing_steps, crumbs=[]
-          # # , callback=lambda v, t: force_boundary(v, hs)
-                # )
-          # )
-# Vr = Vs[-1]
-# print tr(Vr)[ids, idv] - tr(hs)[ids, idv]
+## Rannacher smoothing to damp oscilations at the discontinuity
+smoothing_steps = 2
+Vs = impl(V_init, L1_, R1_, L2_, R2_,
+          dt, smoothing_steps, crumbs=[V_init]
+          # , callback=lambda v, t: force_boundary(v, hs)
+          )
+Vs.extend(crank(Vs[-1], L1_, R1_, L2_, R2_,
+          dt, int(t / dt) - smoothing_steps, crumbs=[]
+          # , callback=lambda v, t: force_boundary(v, hs)
+                )
+          )
+Vr = Vs[-1]
+print tr(Vr)[ids, idv] - tr(hs)[ids, idv]
 
 ion()
 # p(tr(Vi), tr(hs), spots[trims], vars[trimv], 1, "impl")
 p(tr(Vc), tr(hs), spots[trims], vars[trimv], 2, "crank")
-# p(tr(Vr), tr(hs), spots[trims], vars[trimv], 3, "smooth")
+p(tr(Vr), tr(hs), spots[trims], vars[trimv], 3, "smooth")
 ioff()
 show()
 # p(V_init, hs, spots, vars, 1, "impl")

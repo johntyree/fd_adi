@@ -7,11 +7,6 @@ import numpy as np
 import pylab
 import scipy.sparse
 import scipy.optimize
-import inspect
-
-def attr_dict(a):
-    return dict(inspect.getmembers(a))
-
 
 def tic(label=None):
     """
@@ -26,7 +21,6 @@ def tic(label=None):
         print label,
     sys.stdout.flush()
     TIC_START = time.time()
-
 
 def toc(label=None):
     """
@@ -43,7 +37,6 @@ def toc(label=None):
     sys.stdout.flush()
     return t
 
-
 def D(dim):
     """
     Discrete first derivative operator with no boundary.
@@ -59,7 +52,6 @@ def D(dim):
     operator[0,2:]  =  0.5
     operator[2,:-2] = -0.5
     return scipy.sparse.dia_matrix((operator, (1,0,-1)), shape=(dim,dim))
-
 
 def D2(dim):
     """
@@ -97,7 +89,6 @@ def center_diff(domain, n=1, axis=-1):
             t = xs; xs = dx; dx = t
     return xs
 
-
 def sinh_space(exact, high, density, size):
     """
     Sigmoidal space with high density around 'exact'.
@@ -119,7 +110,6 @@ def sinh_space(exact, high, density, size):
     eps = np.arcsinh(-K/density) + np.arange(size)*deps
     space = K + density * np.sinh(eps)
     return space
-
 
 def exponential_space(low, exact, high, ex, size):
     """
@@ -152,7 +142,6 @@ def exponential_space(low, exact, high, ex, size):
         v[i] = l + pow(i*dv, ex)
     return v
 
-
 def cubic_sigmoid_space(exact, high, density, size):
     """Cheap and bad sigmoid curve. Use sinh instead."""
     if size == 1:
@@ -170,6 +159,7 @@ def cubic_sigmoid_space(exact, high, density, size):
     return y
 
 
+
 def nonuniform_backward_coefficients(deltas):
     """
     The coefficients for tridiagonal matrices operating on a non-uniform grid.
@@ -177,35 +167,23 @@ def nonuniform_backward_coefficients(deltas):
     L = spl.dia_matrix((fst, (0,-1,-2)), shape=(fst.shape[1], fst.shape[1]))
     """
     d = deltas.copy()
-    m = 1
-    fst = np.zeros((4,len(d)))
+    fst = np.zeros((3,len(d)))
     snd = fst.copy()
     for i in range(2,len(d)-1):
-        fst[m  , i]   = (d[i-1]+2*d[i])  / (d[i]*(d[i-1]+d[i]))
-        fst[m+1, i-1] = (-d[i-1] - d[i]) / (d[i-1]*d[i])
-        fst[m+2, i-2] = d[i]             / (d[i-1]*(d[i-1]+d[i]))
+        fst[2, i]   = (d[i-1]+2*d[i])  / (d[i]*(d[i-1]+d[i]));
+        fst[1, i-1] = (-d[i-1] - d[i]) / (d[i-1]*d[i]);
+        fst[0, i-2] = d[i]             / (d[i-1]*(d[i-1]+d[i]));
 
-        denom = (0.5*(d[i]+d[i-1])*d[i]*d[i-1])
-        snd[m  , i]   = d[i-1]         / denom
-        snd[m+1, i-1] = -(d[i]+d[i-1]) / denom
-        snd[m+2, i-2] = d[i]           / denom
+        denom = (0.5*(d[i]+d[i-1])*d[i]*d[i-1]);
+        snd[2, i]   = d[i-1] / denom;
+        snd[1, i-1] = -(d[i]+d[i-1]) / denom;
+        snd[0, i-2] = d[i] / denom;
 
-    # Use first order approximation for the first (inner) row
-    # fst[m,   1] =  1 / d[-1]
-    # fst[m+1, 0] = -1 / d[-1]
-    # fst[m+2, 0] = 0
-    fst[m-1,2] =          d[1]  / (d[2]*(d[1]+d[2]))
-    fst[m,  1] = (-d[1] + d[2]) /       (d[1]*d[2])
-    fst[m+1,0] =         -d[2]  / (d[1]*(d[1]+d[2]))
 
-    # Use centered approximation for the first (inner) row
-    snd[m-1, 2] =  2 / (d[2]*(d[1]+d[2]))
-    snd[m,   1] = -2 /       (d[1]*d[2])
-    snd[m+1, 0] =  2 / (d[1]*(d[1]+d[2]))
-
-    L1 = scipy.sparse.dia_matrix((fst.copy(), (1, 0, -1, -2)), shape=(len(d),len(d)))
-    L2 = scipy.sparse.dia_matrix((snd.copy(), (1, 0, -1, -2)), shape=(len(d),len(d)))
+    L1 = scipy.sparse.dia_matrix((fst.copy(), (-2, -1, 0)), shape=(len(d),len(d)))
+    L2 = scipy.sparse.dia_matrix((snd.copy(), (-2, -1, 0)), shape=(len(d),len(d)))
     return L1,L2
+    return fst, snd
 
 
 def nonuniform_forward_coefficients(deltas):
@@ -215,34 +193,20 @@ def nonuniform_forward_coefficients(deltas):
     L = spl.dia_matrix((fst, (2,1,0)), shape=(fst.shape[1], fst.shape[1]))
     """
     d = deltas.copy()
-    m = 2
-    fst = np.zeros((4,len(d)))
+    fst = np.zeros((3,len(d)))
     snd = fst.copy()
     for i in range(1,len(d)-2):
-        fst[m-2, i+2] = -d[i+1]           / (d[i+2]*(d[i+1]+d[i+2]))
-        fst[m-1, i+1] = (d[i+1] + d[i+2])  /         (d[i+1]*d[i+2])
-        fst[m  , i  ] = (-2*d[i+1]-d[i+2]) / (d[i+1]*(d[i+1]+d[i+2]))
+        fst[2,i+2] = -d[i+1]           / (d[i+2]*(d[i+1]+d[i+2]))
+        fst[1,i+1] = (d[i+1] + d[i+2])  /         (d[i+1]*d[i+2])
+        fst[0,i]   = (-2*d[i+1]-d[i+2]) / (d[i+1]*(d[i+1]+d[i+2]))
 
         denom = (0.5*(d[i+2]+d[i+1])*d[i+2]*d[i+1]);
-        snd[m-2,  i+2] =   d[i+1]         / denom
-        snd[m-1  ,i+1] = -(d[i+2]+d[i+1]) / denom
-        snd[m,i]   =   d[i+2]         / denom
+        snd[2,i+2] =   d[i+1]         / denom
+        snd[1,i+1] = -(d[i+2]+d[i+1]) / denom
+        snd[0,i]   =   d[i+2]         / denom
 
-    # Use first order approximation for the last (inner) row
-    # fst[m-2,  0] = 0
-    # fst[m-1,   -1] =  1 / d[-1]
-    # fst[m, -2] = -1 / d[-1]
-    fst[m-1,-1] =           d[-2]  / (d[-1]*(d[-2]+d[-1]))
-    fst[m,  -2] = (-d[-2] + d[-1]) /        (d[-2]*d[-1])
-    fst[m+1,-3] =          -d[-1]  / (d[-2]*(d[-2]+d[-1]))
-
-    # Use centered approximation for the last (inner) row
-    snd[m-1, -1] = 2 / (d[-1]*(d[-2]+d[-1]))
-    snd[m  ,-2] = -2 /       (d[-2]*d[-1])
-    snd[m+1,-3] = 2  / (d[-2]*(d[-2]+d[-1]))
-
-    L1 = scipy.sparse.dia_matrix((fst.copy(), (2, 1, 0, -1)), shape=(len(d),len(d)))
-    L2 = scipy.sparse.dia_matrix((snd.copy(), (2, 1, 0, -1)), shape=(len(d),len(d)))
+    L1 = scipy.sparse.dia_matrix((fst.copy(), (0, 1, 2)), shape=(len(d),len(d)))
+    L2 = scipy.sparse.dia_matrix((snd.copy(), (0, 1, 2)), shape=(len(d),len(d)))
     return L1,L2
 
 
@@ -256,15 +220,15 @@ def nonuniform_center_coefficients(deltas):
     fst = np.zeros((3,len(d)))
     snd = fst.copy()
     for i in range(1,len(d)-1):
-        fst[0,i+1] =            d[i]  / (d[i+1]*(d[i]+d[i+1]))
+        fst[2,i+1] =            d[i]  / (d[i+1]*(d[i]+d[i+1]))
         fst[1,i]   = (-d[i] + d[i+1]) /         (d[i]*d[i+1])
-        fst[2,i-1] =         -d[i+1]  / (d[i  ]*(d[i]+d[i+1]))
+        fst[0,i-1] =         -d[i+1]  / (d[i  ]*(d[i]+d[i+1]))
 
-        snd[0,i+1] = 2  / (d[i+1]*(d[i]+d[i+1]))
+        snd[2,i+1] = 2  / (d[i+1]*(d[i]+d[i+1]))
         snd[1,i]   = -2 /       (d[i]*d[i+1])
-        snd[2,i-1] = 2  / (d[i  ]*(d[i]+d[i+1]))
-    L1 = scipy.sparse.dia_matrix((fst.copy(), (1, 0, -1)), shape=(len(d),len(d)))
-    L2 = scipy.sparse.dia_matrix((snd.copy(), (1, 0, -1)), shape=(len(d),len(d)))
+        snd[0,i-1] = 2  / (d[i  ]*(d[i]+d[i+1]))
+    L1 = scipy.sparse.dia_matrix((fst.copy(), (-1, 0, 1)), shape=(len(d),len(d)))
+    L2 = scipy.sparse.dia_matrix((snd.copy(), (-1, 0, 1)), shape=(len(d),len(d)))
     return L1, L2
 
 
@@ -289,21 +253,18 @@ def nonuniform_complete_coefficients(deltas, boundary=None, up_or_down=None,
         up_or_down = up_or_down.lower()
         if up_or_down.startswith('down'):
             downwind_from = flip_idx
-            # print "Using downwinding:",
+            print "Using downwinding:",
         elif up_or_down.startswith('up'):
             upwind_from = flip_idx
-            # print "Using upwinding:",
+            print "Using upwinding:",
 
 
     # Indexing is getting complicated so we'll do it like this
     # U[m,:] is the center diag
     # U[m-x,:] is the x'th diag above center
-    # Note diag m starts at 0, m-1 starts at +1, m-2 starts at +2...
-    #                          m+1 ENDS   at -1, m+2 ENDS at -2...
+    # Note diag m starts at 0, m+1 starts at 1, m+2 starts at 2...
+    #                          m-1 ENDS   at -1, m-2 ENDS at -2...
     m = 2
-    c = 1
-    b = 1
-    f = 2
 
     C1, C2 = nonuniform_center_coefficients(d)
     F1, F2 = nonuniform_forward_coefficients(d)
@@ -313,92 +274,90 @@ def nonuniform_complete_coefficients(deltas, boundary=None, up_or_down=None,
         raise NotImplementedError("One or both of downwind_from and upwind_from"
                                   "must be None.")
     elif downwind_from is not None:
-        if downwind_from < 1:
+        if downwind_from < 2:
             raise ValueError("Can't use backward differencing at top boundary."
                              " (downwind_from == %i < 2)" % downwind_from)
-        elif downwind_from == 1:
-            U1[m-B1.offsets] = B1.data
-            U2[m-B2.offsets] = B2.data
-
         else:
             u = downwind_from
 
-            U1[m-2, :u+2] = 0
-            U1[m-2, u+2:] = 0
-            U2[m-2, :u+2] = 0
-            U2[m-2, u+2:] = 0
+            U1[m+2, :u+2] = 0
+            U1[m+2, u+2:] = 0
+            U2[m+2, :u+2] = 0
+            U2[m+2, u+2:] = 0
 
-            U1[m-1, :u+1] = C1.data[c-1,:u+1]
-            U2[m-1, :u+1] = C2.data[c-1,:u+1]
-            U1[m-1, u+1:] = B1.data[b-1,u+1:]
-            U2[m-1, u+1:] = B2.data[b-1,u+1:]
+            U1[m+1, :u+1] = C1.data[2,:u+1]
+            U1[m+1, u+1:] = 0
+            U2[m+1, :u+1] = C2.data[2,:u+1]
+            U2[m+1, u+1:] = 0
 
-            U1[m  , :u] = C1.data[c,:u]
-            U2[m  , :u] = C2.data[c,:u]
-            U1[m  , u:] = B1.data[b,u:]
-            U2[m  , u:] = B2.data[b,u:]
+            U1[m, :u] = C1.data[1,:u]
+            U1[m, u:] = B1.data[2,u:]
+            U2[m, :u] = C2.data[1,:u]
+            U2[m, u:] = B2.data[2,u:]
 
-            U1[m+1, :u-1] = C1.data[c+1,:u-1]
-            U2[m+1, :u-1] = C2.data[c+1,:u-1]
-            U1[m+1, u-1:] = B1.data[b+1,u-1:]
-            U2[m+1, u-1:] = B2.data[b+1,u-1:]
+            U1[m-1, :u-1] = C1.data[0,:u-1]
+            U1[m-1, u-1:] = B1.data[1,u-1:]
+            U2[m-1, :u-1] = C2.data[0,:u-1]
 
-            U1[m+2, :u-2] = 0
-            U1[m+2, u-2:] = B1.data[b+2,u-2:]
-            U2[m+2, :u-2] = 0
-            U2[m+2, u-2:] = B2.data[b+2,u-2:]
+            U2[m-1, u-1:] = B2.data[1,u-1:]
 
-
+            U1[m-2, :u-2] = 0
+            U1[m-2, u-2:] = B1.data[0,u-2:]
+            U2[m-2, :u-2] = 0
+            U2[m-2, u-2:] = B2.data[0,u-2:]
 
     elif upwind_from is not None:
-        if upwind_from > len(d)-1:
+        if upwind_from > len(d)-2:
             raise ValueError("Can't use foward differencing at bottom boundary."
-                             " (upwind_from == %i > len(d)-1 (%i))" % (upwind_from, len(d)-1))
+                             " (upwind_from == %i > len(d)-2)" % upwind_from)
+        else:
+            u = upwind_from
 
-        u = upwind_from
+            U1[m+2, :u+2]  = 0
+            U1[m+2,  u+2:] = F1.data[2,u+2:]
+            U2[m+2, :u+2]  = 0
+            U2[m+2,  u+2:] = F2.data[2,u+2:]
 
-        U1[m-2, :u+2]  = 0
-        U1[m-2,  u+2:] = F1.data[f-2,u+2:]
-        U2[m-2, :u+2]  = 0
-        U2[m-2,  u+2:] = F2.data[f-2,u+2:]
+            U1[m+1, :u+1]  = C1.data[2,:u+1]
+            U1[m+1,  u+1:] = F1.data[1, u+1:]
+            U2[m+1, :u+1]  = C2.data[2,:u+1]
+            U2[m+1,  u+1:] = F2.data[1, u+1:]
 
-        U1[m-1, :u+1]  = C1.data[c-1,:u+1]
-        U1[m-1,  u+1:] = F1.data[f-1, u+1:]
-        U2[m-1, :u+1]  = C2.data[c-1,:u+1]
-        U2[m-1,  u+1:] = F2.data[f-1, u+1:]
+            U1[m+0, :u]  = C1.data[1,:u]
+            U1[m+0,  u:] = F1.data[0,u:]
+            U2[m+0, :u]  = C2.data[1,:u]
+            U2[m+0,  u:] = F2.data[0,u:]
 
-        U1[m+0, :u]  = C1.data[c,:u]
-        U1[m+0,  u:] = F1.data[f,u:]
-        U2[m+0, :u]  = C2.data[c,:u]
-        U2[m+0,  u:] = F2.data[f,u:]
+            U1[m-1, :u-1]  = C1.data[0,:u-1]
+            U1[m-1,  u-1:] = 0
+            U2[m-1, :u-1]  = C2.data[0,:u-1]
 
-        U1[m+1, :u-1]  = C1.data[c+1,:u-1]
-        U1[m+1,  u-1:] = F1.data[f+1,u-1:]
-        U2[m+1, :u-1]  = C2.data[c+1,:u-1]
-        U2[m+1,  u-1:] = F2.data[f+1,u-1:]
+            U2[m-1,  u-1:] = 0
 
-        U1[m+2, :u-2]  = 0
-        U1[m+2,  u-2:] = 0
-        U2[m+2, :u-2]  = 0
-        U2[m+2,  u-2:] = 0
+            U1[m-2, :u-2]  = 0
+            U1[m-2,  u-2:] = 0
+            U2[m-2, :u-2]  = 0
+            U2[m-2,  u-2:] = 0
 
-
+            # Use first order approximation for the last (inner) row
+            U1[m, -2] = -1 / d[-1]
+            U1[m+1, -1] =  1 / d[-1]
 
     # If we don't use anything special, then just copy the center coefficients
     elif downwind_from is None and upwind_from is None:
-        U1[m-1,:] = C1.data[c-1,:]
-        U1[m,:]   = C1.data[c  ,:]
-        U1[m+1,:] = C1.data[c+1,:]
+        U1[m+1,:] = C1.data[2,:]
+        U1[m,:]   = C1.data[1,:]
+        U1[m-1,:] = C1.data[0,:]
 
-        U2[m-1,:] = C2.data[c-1,:]
-        U2[m,:]   = C2.data[c  ,:]
-        U2[m+1,:] = C2.data[c+1,:]
+        U2[m+1,:] = C2.data[2,:]
+        U2[m,:]   = C2.data[1,:]
+        U2[m-1,:] = C2.data[0,:]
 
     else:
         raise NotImplementedError("The universe has terminated.")
 
-    U1 = scipy.sparse.dia_matrix((U1, (2, 1, 0, -1,-2)), shape=(len(d),len(d)))
-    U2 = scipy.sparse.dia_matrix((U2, (2, 1, 0, -1,-2)), shape=(len(d),len(d)))
+    U1 = scipy.sparse.dia_matrix((U1, (-2, -1, 0, 1, 2)), shape=(len(d),len(d)))
+    U2 = scipy.sparse.dia_matrix((U2, (-2, -1, 0, 1, 2)), shape=(len(d),len(d)))
     return U1, U2
 
 

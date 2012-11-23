@@ -20,8 +20,9 @@ class Grid(object):
 
         mesh = tuple(mesh)
         for m in mesh:
-            s = np.sign(np.diff(m))
-            assert(all(s == s[0]))
+            if len(m) > 1:
+                s = np.sign(np.diff(m))
+                assert(all(s == s[0]))
         self._mesh = mesh
         self.domain = initializer(*(x.T for x in np.meshgrid(*mesh)))
         self._shape = tuple(map(len, mesh))
@@ -34,6 +35,19 @@ class Grid(object):
 
     def copy(self):
         return Grid(mesh=self._mesh, initializer=self.initializer)
+
+    def __str__(self):
+        keys = utils.attr_dict(self)
+        keys['hexid'] = hex(id(self))
+        keys['ndim'] = self.ndim
+        return ("""
+Grid object <%(hexid)s>
+    mesh: (%(_mesh)s
+    ndim: %(ndim)i
+    dx  : %(dx)s
+    shape: %(shape)s
+    domain: %(domain)s
+        """) % keys
 
     @property
     def mesh(self):
@@ -48,12 +62,15 @@ class Grid(object):
     def shape(self):
         return self._shape
 
+    def __getattr__(self, name):
+        return self.domain.__getattribute__(name)
+
     def __getitem__(self, indices):
         return self.domain[indices]
 
 
 
-def main():
+def test_copy():
     """Run main."""
     k = 0.5
     g = Grid(initializer=lambda x,y: np.maximum(x-k,0))
@@ -65,7 +82,9 @@ def main():
     print g.domain
     print h.domain
     print g.shape, h.shape
-
+    assert(g.domain != h.domain)
+    g.reset()
+    assert(g.domain != h.domain)
     g.reset()
     print g.mesh
     print g.domain
