@@ -11,6 +11,8 @@ import scipy.integrate
 import numpy as np
 import numexpr as ne
 
+from Option import Option
+
 from visualize import fp
 prec = 3
 
@@ -20,6 +22,57 @@ I = 1j
 BLACKSCHOLES, FUNDAMENTAL, COS = [2**i for i in range(3)]
 HESTON = FUNDAMENTAL | COS
 ALL = BLACKSCHOLES | HESTON
+
+class HestonOption(Option):
+    def __init__(self
+                , spot=100
+                , strike=99
+                , interest_rate=0.06
+                , volatility=0.2
+                , tenor=1.0
+                , dt=None
+                , mean_reversion=1
+                , mean_variance=None
+                , vol_of_variance=0.4
+                , correlation=0):
+        Option.__init__(self
+                , spot=spot
+                , strike=strike
+                , interest_rate=interest_rate
+                , volatility=volatility
+                , tenor=tenor
+                , dt=dt)
+        self.mean_reversion = mean_reversion
+        self.mean_variance = mean_variance if mean_variance is not None else volatility**2
+        self.vol_of_variance = vol_of_variance
+        self.correlation = correlation
+
+
+    def __str__(self):
+        s = Option.features(self)
+        s[0] = "HestonOption <%s>" % hex(id(self))
+        s.extend(
+                [ "Mean Reversion: %s" % self.mean_reversion
+                , "Mean Variance: %s" % self.mean_variance
+                , "Vol of Variance: %s" % self.vol_of_variance
+                , "Correlation %s" % self.correlation
+                ])
+        return s
+
+    @property
+    def analytical(self):
+        return HestonCos(
+            self.spot,
+            self.strike,
+            self.interest_rate.value,
+            self.volatility,
+            self.tenor,
+            self.mean_reversion,
+            self.mean_variance,
+            self.vol_of_variance,
+            self.correlation).solve()
+
+
 
 class HestonCos(object):
     def __init__(self, S, K, r, vol, T, kappa, theta, sigma, rho, N=2**8):
@@ -313,15 +366,6 @@ def hs_stream(s, k, r, v, dt, kappa, theta, sigma, rho, HFUNC=HestonCos):
     yield bs_call_delta(s[:,np.newaxis], k, r, v[np.newaxis,:], 0)[0]
     for i in it.count(1):
         yield hs_call(s, k, r, v, i*dt, kappa, theta, sigma, rho)
-
-def bs_call(s,k,r,v,t):
-    return bs_call_delta(s,k,r,v,t)[0]
-
-def bs_call_delta(s, k, r, vol, t):
-    N = scipy.stats.distributions.norm.cdf
-    d1 = (np.log(s/k) + (r+0.5*vol**2) * t) / (np.maximum(1e-10, vol) * np.sqrt(t))
-    d2 = d1 - vol*np.sqrt(t)
-    return (N(d1)*s - N(d2)*k*np.exp(-r * t), N(d1))
 
 def bench():
     global ret

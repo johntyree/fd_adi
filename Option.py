@@ -7,6 +7,7 @@
 # import itertools as it
 
 import numpy as np
+import scipy.stats
 
 
 class Option(object):
@@ -22,14 +23,14 @@ class Option(object):
                  ):
         self.spot = spot
         self.strike = strike
+        # Constant rate
         self.interest_rate = MeanRevertingProcess(mean=interest_rate, volatility=0)
 
-        if variance is not None and volatility is not None:
-            assert(np.close(volatility**2, variance))
-        if volatility:
-            variance = volatility**2
-        else:
+        if variance is not None:
             volatility = np.sqrt(variance)
+        else:
+            variance = volatility**2
+            # Constant rate
         self._variance = MeanRevertingProcess(mean=variance, volatility=0)
 
         self.tenor = tenor
@@ -60,44 +61,32 @@ class Option(object):
             ]
 
 
-class HestonOption(Option):
-    def __init__(self
-                , spot=100
-                , strike=99
-                , interest_rate=0.06
-                , volatility=0.2
-                , tenor=1.0
-                , dt=None
-                , mean_reversion=1
-                , mean_variance=None
-                , vol_of_variance=0.4
-                , correlation=0):
-        Option.__init__(self
-                , spot=spot
-                , strike=strike
-                , interest_rate=interest_rate
-                , volatility=volatility
-                , tenor=tenor
-                , dt=dt)
-        self.mean_reversion = mean_reversion
-        self.mean_variance = mean_variance if mean_variance is not None else volatility**2
-        self.vol_of_variance = vol_of_variance
-        self.correlation = correlation
+class BlackScholesOption(Option):
+    __init__ = Option.__init__
 
-    def __repr__(self):
-        return "\n\t".join(self.features())
+    @property
+    def analytical(self):
+        return self._call_delta()[0]
 
-    def features(self):
-        s = Option.features(self)
-        s[0] = "HestonOption <%s>" % hex(id(self))
-        s.extend(
-                [ "Mean Reversion: %s" % self.mean_reversion
-                , "Mean Variance: %s" % self.mean_variance
-                , "Vol of Variance: %s" % self.vol_of_variance
-                , "Correlation %s" % self.correlation
-                ])
-        return s
+    @property
+    def delta(self):
+        return self._call_delta()[1]
 
+    def _call_delta(self):
+        N = scipy.stats.distributions.norm.cdf
+        s = self.spot
+        k = self.strike
+        r = self.interest_rate.value
+        t = self.tenor
+        vol = self.volatility
+
+        if self.tenor == 0.0 or self.volatility == 0.0:
+            d1 = np.infty
+        else:
+            d1 = ((np.log(s/k) + (r+0.5*vol**2) * t)
+                / (vol * np.sqrt(t)))
+            d2 = d1 - vol*np.sqrt(t)
+        return (N(d1)*s - N(d2)*k*np.exp(-r * t), N(d1))
 
 class MeanRevertingProcess(object):
     def __init__(  self
@@ -114,6 +103,21 @@ class MeanRevertingProcess(object):
 
     def __repr__(self):
         return "%s (%s, %s)" % (self.value, self.mean, self.volatility)
+
+    # def __add__(self, val):
+        # self.add(val, inplace=False)
+    # def __iadd__(self, val):
+        # self.add(val, inplace=True)
+    # def __mul__(self, val):
+        # self.mul(val, inplace=False)
+    # def __imul__(self, val):
+        # self.mul(val, inplace=True)
+
+    # def add(self, other, inplace=False):
+        # MeanRevertingProcess(self.mean,
+                             # self.volatility,
+                             # self.value+other)
+
 
 
 # class AsianOption(Option):
