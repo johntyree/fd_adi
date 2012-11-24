@@ -45,10 +45,10 @@ class Option(object):
         "The volatility property, based on variance."
         return np.sqrt(self.variance.value)
 
-    def __repr__(self):
-        return "\n\t".join(self.features())
+    # def __repr__(self):
+        # return "\n\t".join(self.features())
 
-    def features(self):
+    def __str__(self):
         return [ "Option <%s>" % hex(id(self))
             , "Spot: %s" % self.spot
             , "Strike: %s" % self.strike
