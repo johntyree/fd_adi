@@ -286,7 +286,7 @@ class something(unittest.TestCase):
         assert (G.domain == U).all()
 
 
-    def test_FD_combine_dimensional_operators(self):
+    def test_FDADI_combine_dimensional_operators(self):
         G = Grid.Grid((self.spots, self.vars), initializer=lambda x0,x1: np.maximum(x0-self.strike,0))
         # print G
 
@@ -319,9 +319,8 @@ class something(unittest.TestCase):
                         # Free boundary
                 (1,1) : ((None, lambda *x: None),
                         # D intrinsic value at high variance
-                        (0.0, lambda t, *dim: np.maximum(0.0, dim[0]-k)))
-             }
-        F = FD.FiniteDifferenceEngine(G, coefficients=coeffs, boundaries=bounds)
+                        (0.0, lambda t, *dim: np.maximum(0.0, dim[0]-k)))}
+        F = FD.FiniteDifferenceEngineADI(G, coefficients=coeffs, boundaries=bounds)
 
         oldL1 = self.L1_
         oldL2 = self.L2_

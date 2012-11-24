@@ -103,9 +103,9 @@ trimv = slice(None)
 
 # Does better without upwinding here
 up_or_down_spot = ''
-up_or_down_var = ''
+up_or_down_var = 'down'
 flip_idx_var = min(pylab.find(vars > H.mean_variance))
-flip_idx_spot = 2
+flip_idx_spot = 1
 
 tr = lambda x: x[trims, :][:, trimv]
 tr3 = lambda x: x[:, trims, :][:, :, trimv]
@@ -114,7 +114,6 @@ ids = np.isclose(spots[trims], H.spot)
 idv = np.isclose(vars[trimv], H.variance.value)
 dss = np.hstack((np.nan, np.diff(spots)))
 dvs = np.hstack((np.nan, np.diff(vars)))
-flip_idx_var = None
 
 BADANALYTICAL = False
 
@@ -142,11 +141,13 @@ def mu_v(t, *dim):
     return H.mean_reversion * (H.mean_variance - dim[1])
 def gamma2_v(t, *dim):
     return 0.5 * H.vol_of_variance**2 * dim[1]
+
 coeffs = {()   : lambda t: -H.interest_rate.value,
           (0,) : mu_s,
           (0,0): gamma2_s,
           (1,) : mu_v,
           (1,1): gamma2_v}
+
 bounds = {
                 # D: U = 0              VN: dU/dS = 1
         (0,)  : ((0, lambda *args: 0.0), (1, lambda *args: 1.0)),
@@ -159,10 +160,14 @@ bounds = {
                 # Free boundary
         (1,1) : ((None, lambda *x: None),
                 # D intrinsic value at high variance
-                (0.0, lambda t, *dim: np.maximum(0.0, dim[0]-H.strike)))
-     }
+                (0.0, lambda t, *dim: np.maximum(0.0, dim[0]-H.strike)))}
+
+# This is largely redundant. Center is the default.
+schemes = {(1,) : ({"scheme": "center"}, {"scheme": "backward", "from" : flip_idx_var})}
+
+
 utils.tic("Building FD Engine")
-F = FD.FiniteDifferenceEngineADI(G, coefficients=coeffs, boundaries=bounds)
+F = FD.FiniteDifferenceEngineADI(G, coefficients=coeffs, boundaries=bounds, schemes=schemes)
 utils.toc()
 
 L1_ = []

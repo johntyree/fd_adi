@@ -21,7 +21,7 @@ import scipy.linalg as spl
 
 
 class FiniteDifferenceEngine(object):
-    def __init__(self, grid, coefficients={}, boundaries={}):
+    def __init__(self, grid, coefficients={}, boundaries={}, schemes={}):
         """
         @coefficients@ is a dict of tuple, function pairs with c[i,j] referring to the
         coefficient of the i j derivative, dU/didj. Absent pairs are counted as zeros.
@@ -35,13 +35,13 @@ class FiniteDifferenceEngine(object):
         closures. Weird things will happen.
 
         Ex. (2D grid)
-            { (None,): lambda t, x0, x1: 0.06 # 0th derivative
+
+            {(None,): lambda t, x0, x1: 0.06 # 0th derivative
               (0,)  : lambda t, x0, x1: 0.5,
               (0,0) : lambda t, x0, x1: x,
               # python magic lets be more general than (2*x1*t)
               (1,)  : lambda t, *dims: 2*dims[1]*t
-              (0,1) : lambda t, *dims: dims[0]*dims[1]
-            }
+              (0,1) : lambda t, *dims: dims[0]*dims[1]}
 
         is interpreted as:
             0.5*(dU/dx1) + x1*(d²U/dx1²) + 2*x2*t*(dU/dx2)
@@ -66,6 +66,7 @@ class FiniteDifferenceEngine(object):
         representing the value of the boundary.
 
         Ex. (Heston PDE, x0 = spot, x1 = variance)
+
                     # 0'th derivative term (ex. -rU)
                     # This can only depend on time!
             {()    : lambda t: -self.r
@@ -79,16 +80,50 @@ class FiniteDifferenceEngine(object):
                        (1, lambda t, *dims: np.maximum(0, dim[0]-k)))
                     # Free boundary at low variance
                     # VN: second derivative is 0 at high variance
-            (1,1)  : ((None, lambda *x: None), (1, lambda *args:0))
-             }
+            (1,1)  : ((None, lambda *x: None), (1, lambda *args:0))}
+
+
+        Again we do a similar encoding for the FD schemes used.
+
+        @schemes@ is a dict of tuples of dicts as follows.
+
+        Ex. (Centered in all cases. Switch to upwinding at index 10 in
+                convection term in x1 dimension.)
+
+            {(0,) : ({"scheme": "center"},),
+            (0,0): ({"scheme": "center"},),
+            (1,) : ({"scheme": "center"},
+                    {"scheme": "backward", "from" : flip_idx_var}),
+            (1,1): ({"scheme": "center"},)}
+
+        Any missing values are determined by @self.default_scheme@ and
+        @self.default_order@ (making this particular example largely
+        redundant).
 
         Can't do this with C/Cuda of course... maybe cython?
         """
         self.grid = grid
-        self.operators = {}
+        self.ndim = self.grid.ndim
         self.coefficients = coefficients
         self.boundaries = boundaries
+        self.schemes = schemes
         self.t = 0
+        self.default_scheme = 'center'
+        self.default_order = 2
+
+        # Setup
+        self.operators = {}
+
+
+    def solve(self):
+        """Run all the way to the terminal condition."""
+        raise NotImplementedError
+
+
+class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
+    def __init__(self, grid, coefficients={}, boundaries={}, schemes={}):
+        FiniteDifferenceEngine.__init__(self, grid, coefficients=coefficients,
+                boundaries=boundaries, schemes=schemes)
         self.make_discrete_operators()
 
 
@@ -96,23 +131,30 @@ class FiniteDifferenceEngine(object):
         ndim = self.grid.ndim
         coeffs = self.coefficients
         bounds = self.boundaries
-        order = 2
-        # key = dim, val = [Bool, Bool] # upper lower
         dirichlets = {}
+
+        # We partially apply the function to all of the values except this
+        # dimension, and change the semantics to accept an index into mesh
+        # rather than the mesh value itself. This way the caller doesn't need
+        # to know anything other than row it's working on.
+        # f : (t x R^n -> R) -> Z -> R
         def wrapscalarfunc(f, args, dim):
             x = list(args)
             x.insert(dim, None)
             def newf(i):
                 x[dim] = self.grid.mesh[dim][i]
-                # print "Args for dim %i: %s" % (dim, x)
                 return f(self.t, *x)
             return newf
+
+        # Here we do the same except we go ahead and evalutate the function for
+        # the entire vector. This is just for numpy's speed and is otherwise
+        # redundant.
         def evalvectorfunc(f, args, dim):
             x = list(args)
             x.insert(dim, self.grid.mesh[dim])
             return f(self.t, *x)
 
-        wrapfunc = evalvectorfunc
+        # d = (0,0) or so...
         for d in coeffs.keys():
             # Don't need an operator for the 0th derivative
             if d == ():
@@ -122,99 +164,149 @@ class FiniteDifferenceEngine(object):
             otherdims = range(ndim)
             otherdims.remove(dim)
             Bs = []
-            # Make an operator for this dimension
-            #TODO
-            # schemes[d] = [('center', 0), ('backward', 22)]
-            Binit = BandedOperator.for_vector(self.grid.mesh[dim],
-                        scheme='center', derivative=len(d), order=order)
+
+            # Make an operator template for this dimension
+            Binit = None
+            for sd in self.schemes.get(d, ({},)): # a tuple of dicts
+                s = sd.get('scheme', self.default_scheme)
+                idx = sd.get('from', 0)
+                o = sd.get('order', self.default_order)
+                B = BandedOperator.for_vector(self.grid.mesh[dim],
+                        scheme=s, derivative=len(d), order=o)
+                if Binit is not None:
+                    # They asked for more than one scheme,
+                    # Splice the operators together at row idx
+                    Binit.splice_with(B, idx, overwrite=True)
+                else:
+                    Binit = B
+            # m is the main diagonal's index in B.data
             m = tuple(Binit.offsets).index(0)
             if m > len(Binit.offsets)-1:
                 raise ValueError("No main diagonal!")
-            #TODO: Splice here
-            # take cartesian product of other dimension values
-            argset = list(itertools.product(*(self.grid.mesh[i] for i in otherdims)))
+            # Take cartesian product of other dimension values
+            argset = itertools.product(*(self.grid.mesh[i] for i in otherdims))
             if dim not in dirichlets:
-                dirichlets[dim] = [None] * len(argset)
-            # pair our current dimension with all combinations of the other dimensions
-            for col, a in enumerate(argset):
-                # Make a new operator
+                dirichlets[dim] = []
+            # Pair our current dimension with all combinations of the other
+            # dimension values
+            for a in argset:
+                # Make a new operator from our template
                 B = Binit.copy()
 
-                # Give it the specified coefficient
-                # Here we wrap the functions with the appropriate values for
-                # this particular dimension.
+                # Adjust the boundary conditions as necessary
                 b = bounds[d]
                 lowfunc = wrapscalarfunc(b[0][1], a, dim)
                 highfunc = wrapscalarfunc(b[1][1], a, dim)
-                # print "old b(%s) -> (%s, %s)" % (d, b[0][1](0), b[1][1](-1))
-                # print b
                 b = ((b[0][0], lowfunc(0)), (b[1][0], highfunc(-1)))
-                # print "new b(%s) -> (%s (%s), %s (%s))" % (d, b[0][1], lowval, b[1][1], highval)
-                # print b
-                # print "Boundary:", d
                 B.applyboundary(b)
-                if dim == 1:
-                    g = bounds[d][1][1]
-                    f = wrapfunc(g, a, dim)
-
-                B.vectorized_scale(wrapfunc(coeffs[d], a, dim))
                 # If it's a dirichlet boundary we mark it because we have to
-                # handle it absolutely last
+                # handle it absolutely last, it doesn't get scaled.
                 lf = hf = None
-                if b[0][0] == 0:
+                if b[0][0] == 0: # 0(th derivative) is dirichlet
                     lf = lowfunc
-                    # bounds[dim].append(b)
                 if b[1][0] == 0:
                     hf = highfunc
                 if lowfunc or highfunc:
-                    dirichlets[dim][col] = (lf, hf)
-                    # bounds[dim].append(b)
-                # print
+                    dirichlets[dim].append((lf, hf))
+
+                # Give the operator the right coefficient
+                # Here we wrap the functions with the appropriate values for
+                # this particular dimension.
+                B.vectorized_scale(evalvectorfunc(coeffs[d], a, dim))
                 Bs.append(B)
 
-            # Combine operators for this dimension
+            # Combine scaled derivatives for this dimension
             if dim not in self.operators:
                 self.operators[dim] = Bs
             else:
                 for col, b in enumerate(Bs):
                     self.operators[dim][col] += b
 
-        # Now the 0th derivative
+        # Now the 0th derivative (x * V)
+        # We split this evenly among each dimension
         #TODO: This function is ONLY dependent on time. NOT MESH
         if () in coeffs:
             for Bs in self.operators.values():
                 for B in Bs:
                     B += coeffs[()](self.t) / float(ndim)
 
-        # Now eveerything else is done. Enforce dirichlet boundaries
+        # Now everything else is done we can apply dirichlet boundaries
         for (dim, funcs) in dirichlets.items():
-            # print "Mesh(%i) has %i ops with %i funcs:" % (dim,
-                    # len(self.operators[dim]), len(funcs)), self.grid.mesh[dim]
-            # otherdims = range(ndim)
-            # otherdims.remove(dim)
-            # argset = list(itertools.product(*(self.grid.mesh[i] for i in otherdims)))
+            # For each operator in this dimension
             for i, B in enumerate(self.operators[dim]):
                 lowfunc, highfunc = funcs[i]
                 if lowfunc:
-                    B.R[0] = lowfunc(0)
+                    # Cancel out the old value
                     B.data[m, 0] = -1
+                    # Replace with the new one
+                    B.R[0] = lowfunc(0)
                 if highfunc:
-                    B.R[-1] = highfunc(-1)
                     B.data[m, -1] = -1
+                    B.R[-1] = highfunc(-1)
 
+        # Flatten into one large operator for speed
+        # We'll apply this to a flattened domain and then reshape it.
         for d in range(ndim):
-            # ops = [o for o in coeffs.keys() if all(i == d for i in o)]
-            # self.operators[d] = self.operators[ops[0]]
-            # for o in ops[1:]:
-                # for i, b in enumerate(self.operators[d]):
-                    # b += self.operators[o][i]
             self.operators[d] = flatten_tensor(self.operators[d])
         return
 
 
-    def solve(self):
-        """Run all the way to the terminal condition."""
-        raise NotImplementedError
+    def impl(self, t, dt, crumbs=[], callback=None):
+        n = int(t / dt)
+        V = self.grid.domain.copy()
+        crumbs.append(V)
+
+        ordered_ops = sorted(self.operators.items())
+        Ls = np.roll([(op * -dt).add(1, inplace=True) for _, op in ordered_ops], -1)
+
+        print_step = max(1, int(n / 10))
+        to_percent = 100.0 / n
+        utils.tic("Impl:")
+        for k in xrange(n):
+            if not k % print_step:
+                if np.isnan(V).any():
+                    print "Impl fail @ t = %f (%i steps)" % (dt * k, k)
+                    return crumbs
+                print int(k * to_percent),
+            if callback is not None:
+                callback(V, ((n - k) * dt))
+            for L in Ls:
+                V = L.solve(V).T
+        crumbs.append(V.copy())
+        utils.toc()
+        return crumbs
+
+
+    def crank(self, t, dt, crumbs=[], callback=None):
+        V = self.grid.domain.copy()
+        n = int(t / dt)
+        dt *= 0.5
+        crumbs.append(V)
+
+        ordered_ops = sorted(self.operators.items())
+        # Have to roll the first one because of the scheme
+        Les = np.roll([(op *  dt).add(1, inplace=True) for d, op in ordered_ops], -1)
+        Lis = ((op * -dt).add(1, inplace=True) for d, op in ordered_ops)
+        Ls = zip(Les, Lis)
+
+
+        print_step = max(1, int(n / 10))
+        to_percent = 100.0 / n
+        utils.tic("Crank:")
+        for k in xrange(n):
+            if not k % print_step:
+                if np.isnan(V).any():
+                    print "Crank fail @ t = %f (%i steps)" % (dt * k, k)
+                    return crumbs
+                print int(k * to_percent),
+            if callback is not None:
+                callback(V, ((n - k) * dt))
+            for Le, Li in Ls:
+                V = Le.apply(V).T
+                V = Li.solve(V)
+            crumbs.append(V.copy())
+        utils.toc()
+        return crumbs
 
 
 class BandedOperator(object):
@@ -517,11 +609,13 @@ class BandedOperator(object):
         """
         newoffsets = sorted(set(self.offsets).union(set(bottom.offsets)), reverse=True)
         newdata = np.zeros((len(newoffsets), self.shape[1]))
+        if at < 0:
+            at = self.shape[0] + at
 
         if any(at - o < 0 for o in newoffsets):
             # print "Returning bottom cause we splicin' it all..."
             return bottom.copy()
-        if any(at + o > self.shape[1] for o in [x for x in  newoffsets if x < 2]):
+        if any(at + o > self.shape[0] for o in [x for x in  newoffsets if x < 2]):
             # print "Returning self cause we ain't splicin' shit..."
             return self.copy()
 
@@ -570,22 +664,23 @@ class BandedOperator(object):
 
     def __eq__(self, other):
         no_nan = np.nan_to_num
-        #TODO: These asserts are just to make testing easier, remove them.
-        assert (self.data == other.data).all()
-        assert (self.offsets == other.offsets).all()
-        assert (self.shape == other.shape)
-        assert (no_nan(self.deltas) == no_nan(other.deltas)).all()
-        assert (self.order == other.order)
-        assert (self.derivative == other.derivative)
-        assert (self.R == other.R).all()
-        return ((self.data == other.data).all()
-            and (self.offsets == other.offsets).all()
-            and (self.shape == other.shape)
-            and (no_nan(self.deltas) == no_nan(other.deltas)).all()
-            and (self.order == other.order)
-            and (self.derivative == other.derivative)
-            and (self.R == other.R).all()
-            )
+        # assert (self.data == other.data).all()
+        # assert (self.offsets == other.offsets).all()
+        # assert (self.shape == other.shape)
+        # assert (no_nan(self.deltas) == no_nan(other.deltas)).all()
+        # assert (self.order == other.order)
+        # assert (self.derivative == other.derivative)
+        # assert (self.R == other.R).all()
+        try:
+            return ((self.data == other.data).all()
+                and (self.offsets == other.offsets).all()
+                and (self.shape == other.shape)
+                and (no_nan(self.deltas) == no_nan(other.deltas)).all()
+                and (self.order == other.order)
+                and (self.derivative == other.derivative)
+                and (self.R == other.R).all())
+        except:
+            return False
 
 
     def __add__(self, other):
@@ -702,50 +797,6 @@ class BandedOperator(object):
         for i in xrange(self.shape[0]):
             self.R[i] *= func(i)
 
-def impl(V, L1, R1x, L2, R2x, dt, n, crumbs=[], callback=None):
-    V = V.copy()
-
-    L1i = flatten_tensor(L1)
-    # L1i = L1.copy()
-    R1 = np.array(R1x).T
-
-    L2i = flatten_tensor(L2)
-    # L2i = L2.copy()
-    R2 = np.array(R2x)
-
-    m = 2
-
-    # L  = (As + Ass - H.interest_rate*np.eye(nspots))*-dt + np.eye(nspots)
-    L1i.data *= -dt
-    L1i.data[m, :] += 1
-    R1 *= dt
-
-    L2i.data *= -dt
-    L2i.data[m, :] += 1
-    R2 *= dt
-
-    offsets1 = (abs(min(L1i.offsets)), abs(max(L1i.offsets)))
-    offsets2 = (abs(min(L2i.offsets)), abs(max(L2i.offsets)))
-
-    print_step = max(1, int(n / 10))
-    to_percent = 100.0 / n
-    utils.tic("Impl:")
-    for k in xrange(n):
-        if not k % print_step:
-            if np.isnan(V).any():
-                print "Impl fail @ t = %f (%i steps)" % (dt * k, k)
-                return crumbs
-            print int(k * to_percent),
-        if callback is not None:
-            callback(V, ((n - k) * dt))
-        V = spl.solve_banded(offsets2, L2i.data,
-                             (V + R2).flat, overwrite_b=True).reshape(V.shape)
-        V = spl.solve_banded(offsets1, L1i.data,
-                             (V + R1).T.flat, overwrite_b=True).reshape(V.shape[::-1]).T
-    crumbs.append(V.copy())
-    utils.toc()
-    return crumbs
-
 
 def flatten_tensor(mats):
     diags = np.hstack([x.data for x in mats])
@@ -754,68 +805,6 @@ def flatten_tensor(mats):
     return flatmat
 
 
-
-class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
-    def __init__(self, grid, coefficients={}, boundaries={}):
-        FiniteDifferenceEngine.__init__(self, grid, coefficients=coefficients, boundaries=boundaries)
-
-    def impl(self, t, dt, crumbs=[], callback=None):
-        n = int(t / dt)
-        V = self.grid.domain.copy()
-        crumbs.append(V)
-
-        A = self.operators[0].copy() * -dt + 1
-        B = self.operators[1].copy() * -dt + 1
-
-        print_step = max(1, int(n / 10))
-        to_percent = 100.0 / n
-        utils.tic("Impl:")
-        for k in xrange(n):
-            if not k % print_step:
-                if np.isnan(V).any():
-                    print "Impl fail @ t = %f (%i steps)" % (dt * k, k)
-                    return crumbs
-                print int(k * to_percent),
-            if callback is not None:
-                callback(V, ((n - k) * dt))
-            V = B.solve(V).T
-            V = A.solve(V).T
-        crumbs.append(V.copy())
-        utils.toc()
-        return crumbs
-
-
-    def crank(self, t, dt, crumbs=[], callback=None):
-        V = self.grid.domain.copy()
-        n = int(t / dt)
-        dt *= 0.5
-        crumbs.append(V)
-
-        Ae = self.operators[0].copy() *  dt + 1
-        Ai = self.operators[0].copy() * -dt + 1
-
-        Be = self.operators[1].copy() *  dt + 1
-        Bi = self.operators[1].copy() * -dt + 1
-
-
-        print_step = max(1, int(n / 10))
-        to_percent = 100.0 / n
-        utils.tic("Crank:")
-        for k in xrange(n):
-            if not k % print_step:
-                if np.isnan(V).any():
-                    print "Crank fail @ t = %f (%i steps)" % (dt * k, k)
-                    return crumbs
-                print int(k * to_percent),
-            if callback is not None:
-                callback(V, ((n - k) * dt))
-            V = Be.apply(V).T
-            V = Ai.solve(V)
-            V = Ae.apply(V).T
-            V = Bi.solve(V)
-            crumbs.append(V.copy())
-        utils.toc()
-        return crumbs
 
 
 
