@@ -352,7 +352,7 @@ class HestonFundamental(object):
 
         return np.maximum(0, self.spot * P1 - self.strike * P2 * discount)
 
-def hs_call(s, k, r, vols, t, kappa, theta, sigma, rho, HFUNC=HestonCos):
+def hs_call_vector(s, k, r, vols, t, kappa, theta, sigma, rho, HFUNC=HestonCos):
     if s[0] == 0:
         ret = HFUNC(s[1:], k, r, vols, t, kappa, theta, sigma, rho).solve()
         ret = np.vstack((np.zeros((1, len(vols))), ret))
