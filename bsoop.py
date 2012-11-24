@@ -47,9 +47,9 @@ from pylab import plot, title, xlabel, ylabel, legend, show, ion, ioff
 import pylab
 import utils
 from visualize import surface
-from heston import bs_call_delta, hs_call
+from heston import HestonOption, hs_call_vector
 
-from Option import HestonOption
+from Option import BlackScholesOption
 from Grid import Grid
 import FiniteDifferenceEngine as FD
 
@@ -117,10 +117,14 @@ dvs = np.hstack((np.nan, np.diff(vars)))
 
 BADANALYTICAL = False
 
-bs, delta = [x for x in bs_call_delta(spots[:, np.newaxis], H.strike, H.interest_rate.value,
-                                      np.sqrt(vars)[np.newaxis, :], H.tenor)]
+bs = BlackScholesOption(spot=spots[:, np.newaxis],
+                        strike=H.strike,
+                        interest_rate=H.interest_rate.value,
+                        variance=vars[np.newaxis, :],
+                        tenor=H.tenor).analytical
+
 utils.tic("Heston Analytical:")
-hs = hs_call(spots, H.strike, H.interest_rate.value, np.sqrt(vars),
+hs = hs_call_vector(spots, H.strike, H.interest_rate.value, np.sqrt(vars),
              H.tenor, H.mean_reversion, H.mean_variance, H.vol_of_variance, H.correlation)
 utils.toc()
 hs = np.nan_to_num(hs)
@@ -301,12 +305,12 @@ def force_boundary(V, values=None, t=None):
 def impl(V, L1, R1x, L2, R2x, dt, n, crumbs=[], callback=None):
     V = V.copy()
 
-    L1i = flatten_tensor(L1)
-    # L1i = L1.copy()
+    # L1i = flatten_tensor(L1)
+    L1i = L1.copy()
     R1 = np.array(R1x).T
 
-    L2i = flatten_tensor(L2)
-    # L2i = L2.copy()
+    # L2i = flatten_tensor(L2)
+    L2i = L2.copy()
     R2 = np.array(R2x)
 
     m = 2
@@ -477,45 +481,50 @@ assert np.array(R2).shape == np.array(R2_).shape
 assert (np.array(R1) == np.array(R1_)).all()
 assert (np.array(R2) == np.array(R2_)).all()
 
-# Vs = impl(V_init, L1_, R1, L2_, R2,
-          # H.dt, int(H.tenor / H.dt), crumbs=[V_init]
-          # # , callback=lambda v, H.tenor: force_boundary(v, hs)
-          # )
-# Vi = Vs[-1]
-# print tr(Vi)[ids, idv] - tr(hs)[ids, idv]
-Vs = F.impl(H.tenor, H.dt, crumbs=[], callback=None)
+Vs = impl(V_init, L1, R1, L2, R2,
+          H.dt, int(H.tenor / H.dt), crumbs=[V_init]
+          # , callback=lambda v, H.tenor: force_boundary(v, hs)
+          )
+Vi = Vs[-1]
+print tr(Vi)[ids, idv] - tr(hs)[ids, idv]
+Vs = F.impl(H.tenor/H.dt, H.dt, crumbs=[], callback=None)
 Vfi = Vs[-1]
 print tr(Vfi)[ids, idv] - tr(hs)[ids, idv]
 
-# Vs = crank(V_init, L1, R1, L2, R2,
-           # H.dt, int(H.tenor / H.dt), crumbs=[V_init]
-           # # , callback=lambda v, H.tenor: force_boundary(v, hs)
-           # )
-# Vc = Vs[-1]
-# print tr(Vc)[ids, idv] - tr(hs)[ids, idv]
-Vs = F.crank(H.tenor, H.dt, crumbs=[], callback=None)
+Vs = crank(V_init, L1, R1, L2, R2,
+           H.dt, int(H.tenor / H.dt), crumbs=[V_init]
+           # , callback=lambda v, H.tenor: force_boundary(v, hs)
+           )
+Vc = Vs[-1]
+print tr(Vc)[ids, idv] - tr(hs)[ids, idv]
+Vs = F.crank(H.tenor/H.dt, H.dt, crumbs=[], callback=None)
 Vfc = Vs[-1]
 print tr(Vfc)[ids, idv] - tr(hs)[ids, idv]
 
-# # Rannacher smoothing to damp oscilations at the discontinuity
-# smoothing_steps = 2
-# Vs = impl(V_init, L1_, R1_, L2_, R2_,
-          # H.dt, smoothing_steps, crumbs=[V_init]
-          # # , callback=lambda v, H.tenor: force_boundary(v, hs)
-          # )
-# Vs.extend(crank(Vs[-1], L1_, R1_, L2_, R2_,
-          # H.dt, int(H.tenor / H.dt) - smoothing_steps, crumbs=[]
-          # # , callback=lambda v, H.tenor: force_boundary(v, hs)
-                # )
-          # )
-# Vr = Vs[-1]
-# print tr(Vr)[ids, idv] - tr(hs)[ids, idv]
+# Rannacher smoothing to damp oscilations at the discontinuity
+smoothing_steps = 2
+Vs = impl(V_init, L1, R1, L2, R2,
+          H.dt/2, 2*smoothing_steps, crumbs=[V_init]
+          # , callback=lambda v, H.tenor: force_boundary(v, hs)
+          )
+Vs = crank(Vs[-1], L1, R1, L2, R2,
+          H.dt, int(H.tenor / H.dt) - smoothing_steps, crumbs=Vs
+          # , callback=lambda v, H.tenor: force_boundary(v, hs)
+          )
+Vr = Vs[-1]
+print tr(Vr)[ids, idv] - tr(hs)[ids, idv]
+Vs = F.smooth(H.tenor/H.dt, H.dt, crumbs=[], callback=None,
+              smoothing_steps=smoothing_steps)
+Vfr = Vs[-1]
+print tr(Vfr)[ids, idv] - tr(hs)[ids, idv]
 
 ion()
 # p(tr(Vi), tr(hs), spots[trims], vars[trimv], 1, "impl")
 # p(tr(Vfi), tr(hs), spots[trims], vars[trimv], 1, "FD impl")
 # p(tr(Vc), tr(hs), spots[trims], vars[trimv], 2, "crank")
+# p(tr(Vfc), tr(hs), spots[trims], vars[trimv], 2, "FD crank")
 # p(tr(Vr), tr(hs), spots[trims], vars[trimv], 3, "smooth")
+# p(tr(Vfr), tr(hs), spots[trims], vars[trimv], 3, "FD smooth")
 ioff()
 show()
 # p(V_init, hs, spots, vars, 1, "impl")
