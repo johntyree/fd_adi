@@ -175,7 +175,7 @@ class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
                 if Binit is not None:
                     # They asked for more than one scheme,
                     # Splice the operators together at row idx
-                    Binit.splice_with(B, idx, overwrite=True)
+                    Binit.splice_with(B, idx, inplace=True)
                 else:
                     Binit = B
             # m is the main diagonal's index in B.data
@@ -315,10 +315,10 @@ class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
         utils.toc()
         return crumbs
 
+
     def smooth(self, n, dt, crumbs=[], callback=None):
         V = self.impl(4, dt*0.5, crumbs=crumbs)
         return self.crank(n-2, dt, crumbs=V)
-
 
 
 class BandedOperator(object):
@@ -363,15 +363,18 @@ class BandedOperator(object):
 
         cls.check_derivative(derivative)
 
-
         deltas = np.hstack((np.nan, np.diff(vector)))
+        scheme = scheme.lower()
 
-        if scheme.lower().startswith("forward"):
+
+        if scheme.startswith("forward") or scheme.startswith('up'):
             data, offsets = cls.forwardcoeffs(deltas, derivative=derivative, order=order)
-        elif scheme.lower().startswith("center"):
-            data, offsets = cls.centercoeffs(deltas, derivative=derivative, order=order)
-        elif scheme.lower().startswith("backward"):
+        elif scheme.startswith("backward") or scheme.startswith('down'):
             data, offsets = cls.backwardcoeffs(deltas, derivative=derivative, order=order)
+        elif scheme.startswith("center") or scheme == "":
+            data, offsets = cls.centercoeffs(deltas, derivative=derivative, order=order)
+        else:
+            raise ValueError("Unknown scheme: %s" % scheme)
 
         self = BandedOperator((data, offsets), residual=residual)
         self.derivative = derivative
@@ -614,49 +617,57 @@ class BandedOperator(object):
         return (data, offsets)
 
 
-    def splice_with(self, bottom, at, overwrite=False):
+    def splice_with(self, bottom, at, inplace=False):
         """
         Splice a second operator into this one by replacing rows after @at@.
-        If overwrite is True, split it in place.
+        If inplace is True, splice it directly into this object.
         """
         newoffsets = sorted(set(self.offsets).union(set(bottom.offsets)), reverse=True)
-        newdata = np.zeros((len(newoffsets), self.shape[1]))
+
+        if inplace:
+            assert (newoffsets == self.offsets).all()
+            B = self
+        else:
+            newdata = np.zeros((len(newoffsets), self.data.shape[1]))
+            B = BandedOperator((newdata, newoffsets))
+
         if at < 0:
             at = self.shape[0] + at
 
         if any(at - o < 0 for o in newoffsets):
-            # print "Returning bottom cause we splicin' it all..."
-            return bottom.copy()
-        if any(at + o > self.shape[0] for o in [x for x in  newoffsets if x < 2]):
-            # print "Returning self cause we ain't splicin' shit..."
-            return self.copy()
-
+            if inplace:
+                B.D = bottom.D.copy()
+                B.R = bottom.R.copy()
+                return B
+            else:
+                # print "Returning bottom cause we splicin' it all..."
+                return bottom.copy()
+        # elif any(at + o > self.shape[0] for o in [x for x in  newoffsets if x < 2]):
+        elif any(at + o > self.shape[0] for o in newoffsets):
+            if inplace:
+                return B
+            else:
+                print "Returning self cause we ain't splicin' nothin'..."
+                return B.copy()
+        else:
         # from visualize import fp
         # print "self"
         # fp(self.todense())
         # print "bottom"
         # fp(bottom.todense())
-        for torow, o in enumerate(newoffsets):
-            if at - o < 0 or at + o > self.shape[1]:
-                raise ValueError("You are reaching beyond the edge of the "
-                                 "vector. (at = %i, row offset = %i)" % (at, o))
-            if o in self.offsets:
-                fromrow = list(self.offsets).index(o)
-                newdata[torow,:at+o] = self.data[fromrow, :at+o]
-                # print "new[%i, :%i+%i] = self[%i, :%i+%i]" % (torow, at, o, fromrow, at, o)
-            if o in bottom.offsets:
-                fromrow = list(bottom.offsets).index(o)
-                newdata[torow,at+o:] = bottom.data[fromrow, at+o:]
-                # print "new[%i, :%i+%i] = bottom[%i, :%i+%i]" % (torow, at, o, fromrow, at, o)
-
-        newShape = (newdata.shape[1], newdata.shape[1])
-        if overwrite:
-            newOp = self
-        else:
-            newOp = self.copy()
-        newOp.D = scipy.sparse.dia_matrix((newdata, newoffsets), shape=newShape)
-        # Update any attributes here!  (none right now)
-        return newOp
+            for torow, o in enumerate(newoffsets):
+                if at - o < 0 or at + o > self.shape[1]:
+                    raise ValueError("You are reaching beyond the edge of the "
+                                    "vector. (at = %i, row offset = %i)" % (at, o))
+                if o in self.offsets:
+                    fromrow = list(self.offsets).index(o)
+                    B.data[torow,:at+o] = self.data[fromrow, :at+o]
+                    # print "new[%i, :%i+%i] = self[%i, :%i+%i]" % (torow, at, o, fromrow, at, o)
+                if o in bottom.offsets:
+                    fromrow = list(bottom.offsets).index(o)
+                    B.data[torow,at+o:] = bottom.data[fromrow, at+o:]
+                    # print "new[%i, :%i+%i] = bottom[%i, :%i+%i]" % (torow, at, o, fromrow, at, o)
+        return B
 
 
     def __mul__(self, val, inplace=False):

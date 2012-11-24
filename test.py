@@ -14,7 +14,8 @@ from visualize import fp
 import FiniteDifferenceEngine as FD
 import Grid
 import unittest
-from heston import bs_call_delta
+from heston import HestonOption
+from Option import BlackScholesOption
 
 
 def nonuniform_forward_coefficients(deltas):
@@ -117,20 +118,31 @@ def splice_diamatrix(top, bottom, idx=0):
 
 
 
-class BlackScholes(unittest.TestCase):
+class BlackScholesOption_test(unittest.TestCase):
 
     def setUp(self):
-        spot_max = 2500.0
-        spotdensity = 10.0  # infinity is linear?
+        spot_max = 5000.0
+        spotdensity = 1.0  # infinity is linear?
         v = 0.04
         r = 0.06
         k = 99.0
         spot = 100.0
-        # spots = np.linspace(0, np.log(spot)*2, nspots+1)
         t = 1.0
-        dt = 1.0/300.0
-        nspots = 2000
+        dt = 1.0/100.0
+        nspots = 400
+        # spots = np.linspace(0, np.log(spot)*2, nspots+1)
         spots = utils.sinh_space(spot, spot_max, spotdensity, nspots)
+
+        # self.spot_idx = np.argmin(np.abs(spots - np.log(spot)))
+        # self.spot = np.exp(spots[self.spot_idx])
+        self.spot_idx = np.argmin(np.abs(spots - spot))
+        spot = spots[self.spot_idx]
+
+        # self.BS = BlackScholesOption(spot=np.exp(spot), strike=k, interest_rate=r,
+                                     # variance=v, tenor=t)
+        self.BS = BlackScholesOption(spot=spot, strike=k, interest_rate=r,
+                                     variance=v, tenor=t)
+
         # G = Grid.Grid([spots], initializer=lambda *x: np.maximum(np.exp(x[0])-k,0))
         G = Grid.Grid([spots], initializer=lambda *x: np.maximum(x[0]-k,0))
 
@@ -146,76 +158,67 @@ class BlackScholes(unittest.TestCase):
                   (0,) : mu_s,
                   (0,0): gamma2_s}
 
-        bounds = {
-                        # D: U = 0              VN: dU/dS = 1
+        bounds = {          # D: U = 0              VN: dU/dS = 1
                 (0,)  : ((0, lambda *args: 0.0), (1, lambda t, x: 1.0)),
                 # (0,)  : ((0, lambda *args: 0.0), (1, lambda t, *x: np.exp(x[0]))),
                         # D: U = 0              Free boundary
                 (0,0) : ((0, lambda *args: 0.0), (None, lambda *x: None))}
 
-        # self.spot_idx = np.argmin(np.abs(spots - np.log(spot)))
-        # self.spot = np.exp(spots[self.spot_idx])
-        self.spot_idx = np.argmin(np.abs(spots - spot))
-        self.spot = spots[self.spot_idx]
-        self.t, self.dt = t, dt
+        self.dt = dt
         self.F = FD.FiniteDifferenceEngineADI(G, coefficients=coeffs, boundaries=bounds)
-        self.ans = bs_call_delta(self.spot, k, r, np.sqrt(v), t)[0]
 
     def test_implicit(self):
-        t, dt = self.t, self.dt
+        t, dt = self.BS.tenor, self.dt
         V = self.F.impl(t/dt, dt)[-1][self.spot_idx]
-        print "Spot:", self.spot
-        print "Price:", V, self.ans
-        assert np.isclose(V, self.ans)
-        assert np.isclose(V, self.ans, rtol=0.005, atol=0.005)
+        ans = self.BS.analytical
+        print "Spot:", self.BS.spot
+        print "Price:", V, ans, V - ans
+        assert np.isclose(V, ans, rtol=0.001)
 
     def test_crank(self):
-        t, dt = self.t, self.dt
+        t, dt = self.BS.tenor, self.dt
         V = self.F.crank(t/dt, dt)[-1][self.spot_idx]
-        print "Spot:", self.spot
-        print "Price:", V, self.ans
-        assert np.isclose(V, self.ans)
-        assert np.isclose(V, self.ans, rtol=0.005, atol=0.005)
+        ans = self.BS.analytical
+        print "Spot:", self.BS.spot
+        print "Price:", V, ans, V - ans
+        assert np.isclose(V, ans, rtol=0.001)
 
     def test_smooth(self):
-        t, dt = self.t, self.dt
+        t, dt = self.BS.tenor, self.dt
         V = self.F.smooth(t/dt, dt)[-1][self.spot_idx]
-        print "Spot:", self.spot
-        print "Price:", V, self.ans
-        assert np.isclose(V, self.ans)
-        assert np.isclose(V, self.ans, rtol=0.005, atol=0.005)
+        ans = self.BS.analytical
+        print "Spot:", self.BS.spot
+        print "Price:", V, ans, V - ans
+        assert np.isclose(V, ans, rtol=0.001)
 
 
 
+class FiniteDifferenceEngineADI_test(unittest.TestCase):
 
-class something(unittest.TestCase):
-
-    def __init__(self, other):
-        unittest.TestCase.__init__(self, other)
-        r = 2.0
-        k = 3.0
+    def setUp(self):
         kappa = 1
+        r = 2.0
         theta = 0.04
         sigma = 0.4
-        rho = 0
-        up_or_down_spot = ''
-        up_or_down_var = ''
-        flip_idx_spot = 2
-        flip_idx_var = 2
         spot_max = 1500.0
         var_max = 13.0
-        nspots = 5
-        nvols = 3
+        nspots = 4
+        nvols = 4
         spotdensity = 7.0  # infinity is linear?
         varexp = 4
-        spots = np.arange(5.0)
-        vars = np.linspace(0, 1, 3)
-        spots = utils.sinh_space(k, spot_max, spotdensity, nspots)
+
+        up_or_down_spot = 'up'
+        up_or_down_var = 'down'
+        flip_idx_spot = 1
+        flip_idx_var = 1
+        k = spot_max / 4.0
+        spots = np.linspace(0, spot_max, nspots)
+        vars = np.linspace(0, var_max, nvols)
+        # spots = utils.sinh_space(k, spot_max, spotdensity, nspots)
         # vars = utils.exponential_space(0.00, 0.04, var_max, varexp, nvols)
+
         dss = np.hstack((np.nan, np.diff(spots)))
-        nvols = len(vars)
         dvs = np.hstack((np.nan, np.diff(vars)))
-        nspots = len(spots)
         As_ = utils.nonuniform_complete_coefficients(dss, up_or_down=up_or_down_spot,
                                                     flip_idx=flip_idx_spot)[0]
         Ass_ = utils.nonuniform_complete_coefficients(dss)[1]
@@ -225,7 +228,7 @@ class something(unittest.TestCase):
         assert(not np.isnan(As_.data).any())
         assert(not np.isnan(Ass_.data).any())
         for j, v in enumerate(vars):
-            # Be careful not to overwrite our operators
+            # Be careful not to inplace our operators
             As, Ass = As_.copy(), Ass_.copy()
             m = 2
 
@@ -276,7 +279,7 @@ class something(unittest.TestCase):
             mu_v = kappa * (theta - vars)
             gamma2_v = 0.5 * sigma ** 2 * vars
 
-            # Be careful not to overwrite our operators
+            # Be careful not to inplace our operators
             Av, Avv = Av_.copy(), Avv_.copy()
 
             m = 2
@@ -334,49 +337,22 @@ class something(unittest.TestCase):
         self.R1_ = R1
         self.L2_ = L2
         self.R2_ = R2
-        self.spots = spots
-        self.vars = vars
-        self.nvols = nvols
-        self.strike = k
-        self.r = r
-        self.sigma = sigma
-        self.kappa = kappa
-        self.theta = theta
-        self.vec = spots
-        self.flip_idx_spot = flip_idx_spot
-        self.flip_idx_var = flip_idx_var
-        self.flip_idx = 4
-
-
-    def test_Grid_create(self):
-        G = Grid.Grid((self.spots, self.vars), initializer=lambda x0,x1: np.maximum(x0-self.strike,0))
-        U = np.tile(np.maximum(0, self.spots - self.strike), (self.nvols, 1)).T
-        print G
-        print U
-        assert G.ndim == 2
-        assert (G.mesh[0] == self.spots).all()
-        assert (G.mesh[1] == self.vars).all()
-        assert G.shape == tuple(map(len, G.mesh))
-        assert (G.domain == U).all()
-
-
-    def test_FDADI_combine_dimensional_operators(self):
-        G = Grid.Grid((self.spots, self.vars), initializer=lambda x0,x1: np.maximum(x0-self.strike,0))
+        G = Grid.Grid((spots, vars), initializer=lambda x0,x1: np.maximum(x0-k,0))
         # print G
 
         def mu_s(t, *dim):
-            return self.r * dim[0]
+            return r * dim[0]
 
         def gamma2_s(t, *dim):
             return 0.5 * dim[1] * dim[0]**2
 
         def mu_v(t, *dim):
-            return self.kappa * (self.theta - dim[1])
+            return kappa * (theta - dim[1])
 
         def gamma2_v(t, *dim):
-            return 0.5 * self.sigma**2 * dim[1]
-        k = self.strike
-        coeffs = {()   : lambda t: -self.r,
+            return 0.5 * sigma**2 * dim[1]
+
+        coeffs = {()   : lambda t: -r,
                   (0,) : mu_s,
                   (0,0): gamma2_s,
                   (1,) : mu_v,
@@ -394,22 +370,32 @@ class something(unittest.TestCase):
                 (1,1) : ((None, lambda *x: None),
                         # D intrinsic value at high variance
                         (0.0, lambda t, *dim: np.maximum(0.0, dim[0]-k)))}
-        F = FD.FiniteDifferenceEngineADI(G, coefficients=coeffs, boundaries=bounds)
 
+        schemes = {}
+        schemes[(0,)] = ({"scheme": "center"}, {"scheme": up_or_down_spot, "from" : flip_idx_spot})
+        schemes[(1,)] = ({"scheme": "center"}, {"scheme": up_or_down_var, "from" : flip_idx_var})
+        self.F = FD.FiniteDifferenceEngineADI(G, coefficients=coeffs, boundaries=bounds, schemes=schemes)
+
+    def test_FDADI_combine_dimensional_operators(self):
         oldL1 = self.L1_
         oldL2 = self.L2_
         oldR1 = self.R1_.T.flatten()
         oldR2 = self.R2_.flatten()
         # manualL1 = FD.flattan_tensor(F.operators[(0,)]) + F.operators[(0,0)]
         # manualL2 = F.operators[(1,)] + F.operators[(1,1)]
-        L1 = F.operators[0]
-        L2 = F.operators[1]
+        L1 = self.F.operators[0]
+        L2 = self.F.operators[1]
 
-        # print "old"
-        # fp(oldL1.data)
-        # print
-        # print "new"
-        # fp(L1.data)
+        print "old"
+        fp(oldL1.data)
+        print
+        print "new"
+        fp(L1.data)
+        print "old"
+        fp(oldL1.todense())
+        print
+        print "new"
+        fp(L1.todense())
         assert (L1.data == oldL1.data).all()
         # print "old"
         # print oldR1
@@ -435,7 +421,49 @@ class something(unittest.TestCase):
         assert (L2.R == oldR2).all()
 
 
-    def test_operatoraddself(self):
+class Grid_test(unittest.TestCase):
+
+    def setUp(self):
+        spot_max = 1500.0
+        var_max = 13.0
+        nspots = 50
+        nvols = 30
+        spotdensity = 7.0  # infinity is linear?
+        varexp = 4
+        self.strike = spot_max / 4.0
+        self.spots = utils.sinh_space(self.strike, spot_max, spotdensity, nspots)
+        self.vars = utils.exponential_space(0.00, 0.04, var_max, varexp, nvols)
+        self.Grid = Grid.Grid((self.spots, self.vars),
+                initializer=lambda x0,x1: np.maximum(x0-self.strike,0))
+
+    def test_mesh(self):
+        G = self.Grid
+        assert (G.mesh[0] == self.spots).all()
+        assert (G.mesh[1] == self.vars).all()
+        assert G.ndim == len(G.mesh)
+        assert G.shape == tuple(map(len, G.mesh))
+
+    def test_domain(self):
+        U = np.tile(np.maximum(0, self.spots - self.strike), (len(self.vars), 1)).T
+        G = self.Grid
+        print G
+        print U
+        assert (G.domain == U).all()
+
+
+
+class BandedOperator_test(unittest.TestCase):
+
+    def setUp(self):
+        k = 3.0
+        nspots = 5
+        spot_max = 1500.0
+        spotdensity = 7.0  # infinity is linear?
+        spots = utils.sinh_space(k, spot_max, spotdensity, nspots)
+        self.flip_idx = 4
+        self.vec = spots
+
+    def test_addself(self):
         vec = self.vec
         idx = self.flip_idx
         d = np.hstack((np.nan, np.diff(vec)))
@@ -450,7 +478,7 @@ class something(unittest.TestCase):
         assert (C2.R == C1.R*+C1.R).all()
 
 
-    def test_operatoraddoperator(self):
+    def test_addoperator(self):
         vec = self.vec
         idx = self.flip_idx
         d = np.hstack((np.nan, np.diff(vec)))
@@ -473,7 +501,7 @@ class something(unittest.TestCase):
         assert (CF1.R == oldCF1R*2).all()
 
 
-    def test_operatoraddoperator_inplace(self):
+    def test_addoperator_inplace(self):
         vec = self.vec
         idx = self.flip_idx
         d = np.hstack((np.nan, np.diff(vec)))
@@ -489,7 +517,7 @@ class something(unittest.TestCase):
         assert (oldCB2R == B2.R).all()
 
 
-    def test_operatormul(self):
+    def test_mul(self):
         vec = self.vec
         idx = self.flip_idx
         d = np.hstack((np.nan, np.diff(vec)))
@@ -523,7 +551,7 @@ class something(unittest.TestCase):
         assert (bold * -dt) + 1 == B2
 
 
-    def test_operatoreq(self):
+    def test_eq(self):
         vec = self.vec
         idx = self.flip_idx
         d = np.hstack((np.nan, np.diff(vec)))
@@ -533,7 +561,7 @@ class something(unittest.TestCase):
         assert C2 != B2
 
 
-    def test_operatoraddscalar(self):
+    def test_addscalar(self):
         vec = self.vec
         idx = self.flip_idx
         d = np.hstack((np.nan, np.diff(vec)))
@@ -550,7 +578,7 @@ class something(unittest.TestCase):
         assert (newB2.data != origB2.data).any() # Operations changed our operator
 
 
-    def test_operatoraddscalar_inplace(self):
+    def test_addscalar_inplace(self):
         vec = self.vec
         idx = self.flip_idx
         d = np.hstack((np.nan, np.diff(vec)))
@@ -565,7 +593,7 @@ class something(unittest.TestCase):
         assert (B2.data is not origB2.data)
         assert (B2.data != origB2.data).any() # Operations changed our operator
 
-    def test_operatorvectorizedscale(self):
+    def test_vectorizedscale(self):
         no_nan = np.nan_to_num
         vec = self.vec
         def coeff(high,low=None):
@@ -621,7 +649,7 @@ class something(unittest.TestCase):
         assert manualB == newB
         assert manualB == vecB
 
-    def test_operatorscale(self):
+    def test_scale(self):
         no_nan = np.nan_to_num
         vec = self.vec
         def f0(x): return 0
@@ -662,7 +690,7 @@ class something(unittest.TestCase):
         assert manualB == newB
 
 
-    def test_operatorcopy(self):
+    def test_copy(self):
         vec = self.vec
         idx = self.flip_idx
         d = np.hstack((np.nan, np.diff(vec)))
@@ -683,7 +711,7 @@ class something(unittest.TestCase):
         assert np.all(CC1.offsets == CCC1.offsets)
 
 
-    def test_operatorcreate(self):
+    def test_create(self):
         vec = self.vec
         idx = 1
         d = np.hstack((np.nan, np.diff(vec)))
@@ -773,15 +801,14 @@ class something(unittest.TestCase):
         assert np.all(B2.data == oldB2.data)
 
 
-    def test_operatorsplice(self):
+    def test_splice(self):
         vec = self.vec
-        idx = self.flip_idx
         d = np.hstack((np.nan, np.diff(vec)))
 
         for idx in range(1, len(vec)-1):
             oldCC1 = utils.nonuniform_complete_coefficients(d, up_or_down='', flip_idx=idx)[0]
             C1 = FD.BandedOperator.for_vector(vec, scheme='center', derivative=1, order=2)
-            CC1 = C1.splice_with(C1, idx, overwrite=False)
+            CC1 = C1.splice_with(C1, idx, inplace=False)
             # print "old"
             # fp(oldCC1.todense())
             # print "new"
@@ -792,7 +819,7 @@ class something(unittest.TestCase):
             oldCF1 = utils.nonuniform_complete_coefficients(d, up_or_down='up', flip_idx=idx)[0]
             C1 = FD.BandedOperator.for_vector(vec, scheme='center', derivative=1, order=2)
             F1 = FD.BandedOperator.for_vector(vec, scheme='forward', derivative=1, order=2)
-            CF1 = C1.splice_with(F1, idx, overwrite=False)
+            CF1 = C1.splice_with(F1, idx, inplace=False)
             # print "old"
             # fp(oldCF1.todense())
             # print "new"
@@ -803,7 +830,7 @@ class something(unittest.TestCase):
             oldCB1 = utils.nonuniform_complete_coefficients(d, up_or_down='down', flip_idx=idx)[0]
             C1 = FD.BandedOperator.for_vector(vec, scheme='center', derivative=1, order=2)
             B1 = FD.BandedOperator.for_vector(vec, scheme='backward', derivative=1, order=2)
-            CB1 = C1.splice_with(B1, idx, overwrite=False)
+            CB1 = C1.splice_with(B1, idx, inplace=False)
             # print "old"
             # fp(oldCB1.todense())
             # print "new"
@@ -813,7 +840,7 @@ class something(unittest.TestCase):
         for idx in range(1, len(vec)-1):
             oldCC2 = utils.nonuniform_complete_coefficients(d, up_or_down='', flip_idx=idx)[1]
             C2 = FD.BandedOperator.for_vector(vec, scheme='center', derivative=2, order=2)
-            CC2 = C2.splice_with(C2, idx, overwrite=False)
+            CC2 = C2.splice_with(C2, idx, inplace=False)
             # print "old"
             # fp(oldCC2.todense())
             # print "new"
@@ -824,7 +851,7 @@ class something(unittest.TestCase):
             oldCF2 = utils.nonuniform_complete_coefficients(d, up_or_down='up', flip_idx=idx)[1]
             C2 = FD.BandedOperator.for_vector(vec, scheme='center', derivative=2, order=2)
             F2 = FD.BandedOperator.for_vector(vec, scheme='forward', derivative=2, order=2)
-            CF2 = C2.splice_with(F2, idx, overwrite=False)
+            CF2 = C2.splice_with(F2, idx, inplace=False)
             # print "old"
             # fp(oldCF2.todense())
             # print "new"
@@ -835,11 +862,24 @@ class something(unittest.TestCase):
             oldCB2 = utils.nonuniform_complete_coefficients(d, up_or_down='down', flip_idx=idx)[1]
             C2 = FD.BandedOperator.for_vector(vec, scheme='center', derivative=2, order=2)
             B2 = FD.BandedOperator.for_vector(vec, scheme='backward', derivative=2, order=2)
-            CB2 = C2.splice_with(B2, idx, overwrite=False)
+            CB2 = C2.splice_with(B2, idx, inplace=False)
             # print "old"
             # fp(oldCB2.todense())
             # print "new"
             # fp(CB2.todense())
+            assert np.allclose(CB2.todense(), oldCB2.todense())
+
+        # Check one inplace
+        for idx in range(1, len(vec)-1):
+            oldCB2 = utils.nonuniform_complete_coefficients(d, up_or_down='down', flip_idx=idx)[1]
+            C2 = FD.BandedOperator.for_vector(vec, scheme='center', derivative=2, order=2)
+            B2 = FD.BandedOperator.for_vector(vec, scheme='backward', derivative=2, order=2)
+            CB2 = C2.splice_with(B2, idx, inplace=True)
+            # print "old"
+            # fp(oldCB2.todense())
+            # print "new"
+            # fp(CB2.todense())
+            assert CB2 is C2
             assert np.allclose(CB2.todense(), oldCB2.todense())
 
 
