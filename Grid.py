@@ -24,7 +24,10 @@ class Grid(object):
                 s = np.sign(np.diff(m))
                 assert(all(s == s[0]))
         self._mesh = mesh
-        self.domain = initializer(*(x.T for x in np.meshgrid(*mesh)))
+        if len(mesh) == 1:
+            self.domain = initializer(*mesh)
+        else:
+            self.domain = initializer(*(x.T for x in np.meshgrid(*mesh)))
         self._shape = tuple(map(len, mesh))
         self.dx = [np.hstack((np.nan, np.diff(m))) for m in mesh]
 
