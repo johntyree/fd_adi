@@ -316,9 +316,9 @@ class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
         return crumbs
 
 
-    def smooth(self, n, dt, crumbs=[], callback=None):
-        V = self.impl(4, dt*0.5, crumbs=crumbs)
-        return self.crank(n-2, dt, crumbs=V)
+    def smooth(self, n, dt, crumbs=[], callback=None, smoothing_steps=2):
+        V = self.impl(smoothing_steps*2, dt*0.5, crumbs=crumbs)
+        return self.crank(n-smoothing_steps, dt, crumbs=V)
 
 
 class BandedOperator(object):
@@ -388,7 +388,6 @@ class BandedOperator(object):
         B.order = self.order
         B.deltas = self.deltas
         return B
-
 
 
     def apply(self, V, overwrite=False):
