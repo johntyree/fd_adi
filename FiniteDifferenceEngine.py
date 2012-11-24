@@ -13,7 +13,6 @@ import scipy.sparse
 import itertools
 import utils
 import scipy.linalg as spl
-
 # In order to do the boundary conditions correctly, we MUST handle them with
 # the FiniteDifferenceEngine so that we'll have full access to grid.mesh and
 # time, required for lambda t, *dims:...
@@ -251,10 +250,14 @@ class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
         return
 
 
-    def impl(self, t, dt, crumbs=[], callback=None):
-        n = int(t / dt)
-        V = self.grid.domain.copy()
-        crumbs.append(V)
+    def impl(self, n, dt, crumbs=[], callback=None):
+        n = int(n)
+        if crumbs:
+            V = crumbs[-1]
+        else:
+            V = self.grid.domain.copy()
+            crumbs.append(V)
+
 
         ordered_ops = sorted(self.operators.items())
         Ls = np.roll([(op * -dt).add(1, inplace=True) for _, op in ordered_ops], -1)
@@ -277,9 +280,13 @@ class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
         return crumbs
 
 
-    def crank(self, t, dt, crumbs=[], callback=None):
-        V = self.grid.domain.copy()
-        n = int(t / dt)
+    def crank(self, n, dt, crumbs=[], callback=None):
+        n = int(n)
+        if crumbs:
+            V = crumbs[-1]
+        else:
+            V = self.grid.domain.copy()
+            crumbs.append(V)
         dt *= 0.5
         crumbs.append(V)
 
@@ -307,6 +314,11 @@ class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
             crumbs.append(V.copy())
         utils.toc()
         return crumbs
+
+    def smooth(self, n, dt, crumbs=[], callback=None):
+        V = self.impl(4, dt*0.5, crumbs=crumbs)
+        return self.crank(n-2, dt, crumbs=V)
+
 
 
 class BandedOperator(object):

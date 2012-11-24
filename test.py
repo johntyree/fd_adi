@@ -14,6 +14,7 @@ from visualize import fp
 import FiniteDifferenceEngine as FD
 import Grid
 import unittest
+from heston import bs_call_delta
 
 
 def nonuniform_forward_coefficients(deltas):
@@ -113,6 +114,79 @@ def splice_diamatrix(top, bottom, idx=0):
     newShape = (newdata.shape[1], newdata.shape[1])
     newOp = scipy.sparse.dia_matrix((newdata, newoffsets), shape=newShape)
     return newOp
+
+
+
+class BlackScholes(unittest.TestCase):
+
+    def setUp(self):
+        spot_max = 2500.0
+        spotdensity = 10.0  # infinity is linear?
+        v = 0.04
+        r = 0.06
+        k = 99.0
+        spot = 100.0
+        # spots = np.linspace(0, np.log(spot)*2, nspots+1)
+        t = 1.0
+        dt = 1.0/300.0
+        nspots = 2000
+        spots = utils.sinh_space(spot, spot_max, spotdensity, nspots)
+        # G = Grid.Grid([spots], initializer=lambda *x: np.maximum(np.exp(x[0])-k,0))
+        G = Grid.Grid([spots], initializer=lambda *x: np.maximum(x[0]-k,0))
+
+        def mu_s(t, *dim):
+            # return np.zeros_like(dim[0], dtype=float) + (r - 0.5 * v)
+            return r * dim[0]
+
+        def gamma2_s(t, *dim):
+            # return 0.5 * v + np.zeros_like(dim[0], dtype=float)
+            return 0.5 * v * dim[0]**2
+
+        coeffs = {()   : lambda t: -r,
+                  (0,) : mu_s,
+                  (0,0): gamma2_s}
+
+        bounds = {
+                        # D: U = 0              VN: dU/dS = 1
+                (0,)  : ((0, lambda *args: 0.0), (1, lambda t, x: 1.0)),
+                # (0,)  : ((0, lambda *args: 0.0), (1, lambda t, *x: np.exp(x[0]))),
+                        # D: U = 0              Free boundary
+                (0,0) : ((0, lambda *args: 0.0), (None, lambda *x: None))}
+
+        # self.spot_idx = np.argmin(np.abs(spots - np.log(spot)))
+        # self.spot = np.exp(spots[self.spot_idx])
+        self.spot_idx = np.argmin(np.abs(spots - spot))
+        self.spot = spots[self.spot_idx]
+        self.t, self.dt = t, dt
+        self.F = FD.FiniteDifferenceEngineADI(G, coefficients=coeffs, boundaries=bounds)
+        self.ans = bs_call_delta(self.spot, k, r, np.sqrt(v), t)[0]
+
+    def test_implicit(self):
+        t, dt = self.t, self.dt
+        V = self.F.impl(t/dt, dt)[-1][self.spot_idx]
+        print "Spot:", self.spot
+        print "Price:", V, self.ans
+        assert np.isclose(V, self.ans)
+        assert np.isclose(V, self.ans, rtol=0.005, atol=0.005)
+
+    def test_crank(self):
+        t, dt = self.t, self.dt
+        V = self.F.crank(t/dt, dt)[-1][self.spot_idx]
+        print "Spot:", self.spot
+        print "Price:", V, self.ans
+        assert np.isclose(V, self.ans)
+        assert np.isclose(V, self.ans, rtol=0.005, atol=0.005)
+
+    def test_smooth(self):
+        t, dt = self.t, self.dt
+        V = self.F.smooth(t/dt, dt)[-1][self.spot_idx]
+        print "Spot:", self.spot
+        print "Price:", V, self.ans
+        assert np.isclose(V, self.ans)
+        assert np.isclose(V, self.ans, rtol=0.005, atol=0.005)
+
+
+
 
 class something(unittest.TestCase):
 
@@ -780,7 +854,6 @@ def main():
     """Run main."""
     import nose
     nose.main()
-
     return 0
 
 if __name__ == '__main__':
