@@ -78,9 +78,9 @@ class BlackScholesOption(Option):
         k = self.strike
         r = self.interest_rate.value
         t = self.tenor
-        vol = self.volatility
+        vol = np.maximum(1e-10, self.volatility)
 
-        if self.tenor == 0.0 or self.volatility == 0.0:
+        if self.tenor == 0.0:
             d1 = np.infty
         else:
             d1 = ((np.log(s/k) + (r+0.5*vol**2) * t)
