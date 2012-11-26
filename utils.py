@@ -301,8 +301,8 @@ def nonuniform_complete_coefficients(deltas, boundary=None, up_or_down=None,
     # Note diag m starts at 0, m-1 starts at +1, m-2 starts at +2...
     #                          m+1 ENDS   at -1, m+2 ENDS at -2...
     m = 2
-    c = 1
     b = 1
+    c = 1
     f = 2
 
     C1, C2 = nonuniform_center_coefficients(d)

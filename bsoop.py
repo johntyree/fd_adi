@@ -171,7 +171,7 @@ schemes = {(1,) : ({"scheme": "center"}, {"scheme": "backward", "from" : flip_id
 
 
 utils.tic("Building FD Engine")
-F = FD.FiniteDifferenceEngineADI(G, coefficients=coeffs, boundaries=bounds, schemes=schemes)
+F = FD.FiniteDifferenceEngineADI(G, coefficients=coeffs, boundaries=bounds, schemes=schemes, force_bandwidth=5)
 utils.toc()
 
 L1_ = []
@@ -184,13 +184,17 @@ Ass_ = utils.nonuniform_complete_coefficients(dss)[1]
 # As_, Ass_ = utils.nonuniform_forward_coefficients(dss)
 assert(not np.isnan(As_.data).any())
 assert(not np.isnan(Ass_.data).any())
+mu_sfunc = mu_s
+gamma2_sfunc = gamma2_s
 for j, v in enumerate(vars):
     # Be careful not to overwrite our operators
     As, Ass = As_.copy(), Ass_.copy()
     m = 2
 
-    mu_s = H.interest_rate.value * spots
-    gamma2_s = 0.5 * v * spots ** 2
+    # mu_s = H.interest_rate.value * spots
+    mu_s = mu_sfunc(0, spots, v)
+    gamma2_s = gamma2_sfunc(0, spots, v)
+    # gamma2_s = 0.5 * v * spots ** 2
     for i, z in enumerate(mu_s):
         # print z, coeffs[0,](0, spots[i])
         assert z == coeffs[0,](0, spots[i])
@@ -469,11 +473,11 @@ L2 = F.operators[1].D
 R1 = F.operators[0].R.reshape(V_init.T.shape)
 R2 = F.operators[1].R.reshape(V_init.shape)
 # "Old"
-# fp(flatten_tensor(L2_).data)
+# fp(flatten_tensor(L1_).data)
 # "new"
-# fp(L2.data)
+# fp(L1.data)
 # "diff"
-# fp(L2.data - flatten_tensor(L2_).data)
+# fp(L1.data - flatten_tensor(L1_).data)
 assert (flatten_tensor(L1_).data == L1.data).all()
 assert (flatten_tensor(L2_).data == L2.data).all()
 assert np.array(R1).shape == np.array(R1_).shape

@@ -14,7 +14,7 @@ class Grid(object):
     """#:class documentation"""
     def __init__(self
             , mesh=(np.linspace(0, 1, 5), np.linspace(0, 2, 5))
-            , initializer=lambda x, y: x+y
+            , initializer=lambda x, y: x*0
         ):
         """Create an n-dimensional grid from an iterable of monotonic spaces."""
 

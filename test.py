@@ -3,17 +3,17 @@
 
 # import sys
 # import os
-# import itertools as it
-
+import itertools
+from bisect import bisect_left
+import unittest
 
 import numpy as np
-import utils
-from bisect import bisect_left
 import scipy.sparse
+
+import utils
 from visualize import fp
 import FiniteDifferenceEngine as FD
 import Grid
-import unittest
 from heston import HestonOption
 from Option import BlackScholesOption
 
@@ -196,14 +196,18 @@ class BlackScholesOption_test(unittest.TestCase):
 class FiniteDifferenceEngineADI_test(unittest.TestCase):
 
     def setUp(self):
+        s1_enable = 0
+        s2_enable = 0
+        v1_enable = 0
+        v2_enable = 0
         kappa = 1
-        r = 2.0
+        r = 0.0
         theta = 0.04
         sigma = 0.4
         spot_max = 1500.0
         var_max = 13.0
-        nspots = 4
-        nvols = 4
+        nspots = 6
+        nvols = 5
         spotdensity = 7.0  # infinity is linear?
         varexp = 4
 
@@ -232,8 +236,8 @@ class FiniteDifferenceEngineADI_test(unittest.TestCase):
             As, Ass = As_.copy(), Ass_.copy()
             m = 2
 
-            mu_s = r * spots
-            gamma2_s = 0.5 * v * spots ** 2
+            mu_s = r * spots * s1_enable
+            gamma2_s = 0.5 * v * spots ** 2 * s2_enable
 
             Rs = np.zeros(nspots)
             Rs[-1] = 1
@@ -263,7 +267,7 @@ class FiniteDifferenceEngineADI_test(unittest.TestCase):
             L1_.append(As.copy())
             L1_[j].data += Ass.data
             L1_[j].data[m, :] -=  0.5 * r
-            L1_[j].data[m, 0] = -1
+            # L1_[j].data[m, 0] = -1
 
             R1_.append((Rs + Rss).copy())
             R1_[j][0] = 0
@@ -276,8 +280,8 @@ class FiniteDifferenceEngineADI_test(unittest.TestCase):
         assert(not np.isnan(Av_.data).any())
         assert(not np.isnan(Avv_.data).any())
         for i, s in enumerate(spots):
-            mu_v = kappa * (theta - vars)
-            gamma2_v = 0.5 * sigma ** 2 * vars
+            mu_v = kappa * (theta - vars) * v1_enable
+            gamma2_v = 0.5 * sigma ** 2 * vars * v2_enable
 
             # Be careful not to inplace our operators
             Av, Avv = Av_.copy(), Avv_.copy()
@@ -286,7 +290,7 @@ class FiniteDifferenceEngineADI_test(unittest.TestCase):
 
             Av.data[m - 2, 2] = -dvs[1] / (dvs[2] * (dvs[1] + dvs[2]))
             Av.data[m - 1, 1] = (dvs[1] + dvs[2]) / (dvs[1] * dvs[2])
-            Av.data[m, 0] = (-2 * dvs[1] - dvs[2]) / (dvs[1] * (dvs[1] + dvs[2]))
+            Av.data[m    , 0] = (-2 * dvs[1] - dvs[2]) / (dvs[1] * (dvs[1] + dvs[2]))
 
             Av.data[m - 2, 2:] *= mu_v[:-2]
             Av.data[m - 1, 1:] *= mu_v[:-1]
@@ -313,7 +317,7 @@ class FiniteDifferenceEngineADI_test(unittest.TestCase):
             L2_.append(Av.copy())
             L2_[i].data += Avv.data
             L2_[i].data[m, :] -= 0.5 * r
-            L2_[i].data[m, -1] = -1  # This is to cancel out the previous value so we can
+            # L2_[i].data[m, -1] = -1  # This is to cancel out the previous value so we can
                                 # set the dirichlet boundary condition using R.
                                 # Then we have U_i + -U_i + R
 
@@ -341,16 +345,16 @@ class FiniteDifferenceEngineADI_test(unittest.TestCase):
         # print G
 
         def mu_s(t, *dim):
-            return r * dim[0]
+            return r * dim[0] * s1_enable
 
         def gamma2_s(t, *dim):
-            return 0.5 * dim[1] * dim[0]**2
+            return 0.5 * dim[1] * dim[0]**2 * s2_enable
 
         def mu_v(t, *dim):
-            return kappa * (theta - dim[1])
+            return kappa * (theta - dim[1]) * v1_enable
 
         def gamma2_v(t, *dim):
-            return 0.5 * sigma**2 * dim[1]
+            return 0.5 * sigma**2 * dim[1] * v2_enable
 
         coeffs = {()   : lambda t: -r,
                   (0,) : mu_s,
@@ -359,43 +363,68 @@ class FiniteDifferenceEngineADI_test(unittest.TestCase):
                   (1,1): gamma2_v}
         bounds = {
                         # D: U = 0              VN: dU/dS = 1
-                (0,)  : ((0, lambda *args: 0.0), (1, lambda *args: 1.0)),
-                        # D: U = 0              Free boundary
-                (0,0) : ((0, lambda *args: 0.0), (None, lambda *x: None)),
-                        # Free boundary at low variance
-                (1,)  : ((None, lambda *x: None),
-                        # D intrinsic value at high variance
+                # (0,)  : ((0, lambda *args: 0.0), (1, lambda *args: 1.0)),
+                        # # D: U = 0              Free boundary
+                # (0,0) : ((0, lambda *args: 0.0), (None, lambda *x: None)),
+                        # # Free boundary at low variance
+                (1,)  : (
+                        (None, lambda *x: None),
+                        # (0.0, lambda t, *dim: 0),
+                        # # D intrinsic value at high variance
                         (0.0, lambda t, *dim: np.maximum(0.0, dim[0]-k))),
-                        # Free boundary
-                (1,1) : ((None, lambda *x: None),
-                        # D intrinsic value at high variance
-                        (0.0, lambda t, *dim: np.maximum(0.0, dim[0]-k)))}
+                        # # Free boundary
+                # (1,1) : ((None, lambda *x: None),
+                        # # D intrinsic value at high variance
+                        # (0.0, lambda t, *dim: np.maximum(0.0, dim[0]-k)))
+                }
 
         schemes = {}
         schemes[(0,)] = ({"scheme": "center"}, {"scheme": up_or_down_spot, "from" : flip_idx_spot})
         schemes[(1,)] = ({"scheme": "center"}, {"scheme": up_or_down_var, "from" : flip_idx_var})
-        self.F = FD.FiniteDifferenceEngineADI(G, coefficients=coeffs, boundaries=bounds, schemes=schemes)
+        self.F = FD.FiniteDifferenceEngineADI(G, coefficients=coeffs,
+                boundaries=bounds, schemes=schemes, force_bandwidth=None)
 
-    def test_FDADI_combine_dimensional_operators(self):
-        oldL1 = self.L1_
-        oldL2 = self.L2_
+
+    def test_combine_dimensional_operators(self):
+        oldL1 = self.L1_.copy()
+        high, low = 2, -1
+        m = tuple(oldL1.offsets).index(0)
+        oldL1.data = oldL1.data[m-high:m-low+1]
+        oldL1.offsets = oldL1.offsets[m-high:m-low+1]
+
+        oldL2 = self.L2_.copy()
+        high, low = 1, -2
+        m = tuple(oldL2.offsets).index(0)
+        oldL2.data = oldL2.data[m-high:m-low+1]
+        oldL2.offsets = oldL2.offsets[m-high:m-low+1]
+
         oldR1 = self.R1_.T.flatten()
         oldR2 = self.R2_.flatten()
-        # manualL1 = FD.flattan_tensor(F.operators[(0,)]) + F.operators[(0,0)]
-        # manualL2 = F.operators[(1,)] + F.operators[(1,1)]
+
         L1 = self.F.operators[0]
         L2 = self.F.operators[1]
 
-        print "old"
-        fp(oldL1.data)
-        print
-        print "new"
-        fp(L1.data)
-        print "old"
-        fp(oldL1.todense())
-        print
-        print "new"
-        fp(L1.todense())
+        # oldL1.data = oldL1.data[:-1]
+        # oldL1.offsets = oldL1.offsets[:-1]
+        # oldL2.data = oldL2.data[1:]
+        # oldL2.offsets = oldL2.offsets[1:]
+
+        # print "offsets"
+        # print oldL1.offsets, L1.offsets
+        # print "old"
+        # fp(oldL1.data)
+        # print
+        # print "new"
+        # fp(L1.data)
+        # print "old"
+        # fp(oldL1.todense())
+        # print
+        # print "new"
+        # fp(L1.todense())
+        # print
+        # print "diff"
+        # fp(oldL1.todense() - L1.todense())
+        assert (L1.todense() == oldL1.todense()).all()
         assert (L1.data == oldL1.data).all()
         # print "old"
         # print oldR1
@@ -403,22 +432,52 @@ class FiniteDifferenceEngineADI_test(unittest.TestCase):
         # print "new"
         # print L1.R
         assert (L1.R == oldR1).all()
-        # print "old"
-        # fp(oldL2.data)
-        # print
-        # print "new"
-        # fp(L2.data)
-        #TODO: Somehow this boundary condition is failing. As if it's not using the
-        # right args or right dim or something?
-        assert (L2.data == oldL2.data).all()
         print "old"
-        print oldR2
+        fp(oldL2.data)
         print
         print "new"
-        print L2.R
+        fp(L2.data)
+        print "old"
+        fp(oldL2.todense())
+        print
+        print "new"
+        fp(L2.todense())
+        print
         print "diff"
-        fp(L2.R - oldR2)
+        fp(oldL2.todense() - L2.todense())
+        assert (L2.data == oldL2.data).all()
+        # print "old"
+        # print oldR2
+        # print
+        # print "new"
+        # print L2.R
+        # print "diff"
+        # fp(L2.R - oldR2)
         assert (L2.R == oldR2).all()
+
+    def test_cross_derivative(self):
+        target = np.array([
+            [ 0.  , 0.   , 0.  , 0.  , 0.   , 0.   , 0.  , 0.  , 0.   , 0.   , 0.  , 0.  , 0.   , 0.   , 0.  , 0.  , 0.   , 0.   , 0.  , 0. ] ,
+            [ 0.  , 0.   , 0.  , 0.  , 0.   , 0.   , 0.  , 0.  , 0.   , 0.   , 0.  , 0.  , 0.   , 0.   , 0.  , 0.  , 0.   , 0.   , 0.  , 0. ] ,
+            [ 0.  , 0.   , 0.  , 0.  , 0.   , 0.   , 0.  , 0.  , 0.   , 0.   , 0.  , 0.  , 0.   , 0.   , 0.  , 0.  , 0.   , 0.   , 0.  , 0. ] ,
+            [ 0.  , 0.   , 0.  , 0.  , 0.   , 0.   , 0.  , 0.  , 0.   , 0.   , 0.  , 0.  , 0.   , 0.   , 0.  , 0.  , 0.   , 0.   , 0.  , 0. ] ,
+            [ 0.  , 0.   , 0.  , 0.  , 0.   , 0.   , 0.  , 0.  , 0.   , 0.   , 0.  , 0.  , 0.   , 0.   , 0.  , 0.  , 0.   , 0.   , 0.  , 0. ] ,
+            [-0.5 , 0.   , 0.5 , 0.  , -0.5 , 0.   , 0.5 , 0.  , -0.5 , 0.   , 0.5 , 0.  , 0.   , 0.   , 0.  , 0.  , 0.   , 0.   , 0.  , 0. ] ,
+            [ 0.  , -0.5 , 0.  , 0.5 , 0.   , -0.5 , 0.  , 0.5 , 0.   , -0.5 , 0.  , 0.5 , 0.   , 0.   , 0.  , 0.  , 0.   , 0.   , 0.  , 0. ] ,
+            [ 0.  , 0.   , 0.  , 0.  , 0.   , 0.   , 0.  , 0.  , 0.   , 0.   , 0.  , 0.  , 0.   , 0.   , 0.  , 0.  , 0.   , 0.   , 0.  , 0. ] ,
+            [ 0.  , 0.   , 0.  , 0.  , 0.   , 0.   , 0.  , 0.  , 0.   , 0.   , 0.  , 0.  , 0.   , 0.   , 0.  , 0.  , 0.   , 0.   , 0.  , 0. ] ,
+            [ 0.  , 0.   , 0.  , 0.  , -0.5 , 0.   , 0.5 , 0.  , -0.5 , 0.   , 0.5 , 0.  , -0.5 , 0.   , 0.5 , 0.  , 0.   , 0.   , 0.  , 0. ] ,
+            [ 0.  , 0.   , 0.  , 0.  , 0.   , -0.5 , 0.  , 0.5 , 0.   , -0.5 , 0.  , 0.5 , 0.   , -0.5 , 0.  , 0.5 , 0.   , 0.   , 0.  , 0. ] ,
+            [ 0.  , 0.   , 0.  , 0.  , 0.   , 0.   , 0.  , 0.  , 0.   , 0.   , 0.  , 0.  , 0.   , 0.   , 0.  , 0.  , 0.   , 0.   , 0.  , 0. ] ,
+            [ 0.  , 0.   , 0.  , 0.  , 0.   , 0.   , 0.  , 0.  , 0.   , 0.   , 0.  , 0.  , 0.   , 0.   , 0.  , 0.  , 0.   , 0.   , 0.  , 0. ] ,
+            [ 0.  , 0.   , 0.  , 0.  , 0.   , 0.   , 0.  , 0.  , -0.5 , 0.   , 0.5 , 0.  , -0.5 , 0.   , 0.5 , 0.  , -0.5 , 0.   , 0.5 , 0. ] ,
+            [ 0.  , 0.   , 0.  , 0.  , 0.   , 0.   , 0.  , 0.  , 0.   , -0.5 , 0.  , 0.5 , 0.   , -0.5 , 0.  , 0.5 , 0.   , -0.5 , 0.  , 0.5] ,
+            [ 0.  , 0.   , 0.  , 0.  , 0.   , 0.   , 0.  , 0.  , 0.   , 0.   , 0.  , 0.  , 0.   , 0.   , 0.  , 0.  , 0.   , 0.   , 0.  , 0. ] ,
+            [ 0.  , 0.   , 0.  , 0.  , 0.   , 0.   , 0.  , 0.  , 0.   , 0.   , 0.  , 0.  , 0.   , 0.   , 0.  , 0.  , 0.   , 0.   , 0.  , 0. ] ,
+            [ 0.  , 0.   , 0.  , 0.  , 0.   , 0.   , 0.  , 0.  , 0.   , 0.   , 0.  , 0.  , 0.   , 0.   , 0.  , 0.  , 0.   , 0.   , 0.  , 0. ] ,
+            [ 0.  , 0.   , 0.  , 0.  , 0.   , 0.   , 0.  , 0.  , 0.   , 0.   , 0.  , 0.  , 0.   , 0.   , 0.  , 0.  , 0.   , 0.   , 0.  , 0. ] ,
+            [ 0.  , 0.   , 0.  , 0.  , 0.   , 0.   , 0.  , 0.  , 0.   , 0.   , 0.  , 0.  , 0.   , 0.   , 0.  , 0.  , 0.   , 0.   , 0.  , 0. ]
+        ])
 
 
 class Grid_test(unittest.TestCase):
@@ -456,7 +515,7 @@ class BandedOperator_test(unittest.TestCase):
 
     def setUp(self):
         k = 3.0
-        nspots = 5
+        nspots = 8
         spot_max = 1500.0
         spotdensity = 7.0  # infinity is linear?
         spots = utils.sinh_space(k, spot_max, spotdensity, nspots)
@@ -467,15 +526,16 @@ class BandedOperator_test(unittest.TestCase):
         vec = self.vec
         idx = self.flip_idx
         d = np.hstack((np.nan, np.diff(vec)))
-        C1 = FD.BandedOperator.for_vector(vec, scheme='center', derivative=1, order=2)
-        C2 = C1.add(C1)
-        assert C2 is not C1
-        assert C2.data is not C1.data
-        assert (C2.offsets == C1.offsets).all()
-        assert (C2.data == C1.data+C1.data).all()
-        assert (C2.data == C1.data*2).all()
-        assert (C2.R == C1.R*2).all()
-        assert (C2.R == C1.R*+C1.R).all()
+        for scheme in ["center", "forward", "backward"]:
+            C1 = FD.BandedOperator.for_vector(vec, scheme=scheme, derivative=1, order=2)
+            C2 = C1.add(C1)
+            assert C2 is not C1
+            assert C2.data is not C1.data
+            assert (C2.offsets == C1.offsets).all()
+            assert (C2.data == C1.data+C1.data).all()
+            assert (C2.data == C1.data*2).all()
+            assert (C2.R == C1.R*2).all()
+            assert (C2.R == C1.R*+C1.R).all()
 
 
     def test_addoperator(self):
@@ -494,7 +554,7 @@ class BandedOperator_test(unittest.TestCase):
 
         CF1 = C1.add(F1)
         oldCF1[:4,:] += F1.data[:4, :]
-        oldCF1[1:4,:] += C1.data[1:4, :]
+        oldCF1[1:4,:] += C1.data
         oldCF1R = F1.R + C1.R
         assert (CF1.data == oldCF1).all()
         assert (CF1.R == oldCF1R+oldCF1R).all()
@@ -505,8 +565,8 @@ class BandedOperator_test(unittest.TestCase):
         vec = self.vec
         idx = self.flip_idx
         d = np.hstack((np.nan, np.diff(vec)))
-        B2 = FD.BandedOperator.for_vector(vec, scheme='backward', derivative=2, order=2)
-        C2 = FD.BandedOperator.for_vector(vec, scheme='center', derivative=2, order=2)
+        B2 = FD.BandedOperator.for_vector(vec, scheme='backward', derivative=2, order=2, force_bandwidth=5)
+        C2 = FD.BandedOperator.for_vector(vec, scheme='center', derivative=2, order=2, force_bandwidth=5)
         oldCB2 = np.zeros((len(set(B2.offsets) | set(C2.offsets)), C2.shape[1]))
         oldCB2[1:,:] += B2.data[1:, :]
         oldCB2[1:4,:] += C2.data[1:4, :]
@@ -516,12 +576,20 @@ class BandedOperator_test(unittest.TestCase):
         assert (oldCB2 == B2.data).all()
         assert (oldCB2R == B2.R).all()
 
+        B2 = FD.BandedOperator.for_vector(vec, scheme='backward', derivative=2, order=2)
+        C2 = FD.BandedOperator.for_vector(vec, scheme='center', derivative=2, order=2)
+        try:
+            B2.add(C2, inplace=True)
+        except ValueError:
+            pass
+        else:
+            raise AssertionError("In place addition should fail for different sized operators.")
 
     def test_mul(self):
         vec = self.vec
         idx = self.flip_idx
         d = np.hstack((np.nan, np.diff(vec)))
-        B2 = FD.BandedOperator.for_vector(vec, scheme='backward', derivative=2, order=2)
+        B2 = FD.BandedOperator.for_vector(vec, scheme='backward', derivative=2, order=2, force_bandwidth=5)
         B2.R += 1
         BB2 = B2
         assert (B2 is not B2 * 1)
@@ -555,9 +623,9 @@ class BandedOperator_test(unittest.TestCase):
         vec = self.vec
         idx = self.flip_idx
         d = np.hstack((np.nan, np.diff(vec)))
-        B2 = FD.BandedOperator.for_vector(vec, scheme='backward', derivative=2, order=2)
+        B2 = FD.BandedOperator.for_vector(vec, scheme='backward', derivative=2, order=2, force_bandwidth=5)
         assert B2 == B2
-        C2 = FD.BandedOperator.for_vector(vec, scheme='center', derivative=2, order=2)
+        C2 = FD.BandedOperator.for_vector(vec, scheme='center', derivative=2, order=2, force_bandwidth=5)
         assert C2 != B2
 
 
@@ -565,7 +633,7 @@ class BandedOperator_test(unittest.TestCase):
         vec = self.vec
         idx = self.flip_idx
         d = np.hstack((np.nan, np.diff(vec)))
-        B2 = FD.BandedOperator.for_vector(vec, scheme='backward', derivative=2, order=2)
+        B2 = FD.BandedOperator.for_vector(vec, scheme='backward', derivative=2, order=2, force_bandwidth=5)
         origB2 = B2.copy()
         oldB2 = B2.copy()
 
@@ -582,7 +650,7 @@ class BandedOperator_test(unittest.TestCase):
         vec = self.vec
         idx = self.flip_idx
         d = np.hstack((np.nan, np.diff(vec)))
-        B2 = FD.BandedOperator.for_vector(vec, scheme='backward', derivative=2, order=2)
+        B2 = FD.BandedOperator.for_vector(vec, scheme='backward', derivative=2, order=2, force_bandwidth=5)
         origB2 = B2.copy()
         oldB2 = B2.copy()
 
@@ -694,7 +762,7 @@ class BandedOperator_test(unittest.TestCase):
         vec = self.vec
         idx = self.flip_idx
         d = np.hstack((np.nan, np.diff(vec)))
-        C1 = FD.BandedOperator.for_vector(vec, scheme='center', derivative=1, order=2)
+        C1 = FD.BandedOperator.for_vector(vec, scheme='center', derivative=1, order=2, force_bandwidth=5)
         CC1 = C1.copy()
         CCC1 = CC1.copy()
 
@@ -713,181 +781,125 @@ class BandedOperator_test(unittest.TestCase):
 
     def test_create(self):
         vec = self.vec
+        last = len(vec)-1
         idx = 1
         d = np.hstack((np.nan, np.diff(vec)))
+        deltas = d
+        sch0 = 'center'
+        for sch1 in ['center', 'up', 'down']:
+            for dv in [1,2]:
+                oldX1 = utils.nonuniform_complete_coefficients(deltas, up_or_down=sch1, flip_idx=idx)[dv-1]
+                X1 = FD.BandedOperator.for_vector(vec, scheme=sch1, derivative=dv, order=2)
 
-        oldC1 = utils.nonuniform_complete_coefficients(d, up_or_down='', flip_idx=idx)[0]
-        C1 = FD.BandedOperator.for_vector(vec, scheme='center', derivative=1, order=2)
-        # print "old data"
-        # fp(np.hstack((oldC1.offsets[:,np.newaxis], oldC1.data)))
-        # print "new data"
-        # fp(np.hstack((C1.offsets[:,np.newaxis], C1.data)))
+                high, low = 1,-1
+                if (sch0 == 'up' and idx > 1) or (sch1 == 'up' and idx < last-1):
+                    high = 2
+                if (sch0 == 'down' and idx > 2) or (sch1 == 'down' and idx < last):
+                    low = -2
+                m = tuple(oldX1.offsets).index(0)
+                oldX1.data = oldX1.data[m-high:m-low+1]
+                oldX1.offsets = oldX1.offsets[m-high:m-low+1]
 
-        # print "old todense()"
-        # fp(oldC1.todense())
-        # print "new todense()"
-        # fp(C1.todense())
-        assert np.all(C1.data == oldC1.data)
-        assert np.all(C1.todense() == oldC1.todense())
-
-        oldF1 = utils.nonuniform_complete_coefficients(d, up_or_down='up', flip_idx=idx)[0]
-        F1 = FD.BandedOperator.for_vector(vec, scheme='forward', derivative=1, order=2)
-        # print "old data"
-        # fp(np.hstack((oldF1.offsets[:,np.newaxis], oldF1.data)))
-        # print "new data"
-        # fp(np.hstack((F1.offsets[:,np.newaxis], F1.data)))
-
-        # print "old todense()"
-        # fp(oldF1.todense())
-        # print "new todense()"
-        # fp(F1.todense())
-        assert np.all(F1.todense() == oldF1.todense())
-        assert np.all(F1.data == oldF1.data)
-
-        oldB1 = utils.nonuniform_complete_coefficients(d, up_or_down='down', flip_idx=idx)[0]
-        B1 = FD.BandedOperator.for_vector(vec, scheme='backward', derivative=1, order=2)
-        # print "old data"
-        # fp(np.hstack((oldB1.offsets[:,np.newaxis], oldB1.data)))
-        # print "new data"
-        # fp(np.hstack((B1.offsets[:,np.newaxis], B1.data)))
-
-        # print "old todense()"
-        # fp(oldB1.todense())
-        # print "new todense()"
-        # fp(B1.todense())
-        assert np.all(B1.todense() == oldB1.todense())
-        assert np.all(B1.data == oldB1.data)
-
-        oldC2 = utils.nonuniform_complete_coefficients(d, up_or_down='', flip_idx=idx)[1]
-        C2 = FD.BandedOperator.for_vector(vec, scheme='center', derivative=2, order=2)
-        # print "old data"
-        # fp(np.hstack((oldC2.offsets[:,np.newaxis], oldC2.data)))
-        # print "new data"
-        # fp(np.hstack((C2.offsets[:,np.newaxis], C2.data)))
-
-        # print "old todense()"
-        # fp(oldC2.todense(), 4)
-        # print "new todense()"
-        # fp(C2.todense(), 4)
-        assert np.all(C2.todense() == oldC2.todense())
-        assert np.all(C2.data == oldC2.data)
-
-        oldF2 = utils.nonuniform_complete_coefficients(d, up_or_down='up', flip_idx=idx)[1]
-        F2 = FD.BandedOperator.for_vector(vec, scheme='forward', derivative=2, order=2)
-        # print "old data"
-        # fp(np.hstack((oldF2.offsets[:,np.newaxis], oldF2.data)))
-        # print "new data"
-        # fp(np.hstack((F2.offsets[:,np.newaxis], F2.data)))
-
-        # print "old todense()"
-        # fp(oldF2.todense())
-        # print "new todense()"
-        # fp(F2.todense())
-        assert np.all(F2.todense() == oldF2.todense())
-        assert np.all(F2.data == oldF2.data)
-
-        oldB2 = utils.nonuniform_complete_coefficients(d, up_or_down='down', flip_idx=idx)[1]
-        B2 = FD.BandedOperator.for_vector(vec, scheme='backward', derivative=2, order=2)
-        print "old data"
-        fp(np.hstack((oldB2.offsets[:,np.newaxis], oldB2.data)), 3)
-        print "new data"
-        fp(np.hstack((B2.offsets[:,np.newaxis], B2.data)), 3)
-
-        print "old todense()"
-        fp(oldB2.todense())
-        print "new todense()"
-        fp(B2.todense())
-        assert np.all(B2.todense() == oldB2.todense())
-        assert np.all(B2.data == oldB2.data)
+                print "old todense()"
+                fp(oldX1.todense())
+                print "new todense()"
+                fp(X1.todense())
+                print
+                print X1.shape, oldX1.shape
+                print (X1.offsets, oldX1.offsets),  "%s+%s (dv %i) idx %i" % (sch0, sch1, dv, idx)
+                assert (X1.todense() == oldX1.todense()).all(),  "%s+%s (dv %i) idx %i" % (sch0, sch1, dv, idx)
+                assert (X1.offsets == oldX1.offsets).all(),  "%s+%s (dv %i) idx %i" % (sch0, sch1, dv, idx)
+                assert (X1.data.shape == oldX1.data.shape),  "%s+%s (dv %i) idx %i" % (sch0, sch1, dv, idx)
+                assert (X1.data == oldX1.data).all(),  "%s+%s (dv %i) idx %i" % (sch0, sch1, dv, idx)
 
 
-    def test_splice(self):
+    def test_splice_same(self):
         vec = self.vec
-        d = np.hstack((np.nan, np.diff(vec)))
+        last = len(vec)-1
+        deltas = np.hstack((np.nan, np.diff(vec)))
 
-        for idx in range(1, len(vec)-1):
-            oldCC1 = utils.nonuniform_complete_coefficients(d, up_or_down='', flip_idx=idx)[0]
-            C1 = FD.BandedOperator.for_vector(vec, scheme='center', derivative=1, order=2)
-            CC1 = C1.splice_with(C1, idx, inplace=False)
-            # print "old"
-            # fp(oldCC1.todense())
-            # print "new"
-            # fp(CC1.todense())
-            assert np.allclose(CC1.todense(), oldCC1.todense())
+        # When bandwidth is the same
+        print "Splicing operators of the same width."
+        for sch0,sch1 in itertools.product(['center', 'up', 'down'], repeat=2):
+            for dv in [1,2]:
+                for idx in range(0, len(vec)-1):
+                    X1 = FD.BandedOperator.for_vector(vec, scheme=sch0, derivative=dv, order=2, force_bandwidth=5)+1
+                    X2 = FD.BandedOperator.for_vector(vec, scheme=sch1, derivative=dv, order=2, force_bandwidth=5)+1
+                    X12 = X1.splice_with(X2, idx)
+                    manualX12 = np.vstack((X1.todense()[:idx, :], X2.todense()[idx:,:]))
+                    manualX12 = scipy.sparse.dia_matrix(manualX12)
+                    X12i = X1.splice_with(X2, idx, inplace=True)
+                    assert X12i is X1
 
-        for idx in range(1, len(vec)-1):
-            oldCF1 = utils.nonuniform_complete_coefficients(d, up_or_down='up', flip_idx=idx)[0]
-            C1 = FD.BandedOperator.for_vector(vec, scheme='center', derivative=1, order=2)
-            F1 = FD.BandedOperator.for_vector(vec, scheme='forward', derivative=1, order=2)
-            CF1 = C1.splice_with(F1, idx, inplace=False)
-            # print "old"
-            # fp(oldCF1.todense())
-            # print "new"
-            # fp(CF1.todense())
-            assert np.allclose(CF1.todense(), oldCF1.todense())
+                    high, low = 1,-1
+                    if (sch0 == 'up' and idx > 1) or (sch1 == 'up' and idx < last-1):
+                        high = 2
+                    if (sch0 == 'down' and idx > 2) or (sch1 == 'down' and idx < last):
+                        low = -2
+                    m = tuple(X12.offsets).index(0)
+                    X12.data = X12.data[m-high:m-low+1]
+                    X12.offsets = X12.offsets[m-high:m-low+1]
 
-        for idx in range(1, len(vec)-1):
-            oldCB1 = utils.nonuniform_complete_coefficients(d, up_or_down='down', flip_idx=idx)[0]
-            C1 = FD.BandedOperator.for_vector(vec, scheme='center', derivative=1, order=2)
-            B1 = FD.BandedOperator.for_vector(vec, scheme='backward', derivative=1, order=2)
-            CB1 = C1.splice_with(B1, idx, inplace=False)
-            # print "old"
-            # fp(oldCB1.todense())
-            # print "new"
-            # fp(CB1.todense())
-            assert np.allclose(CB1.todense(), oldCB1.todense())
+                    print
+                    print "manual"
+                    fp(manualX12.data[::-1], 3)
+                    print
+                    print "new"
+                    # fp(X12.todense(), 3)
+                    # print
+                    fp(X12.data, 3)
 
-        for idx in range(1, len(vec)-1):
-            oldCC2 = utils.nonuniform_complete_coefficients(d, up_or_down='', flip_idx=idx)[1]
-            C2 = FD.BandedOperator.for_vector(vec, scheme='center', derivative=2, order=2)
-            CC2 = C2.splice_with(C2, idx, inplace=False)
-            # print "old"
-            # fp(oldCC2.todense())
-            # print "new"
-            # fp(CC2.todense())
-            assert np.allclose(CC2.todense(), oldCC2.todense())
-
-        for idx in range(1, len(vec)-1):
-            oldCF2 = utils.nonuniform_complete_coefficients(d, up_or_down='up', flip_idx=idx)[1]
-            C2 = FD.BandedOperator.for_vector(vec, scheme='center', derivative=2, order=2)
-            F2 = FD.BandedOperator.for_vector(vec, scheme='forward', derivative=2, order=2)
-            CF2 = C2.splice_with(F2, idx, inplace=False)
-            # print "old"
-            # fp(oldCF2.todense())
-            # print "new"
-            # fp(CF2.todense())
-            assert np.allclose(CF2.todense(), oldCF2.todense())
-
-        for idx in range(1, len(vec)-1):
-            oldCB2 = utils.nonuniform_complete_coefficients(d, up_or_down='down', flip_idx=idx)[1]
-            C2 = FD.BandedOperator.for_vector(vec, scheme='center', derivative=2, order=2)
-            B2 = FD.BandedOperator.for_vector(vec, scheme='backward', derivative=2, order=2)
-            CB2 = C2.splice_with(B2, idx, inplace=False)
-            # print "old"
-            # fp(oldCB2.todense())
-            # print "new"
-            # fp(CB2.todense())
-            assert np.allclose(CB2.todense(), oldCB2.todense())
-
-        # Check one inplace
-        for idx in range(1, len(vec)-1):
-            oldCB2 = utils.nonuniform_complete_coefficients(d, up_or_down='down', flip_idx=idx)[1]
-            C2 = FD.BandedOperator.for_vector(vec, scheme='center', derivative=2, order=2)
-            B2 = FD.BandedOperator.for_vector(vec, scheme='backward', derivative=2, order=2)
-            CB2 = C2.splice_with(B2, idx, inplace=True)
-            # print "old"
-            # fp(oldCB2.todense())
-            # print "new"
-            # fp(CB2.todense())
-            assert CB2 is C2
-            assert np.allclose(CB2.todense(), oldCB2.todense())
+                    print
+                    print X12.shape, manualX12.shape
+                    print (X12.offsets, manualX12.offsets[::-1]),  "%s+%s (dv %i) idx %i" % (sch0, sch1, dv, idx)
+                    assert (X12.todense() == manualX12.todense()).all(),  "%s+%s (dv %i) idx %i" % (sch0, sch1, dv, idx)
+                    assert (X12.offsets == manualX12.offsets[::-1]).all(),  "%s+%s (dv %i) idx %i" % (sch0, sch1, dv, idx)
+                    assert (X12.data.shape == manualX12.data.shape),  "%s+%s (dv %i) idx %i" % (sch0, sch1, dv, idx)
+                    assert (X12.data == manualX12.data[::-1]).all(),  "%s+%s (dv %i) idx %i" % (sch0, sch1, dv, idx)
 
 
-        # print "oldCF"
-        # fp(oldCF.todense())
-        # print
-        # print "newCF"
-        # fp(CF.todense())
+    def test_splice_different(self):
+        vec = self.vec
+        last = len(vec)-1
+        deltas = np.hstack((np.nan, np.diff(vec)))
+
+        # When bandwidth is the same
+        print "Splicing operators of the different width."
+        for sch0,sch1 in itertools.product(['center', 'up', 'down'], repeat=2):
+            for dv in [1,2]:
+                for idx in range(0, len(vec)-1):
+                    X1 = FD.BandedOperator.for_vector(vec, scheme=sch0, derivative=dv, order=2)+1
+                    X2 = FD.BandedOperator.for_vector(vec, scheme=sch1, derivative=dv, order=2)+1
+                    X12 = X1.splice_with(X2, idx)
+                    manualX12 = np.vstack((X1.todense()[:idx, :], X2.todense()[idx:,:]))
+                    manualX12 = scipy.sparse.dia_matrix(manualX12)
+                    X12i = X1.splice_with(X2, idx)
+
+                    high, low = 1,-1
+                    if (sch0 == 'up' and idx > 1) or (sch1 == 'up' and idx < last-1):
+                        high = 2
+                    if (sch0 == 'down' and idx > 2) or (sch1 == 'down' and idx < last):
+                        low = -2
+                    m = tuple(X12.offsets).index(0)
+                    X12.data = X12.data[m-high:m-low+1]
+                    X12.offsets = X12.offsets[m-high:m-low+1]
+
+                    print
+                    print "manual"
+                    fp(manualX12.data[::-1], 3)
+                    print
+                    print "new"
+                    # fp(X12.todense(), 3)
+                    # print
+                    fp(X12.data, 3)
+
+                    print
+                    print X12.shape, manualX12.shape
+                    print (X12.offsets, manualX12.offsets[::-1]),  "%s+%s (dv %i) idx %i" % (sch0, sch1, dv, idx)
+                    assert (X12.todense() == manualX12.todense()).all(),  "%s+%s (dv %i) idx %i" % (sch0, sch1, dv, idx)
+                    assert (X12.offsets == manualX12.offsets[::-1]).all(),  "%s+%s (dv %i) idx %i" % (sch0, sch1, dv, idx)
+                    assert (X12.data.shape == manualX12.data.shape),  "%s+%s (dv %i) idx %i" % (sch0, sch1, dv, idx)
+                    assert (X12.data == manualX12.data[::-1]).all(),  "%s+%s (dv %i) idx %i" % (sch0, sch1, dv, idx)
 
 
 def main():

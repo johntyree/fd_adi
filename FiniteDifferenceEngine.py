@@ -20,7 +20,9 @@ import scipy.linalg as spl
 
 
 class FiniteDifferenceEngine(object):
-    def __init__(self, grid, coefficients={}, boundaries={}, schemes={}):
+
+    def __init__(self, grid, coefficients={}, boundaries={}, schemes={},
+            force_bandwidth=None):
         """
         @coefficients@ is a dict of tuple, function pairs with c[i,j] referring to the
         coefficient of the i j derivative, dU/didj. Absent pairs are counted as zeros.
@@ -106,6 +108,7 @@ class FiniteDifferenceEngine(object):
         self.coefficients = coefficients
         self.boundaries = boundaries
         self.schemes = schemes
+        self.force_bandwidth = force_bandwidth
         self.t = 0
         self.default_scheme = 'center'
         self.default_order = 2
@@ -120,17 +123,41 @@ class FiniteDifferenceEngine(object):
 
 
 class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
-    def __init__(self, grid, coefficients={}, boundaries={}, schemes={}):
+
+    def __init__(self, grid, coefficients={}, boundaries={}, schemes={},
+            force_bandwidth=None):
+
         FiniteDifferenceEngine.__init__(self, grid, coefficients=coefficients,
-                boundaries=boundaries, schemes=schemes)
+                boundaries=boundaries, schemes=schemes, force_bandwidth=force_bandwidth)
         self.make_discrete_operators()
 
+    def make_operator_template(self, d, dim=None, force_bandwidth=None):
+        # Make an operator template for this dimension
+        Binit = None
+        for sd in self.schemes.get(d, ({},)): # a tuple of dicts
+            s = sd.get('scheme', self.default_scheme)
+            idx = sd.get('from', 0)
+            o = sd.get('order', self.default_order)
+            B = BandedOperator.for_vector(self.grid.mesh[dim],
+                    scheme=s, derivative=len(d), order=o,
+                    force_bandwidth=force_bandwidth)
+            if Binit is not None:
+                # They asked for more than one scheme,
+                # Splice the operators together at row idx
+                # TODO: Not inplace until we figure out how to pre-allocate the
+                # right size
+                Binit = Binit.splice_with(B, idx, inplace=False)
+            else:
+                Binit = B
+        return Binit
 
     def make_discrete_operators(self):
         ndim = self.grid.ndim
         coeffs = self.coefficients
         bounds = self.boundaries
+        force_bandwidth = self.force_bandwidth
         dirichlets = {}
+        mixed = {}
 
         # We partially apply the function to all of the values except this
         # dimension, and change the semantics to accept an index into mesh
@@ -148,6 +175,7 @@ class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
         # Here we do the same except we go ahead and evalutate the function for
         # the entire vector. This is just for numpy's speed and is otherwise
         # redundant.
+
         def evalvectorfunc(f, args, dim):
             x = list(args)
             x.insert(dim, self.grid.mesh[dim])
@@ -156,36 +184,46 @@ class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
         # d = (0,0) or so...
         for d in coeffs.keys():
             # Don't need an operator for the 0th derivative
+            # Mixed derivatives are handled specially
             if d == ():
                 continue
-            BandedOperator.check_derivative(d)
+
+            mix = BandedOperator.check_derivative(d)
+            if mix:
+                mixed[d] = True
+                continue
+
             dim = d[0]
             otherdims = range(ndim)
             otherdims.remove(dim)
             Bs = []
 
-            # Make an operator template for this dimension
-            Binit = None
-            for sd in self.schemes.get(d, ({},)): # a tuple of dicts
-                s = sd.get('scheme', self.default_scheme)
-                idx = sd.get('from', 0)
-                o = sd.get('order', self.default_order)
-                B = BandedOperator.for_vector(self.grid.mesh[dim],
-                        scheme=s, derivative=len(d), order=o)
-                if Binit is not None:
-                    # They asked for more than one scheme,
-                    # Splice the operators together at row idx
-                    Binit.splice_with(B, idx, inplace=True)
-                else:
-                    Binit = B
+            # # Make an operator template for this dimension
+            Binit = self.make_operator_template(d, dim=dim,
+                    force_bandwidth=force_bandwidth)
+            # Binit = None
+            # for sd in self.schemes.get(d, ({},)): # a tuple of dicts
+                # s = sd.get('scheme', self.default_scheme)
+                # idx = sd.get('from', 0)
+                # o = sd.get('order', self.default_order)
+                # B = BandedOperator.for_vector(self.grid.mesh[dim],
+                        # scheme=s, derivative=len(d), order=o,
+                        # force_bandwidth=force_bandwidth)
+                # if Binit is not None:
+                    # # They asked for more than one scheme,
+                    # # Splice the operators together at row idx
+                    # # Not inplace until we figure out how to pre-allocate the
+                    # # right size
+                    # Binit = Binit.splice_with(B, idx, inplace=False)
+                # else:
+                    # Binit = B
             # m is the main diagonal's index in B.data
             m = tuple(Binit.offsets).index(0)
             if m > len(Binit.offsets)-1:
+                #TODO: Why no main diag? Should be possible, if not probable.
                 raise ValueError("No main diagonal!")
             # Take cartesian product of other dimension values
             argset = itertools.product(*(self.grid.mesh[i] for i in otherdims))
-            if dim not in dirichlets:
-                dirichlets[dim] = []
             # Pair our current dimension with all combinations of the other
             # dimension values
             for a in argset:
@@ -193,33 +231,41 @@ class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
                 B = Binit.copy()
 
                 # Adjust the boundary conditions as necessary
-                b = bounds[d]
-                lowfunc = wrapscalarfunc(b[0][1], a, dim)
-                highfunc = wrapscalarfunc(b[1][1], a, dim)
-                b = ((b[0][0], lowfunc(0)), (b[1][0], highfunc(-1)))
-                B.applyboundary(b)
-                # If it's a dirichlet boundary we mark it because we have to
-                # handle it absolutely last, it doesn't get scaled.
-                lf = hf = None
-                if b[0][0] == 0: # 0(th derivative) is dirichlet
-                    lf = lowfunc
-                if b[1][0] == 0:
-                    hf = highfunc
-                if lowfunc or highfunc:
-                    dirichlets[dim].append((lf, hf))
+                if d in bounds:
+                    b = bounds[d]
+                    lowfunc = wrapscalarfunc(b[0][1], a, dim)
+                    highfunc = wrapscalarfunc(b[1][1], a, dim)
+                    b = ((b[0][0], lowfunc(0)), (b[1][0], highfunc(-1)))
+                    B.applyboundary(b)
+                    # If it's a dirichlet boundary we mark it because we have to
+                    # handle it absolutely last, it doesn't get scaled.
+                    lf = hf = None
+                    if b[0][0] == 0: # 0(th derivative) is dirichlet
+                        lf = lowfunc
+                    if b[1][0] == 0:
+                        hf = highfunc
+                    if lf or hf:
+                        if dim not in dirichlets:
+                            dirichlets[dim] = []
+                        dirichlets[dim].append((lf, hf))
 
                 # Give the operator the right coefficient
                 # Here we wrap the functions with the appropriate values for
                 # this particular dimension.
-                B.vectorized_scale(evalvectorfunc(coeffs[d], a, dim))
+                if d in coeffs:
+                    B.vectorized_scale(evalvectorfunc(coeffs[d], a, dim))
                 Bs.append(B)
 
             # Combine scaled derivatives for this dimension
             if dim not in self.operators:
                 self.operators[dim] = Bs
             else:
+                ops = self.operators[dim] # list reference
                 for col, b in enumerate(Bs):
-                    self.operators[dim][col] += b
+                    if tuple(ops[col].offsets) == tuple(b.offsets):
+                        ops[col] += b
+                    else:
+                        ops[col] = ops[col] + b
 
         # Now the 0th derivative (x * V)
         # We split this evenly among each dimension
@@ -229,10 +275,72 @@ class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
                 for B in Bs:
                     B += coeffs[()](self.t) / float(ndim)
 
+        # Handle the mixed derivatives. Not very DRY, refactor someday?
+        # iters over keys by default
+        # First we build a normal central difference vector in the first
+        # dimension.
+        for d in mixed:
+            if len(d) > 2:
+                raise NotImplementedError("Derivatives must be 2nd order or"
+                        " less.")
+            # Just to make sure
+            for sd in self.schemes.get(d, ({},)): # a tuple of dicts
+                s = sd.get('scheme', self.default_scheme)
+                if s != 'center':
+                    raise NotImplementedError("Mixed derivatives can only be"
+                        " done with central differencing.")
+
+            d0_size = len(self.grid.mesh[d[0]])
+            d1_size = len(self.grid.mesh[d[1]])
+
+            # If we were doing mixed derivatives here, we'd have to do splicing
+            # now at the meta-operator level.
+            # Bs = self.make_operator_template(d, dim=d[0])
+            # Bm1 = self.make_operator_template(d, dim=d[1])
+            Bs = BandedOperator.for_vector(self.grid.mesh[0], derivative=1)
+            Bm1 = BandedOperator.for_vector(self.grid.mesh[1], derivative=1)
+            Bb1 = Bm1.copy()
+            Bp1 = Bm1.copy()
+
+            Bp1.offsets += d1_size
+            Bm1.offsets -= d1_size
+
+            # TODO: Hardcoding in for centered differencing
+            Bps = [Bp1 * 0, Bp1 * 0] + replicate(d0_size-2, Bp1)
+            Bbs = [Bb1 * 0] + replicate(d0_size-2, Bb1) +  [Bb1 * 0]
+            Bms = replicate(d0_size-2, Bm1) + [Bm1 * 0, Bm1 * 0]
+
+            # B0 = FD.flatten_tensor([Bs * 0] + replicate(d1-2, Bs) +  [Bs * 0])
+            # B1 = FD.flatten_tensor([x.copy() for x in Bbs])
+            offsets = Bs.offsets
+            data = [Bps, Bbs, Bms]
+
+            for row, o in enumerate(offsets):
+                if o >= 0:
+                    for i in xrange(Bs.shape[0]-o):
+                        # print "(%i, %i)" % (row, i+o), "Block", i, i+o, "*",
+                        # Bs.data[row, i+o]
+                        # print data[row][i+o].data
+                        data[row][i+o] *= Bs.data[row, i+o]
+                        # print data[row][i+o].data
+                else:
+                    for i in xrange(abs(o), Bs.shape[0]):
+                        # print "(%i, %i)" % (row, i-abs(o)), "Block", i, i-abs(o), "*", Bs.data[row, i-abs(o)]
+                        data[row][i-abs(o)] *= Bs.data[row, i-abs(o)]
+                        # print data[row][i-abs(o)].data
+                print
+
+            # We flatten here because it's faster
+            BP = flatten_tensor(Bps)
+            BB = flatten_tensor(Bbs)
+            BM = flatten_tensor(Bms)
+            self.operators[d] = BP+BB+BM
+
         # Now everything else is done we can apply dirichlet boundaries
         for (dim, funcs) in dirichlets.items():
             # For each operator in this dimension
             for i, B in enumerate(self.operators[dim]):
+                m = tuple(B.offsets).index(0)
                 lowfunc, highfunc = funcs[i]
                 if lowfunc:
                     # Cancel out the old value
@@ -320,8 +428,15 @@ class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
         V = self.impl(smoothing_steps*2, dt*0.5, crumbs=crumbs)
         return self.crank(n-smoothing_steps, dt, crumbs=V)
 
+def replicate(n, x):
+    ret = []
+    for _ in xrange(n):
+        ret.append(x.copy())
+    return ret
+
 
 class BandedOperator(object):
+
     def __init__(self, data_offsets, residual=None, inplace=True):
         """
         A linear operator for discrete derivatives.
@@ -331,7 +446,9 @@ class BandedOperator(object):
             U2 = L*U1 + Rj  -->   U2 = B.apply(U1)
             U2 = L.I * (U1 - R) --> U2 = B.solve(U1)
         """
+
         data, offsets = data_offsets
+        assert data.shape[1] > 3, "Vector too short to use finite differencing."
         if not inplace:
             data = data.copy()
             offsets = tuple(offsets)
@@ -353,11 +470,11 @@ class BandedOperator(object):
         self.solve_banded_offsets = (abs(min(offsets)), abs(max(offsets)))
 
     @classmethod
-    def for_vector(cls, vector, scheme="center", derivative=1, order=1, residual=None):
+    def for_vector(cls, vector, scheme="center", derivative=1, order=2, residual=None, force_bandwidth=None):
         """
         A linear operator for discrete derivative of @vector@.
 
-        @derivative@ is a tuple specify the sequence of derivatives. For
+        @derivative@ is a tuple specifying the sequence of derivatives. For
         example, `(0,0)` is the second derivative in the first dimension.
         """
 
@@ -366,13 +483,13 @@ class BandedOperator(object):
         deltas = np.hstack((np.nan, np.diff(vector)))
         scheme = scheme.lower()
 
-
+        bw = force_bandwidth
         if scheme.startswith("forward") or scheme.startswith('up'):
-            data, offsets = cls.forwardcoeffs(deltas, derivative=derivative, order=order)
+            data, offsets = cls.forwardcoeffs(deltas, derivative=derivative, order=order, force_bandwidth=bw)
         elif scheme.startswith("backward") or scheme.startswith('down'):
-            data, offsets = cls.backwardcoeffs(deltas, derivative=derivative, order=order)
+            data, offsets = cls.backwardcoeffs(deltas, derivative=derivative, order=order, force_bandwidth=bw)
         elif scheme.startswith("center") or scheme == "":
-            data, offsets = cls.centercoeffs(deltas, derivative=derivative, order=order)
+            data, offsets = cls.centercoeffs(deltas, derivative=derivative, order=order, force_bandwidth=bw)
         else:
             raise ValueError("Unknown scheme: %s" % scheme)
 
@@ -478,13 +595,15 @@ class BandedOperator(object):
 
     @staticmethod
     def check_derivative(d):
+        mixed = False
         try:
             d = tuple(d)
             if len(d) > 2:
                 raise NotImplementedError, "Can't do more than 2nd order derivatives."
             if len(set(d)) != 1:
-                #TODO
-                raise NotImplementedError, "Restricted to 2D problems without cross derivatives."
+                mixed = True
+                # #TODO
+                # raise NotImplementedError, "Restricted to 2D problems without cross derivatives."
             map(int, d)
             d = len(d)
         except TypeError:
@@ -494,6 +613,7 @@ class BandedOperator(object):
                 raise TypeError("derivative must be a number or an iterable of numbers")
         if d > 2 or d < 1:
             raise NotImplementedError, "Can't do 0th order or more than 2nd order derivatives."
+        return mixed
 
 
     @staticmethod
@@ -512,15 +632,26 @@ class BandedOperator(object):
 
 
     @classmethod
-    def forwardcoeffs(cls, deltas, derivative=1, order=2):
+    def forwardcoeffs(cls, deltas, derivative=1, order=2, force_bandwidth=None):
         d = deltas
-        data = np.zeros((5,len(d)))
+        if force_bandwidth is not None:
+            # print "force bandwidth:", force_bandwidth
+            force_bandwidth = int(abs(force_bandwidth))
+            assert force_bandwidth % 2
 
         cls.check_derivative(derivative)
         cls.check_order(order)
 
+        bw = force_bandwidth
         if derivative == 1:
-            offsets = [2,1,0,-1,-2]
+            if bw is not None:
+                offsets = range(bw/2, -bw/2, -1)
+            else:
+                if order == 2:
+                    offsets = [2, 1,0,-1]
+                else:
+                    raise NotImplementedError
+            data = np.zeros((len(offsets),len(d)))
             m = offsets.index(0)
             for i in range(1,len(d)-2):
                 data[m-1,i+1] = (d[i+1] + d[i+2])  /         (d[i+1]*d[i+2])
@@ -532,7 +663,14 @@ class BandedOperator(object):
             data[m+1,-3] =          -d[-1]  / (d[-2]*(d[-2]+d[-1]))
 
         elif derivative == 2:
-            offsets = [2,1,0,-1,-2]
+            if bw is not None:
+                offsets = range(bw//2, -bw//2, -1)
+            else:
+                if order == 2:
+                    offsets = [2, 1, 0,-1]
+                else:
+                    raise NotImplementedError
+            data = np.zeros((len(offsets),len(d)))
             m = offsets.index(0)
             for i in range(1,len(d)-2):
                 denom = (0.5*(d[i+2]+d[i+1])*d[i+2]*d[i+1]);
@@ -549,23 +687,41 @@ class BandedOperator(object):
 
 
     @classmethod
-    def centercoeffs(cls, deltas, derivative=1, order=2):
+    def centercoeffs(cls, deltas, derivative=1, order=2, force_bandwidth=None):
         """Centered differencing coefficients."""
         d = deltas
-        data = np.zeros((5,len(d)))
+        if force_bandwidth is not None:
+            # print "force bandwidth:", force_bandwidth
+            force_bandwidth = int(abs(force_bandwidth))
+            assert force_bandwidth % 2
 
         cls.check_derivative(derivative)
         cls.check_order(order)
 
+        bw = force_bandwidth
         if derivative == 1:
-            offsets = [2,1,0,-1,-2]
+            if bw is not None:
+                offsets = range(bw/2, -bw/2, -1)
+            else:
+                if order == 2:
+                    offsets = [1,0,-1]
+                else:
+                    raise NotImplementedError
+            data = np.zeros((len(offsets),len(d)))
             m = offsets.index(0)
             for i in range(1,len(d)-1):
                 data[m-1,i+1] =            d[i]  / (d[i+1]*(d[i]+d[i+1]))
                 data[m  ,i  ] = (-d[i] + d[i+1]) /         (d[i]*d[i+1])
                 data[m+1,i-1] =         -d[i+1]  / (d[i  ]*(d[i]+d[i+1]))
         elif derivative == 2:
-            offsets = [2,1,0,-1,-2]
+            if bw is not None:
+                offsets = range(bw//2, -bw//2, -1)
+            else:
+                if order == 2:
+                    offsets = [1,0,-1]
+                else:
+                    raise NotImplementedError
+            data = np.zeros((len(offsets),len(d)))
             m = offsets.index(0)
             # Inner rows
             for i in range(1,len(d)-1):
@@ -579,16 +735,26 @@ class BandedOperator(object):
 
 
     @classmethod
-    def backwardcoeffs(cls, deltas, derivative=1, order=2):
+    def backwardcoeffs(cls, deltas, derivative=1, order=2, force_bandwidth=None):
         d = deltas
-        data = np.zeros((5,len(d)))
+        if force_bandwidth is not None:
+            # print "force bandwidth:", force_bandwidth
+            force_bandwidth = int(abs(force_bandwidth))
+            assert force_bandwidth % 2
 
         cls.check_derivative(derivative)
         cls.check_order(order)
 
-
+        bw = force_bandwidth
         if derivative == 1:
-            offsets = [2,1,0,-1,-2]
+            if bw is not None:
+                offsets = range(bw/2, -bw/2, -1)
+            else:
+                if order == 2:
+                    offsets = [1,0,-1,-2]
+                else:
+                    raise NotImplementedError
+            data = np.zeros((len(offsets),len(d)))
             m = offsets.index(0)
             for i in range(2,len(d)-1):
                 data[m, i]     = (d[i-1]+2*d[i])  / (d[i]*(d[i-1]+d[i]));
@@ -599,7 +765,14 @@ class BandedOperator(object):
             data[m,  1] = (-d[1] + d[2]) /       (d[1]*d[2])
             data[m+1,0] =         -d[2]  / (d[1]*(d[1]+d[2]))
         elif derivative == 2:
-            offsets = [2,1,0,-1,-2]
+            if bw is not None:
+                offsets = range(bw//2, -bw//2, -1)
+            else:
+                if order == 2:
+                    offsets = [1,0,-1,-2]
+                else:
+                    raise NotImplementedError
+            data = np.zeros((len(offsets),len(d)))
             m = offsets.index(0)
             for i in range(2,len(d)-1):
                 denom = (0.5*(d[i]+d[i-1])*d[i]*d[i-1]);
@@ -624,48 +797,64 @@ class BandedOperator(object):
         newoffsets = sorted(set(self.offsets).union(set(bottom.offsets)), reverse=True)
 
         if inplace:
-            assert (newoffsets == self.offsets).all()
-            B = self
-        else:
-            newdata = np.zeros((len(newoffsets), self.data.shape[1]))
-            B = BandedOperator((newdata, newoffsets))
+            if tuple(newoffsets) != tuple(self.offsets):
+                raise ValueError("Operators have different offsets, cannot"
+                        " splice inplace.")
 
         if at < 0:
             at = self.shape[0] + at
 
-        if any(at - o < 0 for o in newoffsets):
+        # Handle the two extremes
+        if at == self.shape[0]-1:
             if inplace:
+                B = self
+            else:
+                B = self.copy()
+        elif at == 0:
+            if inplace:
+                B = self
                 B.D = bottom.D.copy()
                 B.R = bottom.R.copy()
-                return B
+                B.order = bottom.order
+                B.derivative = bottom.derivative
+                B.deltas = bottom.deltas
             else:
-                # print "Returning bottom cause we splicin' it all..."
-                return bottom.copy()
-        # elif any(at + o > self.shape[0] for o in [x for x in  newoffsets if x < 2]):
-        elif any(at + o > self.shape[0] for o in newoffsets):
-            if inplace:
-                return B
-            else:
-                print "Returning self cause we ain't splicin' nothin'..."
-                return B.copy()
+                B = bottom.copy()
+
+        # If it's not extreme, it must be a normal splice
         else:
-        # from visualize import fp
-        # print "self"
-        # fp(self.todense())
-        # print "bottom"
-        # fp(bottom.todense())
-            for torow, o in enumerate(newoffsets):
-                if at - o < 0 or at + o > self.shape[1]:
-                    raise ValueError("You are reaching beyond the edge of the "
-                                    "vector. (at = %i, row offset = %i)" % (at, o))
+            if inplace:
+                B = self
+            else:
+                newdata = np.zeros((len(newoffsets), self.data.shape[1]))
+                B = BandedOperator((newdata, newoffsets), residual=self.R)
+
+            last = B.shape[1]
+            for torow, o in enumerate(B.offsets):
+                splitidx = max(min(at+o, last), 0)
                 if o in self.offsets:
                     fromrow = list(self.offsets).index(o)
-                    B.data[torow,:at+o] = self.data[fromrow, :at+o]
-                    # print "new[%i, :%i+%i] = self[%i, :%i+%i]" % (torow, at, o, fromrow, at, o)
+                    dat = self.data[fromrow, :splitidx]
+                else:
+                    dat = 0
+                B.data[torow, :splitidx] = dat
                 if o in bottom.offsets:
                     fromrow = list(bottom.offsets).index(o)
-                    B.data[torow,at+o:] = bottom.data[fromrow, at+o:]
-                    # print "new[%i, :%i+%i] = bottom[%i, :%i+%i]" % (torow, at, o, fromrow, at, o)
+                    dat = bottom.data[fromrow, splitidx:last]
+                else:
+                    dat = 0
+                B.data[torow, splitidx:last] = dat
+
+            # handle the residual vector
+            if B.R is not None:
+                B.R[splitidx:last] = bottom.R[splitidx:last]
+            else:
+                B.R = bottom.R.copy()
+                B.R[:splitidx] = 0
+
+            B.order = self.order
+            B.derivative = self.derivative
+            B.deltas = self.deltas
         return B
 
 
@@ -803,7 +992,7 @@ class BandedOperator(object):
         """
         func must be compatible with the following:
             func(x)
-        Where x is the correpsonding value of the current dimension.
+        Where x is the correpsonding index of the current dimension.
 
         Also applies to the residual vector self.R.
 
@@ -820,13 +1009,39 @@ class BandedOperator(object):
             self.R[i] *= func(i)
 
 
+    def compound_with(self, other):
+        """
+        This function is unlike the other scalers. Here, we use THIS operator
+        in a "higher order" way to scale the operators in @data@.
+
+        THIS CHANGES @data@!
+
+        Other than that, it works the same was as scale and is used for making
+        mixed derivatives.
+        """
+        offsets = self.offsets
+
+        for row, o in enumerate(offsets):
+            if o >= 0:
+                for i in xrange(Bs.shape[0]-o):
+                    # print "(%i, %i)" % (row, i+o), "Block", i, i+o, "*",
+                    # Bs.data[row, i+o]
+                    # print data[row][i+o].data
+                    data[row][i+o] *= Bs.data[row, i+o]
+                    # print data[row][i+o].data
+            else:
+                for i in xrange(abs(o), Bs.shape[0]):
+                    # print "(%i, %i)" % (row, i-abs(o)), "Block", i, i-abs(o), "*", Bs.data[row, i-abs(o)]
+                    data[row][i-abs(o)] *= Bs.data[row, i-abs(o)]
+                    # print data[row][i-abs(o)].data
+            print
+
+
 def flatten_tensor(mats):
     diags = np.hstack([x.data for x in mats])
     residual = np.hstack([x.R for x in mats])
     flatmat = BandedOperator((diags, mats[0].offsets), residual=residual)
     return flatmat
-
-
 
 
 
