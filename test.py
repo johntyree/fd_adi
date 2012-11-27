@@ -108,14 +108,14 @@ class FiniteDifferenceEngineADI_test(unittest.TestCase):
         sigma = 0.4
         spot_max = 1500.0
         var_max = 13.0
-        nspots = 13
-        nvols = 10
+        nspots = 5
+        nvols = 4
         spotdensity = 7.0  # infinity is linear?
         varexp = 4
 
-        #TODO:!!!!XXX TODO XXX
-        # var_max = nvols-1
-        # spot_max = nspots-1
+        # TODO:!!!!XXX TODO XXX
+        var_max = nvols-1
+        spot_max = nspots-1
 
         up_or_down_spot = 'up'
         up_or_down_var = 'down'
@@ -124,8 +124,8 @@ class FiniteDifferenceEngineADI_test(unittest.TestCase):
         k = spot_max / 4.0
         spots = np.linspace(0, spot_max, nspots)
         vars = np.linspace(0, var_max, nvols)
-        spots = utils.sinh_space(k, spot_max, spotdensity, nspots)
-        vars = utils.exponential_space(0.00, 0.04, var_max, varexp, nvols)
+        # spots = utils.sinh_space(k, spot_max, spotdensity, nspots)
+        # vars = utils.exponential_space(0.00, 0.04, var_max, varexp, nvols)
         def mu_s(t, *dim): return r * dim[0] * s1_enable
         def gamma2_s(t, *dim): return 0.5 * dim[1] * dim[0]**2 * s2_enable
 
@@ -137,7 +137,7 @@ class FiniteDifferenceEngineADI_test(unittest.TestCase):
                   (0,0): gamma2_s,
                   (1,) : mu_v,
                   (1,1): gamma2_v,
-                  (0,1): lambda t, *dim: dim[0]*0 + 1
+                  (0,1): lambda t, *dim: dim[0] * dim[1] + 3
                   }
         bounds = {
                         # D: U = 0              VN: dU/dS = 1
@@ -385,19 +385,25 @@ class FiniteDifferenceEngineADI_test(unittest.TestCase):
 
     def test_cross_derivative(self):
         crossOp = self.F.operators[(0,1)]
-        fp(crossOp, 2)
         g = self.F.grid.domain
+        x = self.F.grid.mesh[0]
+        y = self.F.grid.mesh[1]
 
-        dx = np.gradient(self.F.grid.mesh[0])[:,np.newaxis]
-        dy = np.gradient(self.F.grid.mesh[1])
+        dx = np.gradient(x)[:,np.newaxis]
+        dy = np.gradient(y)
         dgdx = np.gradient(g, 1)[0]
-        d2gdxdy = np.gradient(dgdx)[1] / (dx * dy)
-        d2gdxdy[:,0] = 0; d2gdxdy[:,-1] = 0
-        d2gdxdy[0,:] = 0; d2gdxdy[-1,:] = 0
+        manuald2gdxdy = np.gradient(dgdx)[1] / (dx * dy)
+        manuald2gdxdy[:,0] = 0; manuald2gdxdy[:,-1] = 0
+        manuald2gdxdy[0,:] = 0; manuald2gdxdy[-1,:] = 0
+        X,Y = [a.T for a in np.meshgrid(x, y)]
+        manuald2gdxdy *= self.F.coefficients[(0,1)](0, X, Y)
+
+        d2gdxdy = crossOp.apply(g)
+
+        fp(manuald2gdxdy)
         fp(d2gdxdy)
-        fp(crossOp.apply(g))
-        fp(crossOp.apply(g) - d2gdxdy, fmt='e')
-        assert np.allclose(d2gdxdy, crossOp.apply(g))
+        fp(d2gdxdy - manuald2gdxdy, fmt='e')
+        assert np.allclose(d2gdxdy, manuald2gdxdy)
 
 class Grid_test(unittest.TestCase):
 
