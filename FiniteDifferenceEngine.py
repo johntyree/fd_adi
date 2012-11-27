@@ -143,6 +143,9 @@ class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
                     scheme=s, derivative=len(d), order=o,
                     force_bandwidth=force_bandwidth)
             if Binit is not None:
+                if idx >= B.D.shape[0]-1:
+                    raise ValueError("Cannot splice beyond the end of the "
+                                     "vector. %i >= %i" % (idx, B.D.shape[0]-1))
                 # print "splicing with %s at %i," % (s, idx),
                 # They asked for more than one scheme,
                 # Splice the operators together at row idx
@@ -156,6 +159,7 @@ class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
         return Binit
 
     def min_possible_bandwidth(self, derivative_tuple):
+        explain = True
         high = low = 0
         d = len(derivative_tuple)
         if derivative_tuple not in self.boundaries:
@@ -168,15 +172,18 @@ class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
                 # print "Reset!"
                 high = low = 0
             if s == 'center' or '':
-                # print "Center requires -1, 1"
+                if explain:
+                    print "Center requires -1, 1"
                 high = max(1, high)
                 low = min(-1, low)
             elif s == 'forward' or s == 'up':
-                # print "Forward requires 0, 2"
+                if explain:
+                    print "Forward requires 0, 2"
                 high = max(2, high)
                 low = min(0, low)
             elif s == 'backward' or s == 'down':
-                # print "Backward requires -2, 0"
+                if explain:
+                    print "Backward requires -2, 0"
                 high = max(0, high)
                 low = min(-2, low)
         if b[0][0] is None:
@@ -184,18 +191,21 @@ class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
                 h = 2
             elif d == 2:
                 h = 1
-            # print ("Low free boundary requires forward"
-                    # " difference (%i): %i (have %i)" % (d, h, high))
+            if explain:
+                print ("Low free boundary requires forward"
+                    " difference (%i): %i (have %i)" % (d, h, high))
             high = max(h, high)
         if b[1][0] is None:
             if d == 1:
                 l = -2
             elif d == 2:
                 l = -1
-            # print ("High free boundary requires backward"
-                   # " difference (%i): %i (have %i)" % (d, l, low))
+            if explain:
+                print ("High free boundary requires backward"
+                       " difference (%i): %i (have %i)" % (d, l, low))
             low = min(l, low)
-        # print "%s requires (%s, %s)" % (derivative_tuple, high, low)
+        if explain:
+            print "FINAL: %s needs (%s, %s)" % (derivative_tuple, high, low)
         return low, high
 
 
@@ -362,22 +372,22 @@ class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
                         # print "(%i, %i)" % (row, i+o), "Block", i, i+o, "*", Bs.data[row, i+o]
                         a = (np.array(self.grid.mesh[0][i]).repeat(d1_size),)
                         vec = evalvectorfunc(coeffs[d], a, 1)
-                        print "= high"
-                        fp(data[row][i+o])
+                        # print "= high"
+                        # fp(data[row][i+o])
                         data[row][i+o].vectorized_scale(vec)
-                        fp(data[row][i+o])
-                        print "="
+                        # fp(data[row][i+o])
+                        # print "="
                         data[row][i+o] *= Bs.data[row, i+o]
                 else:
                     for i in xrange(abs(o), Bs.shape[0]):
                         # print "(%i, %i)" % (row, i-abs(o)), "Block", i, i-abs(o), "*", Bs.data[row, i-abs(o)]
                         a = (np.array(self.grid.mesh[0][i]).repeat(d1_size),)
                         vec = evalvectorfunc(coeffs[d], a, 1)
-                        print "= low"
-                        fp(data[row][i-abs(o)])
+                        # print "= low"
+                        # fp(data[row][i-abs(o)])
                         data[row][i-abs(o)].vectorized_scale(vec)
-                        fp(data[row][i-abs(o)])
-                        print "="
+                        # fp(data[row][i-abs(o)])
+                        # print "="
                         data[row][i-abs(o)] *= Bs.data[row, i-abs(o)]
 
 
