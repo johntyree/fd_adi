@@ -46,7 +46,8 @@ import scipy.sparse as sps
 from pylab import *
 import utils
 from visualize import fp, wireframe, surface, anim
-from heston import bs_call_delta, hs_call
+from heston import hs_call_vector
+from Option import BlackScholesOption
 from time import time
 
 # ion()
@@ -117,13 +118,19 @@ def init(spots, nvols, k):
 
 V_init = init(spots, nvols, k)
 V = np.copy(V_init)
-bs, delta = [x for x in bs_call_delta(spots[:, newaxis], k, r,
-                                      np.sqrt(vars)[newaxis, :], t)]
+# bs, delta = [x for x in bs_call_delta(spots[:, newaxis], k, r,
+                                      # np.sqrt(vars)[newaxis, :], t)]
+
+bs = BlackScholesOption(spot=spots[:, np.newaxis],
+                        strike=k,
+                        interest_rate=r,
+                        variance=vars[np.newaxis, :],
+                        tenor=t).analytical
 utils.tic("Heston Analytical:")
 # hss = array([hs_call(spots, k, r, np.sqrt(vars),
              # dt*i, kappa, theta, sigma, rho) for i in range(int(t/dt)+1)])
 # hs = hss[-1]
-hs = hs_call(spots, k, r, np.sqrt(vars),
+hs = hs_call_vector(spots, k, r, np.sqrt(vars),
              t, kappa, theta, sigma, rho)
 utils.toc()
 hs[isnan(hs)] = 0.0

@@ -137,7 +137,7 @@ class FiniteDifferenceEngineADI_test(unittest.TestCase):
                   (0,0): gamma2_s,
                   (1,) : mu_v,
                   (1,1): gamma2_v,
-                  (0,1): lambda t, *dim: dim[0] * dim[1] + 3
+                  (0,1): lambda t, *dim: dim[0] * dim[1] * 0.06 * 0.4
                   }
         bounds = {
                         # D: U = 0              VN: dU/dS = 1

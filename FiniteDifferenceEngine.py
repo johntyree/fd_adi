@@ -416,9 +416,21 @@ class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
             V = self.grid.domain.copy()
             crumbs.append(V)
 
+        ops = []
+        mixed = None
+        for d, op in self.operators.items():
+            if not isinstance(d, tuple):
+                ops.append(op)
+            else:
+                if mixed:
+                    mixed += op
+                else:
+                    mixed = op
+        if mixed is not None:
+            mixed *= dt
 
-        ordered_ops = sorted(self.operators.items())
-        Ls = np.roll([(op * -dt).add(1, inplace=True) for _, op in ordered_ops], -1)
+        ordered_ops = sorted(ops)
+        Ls = np.roll([(op * -dt).add(1, inplace=True) for op in ordered_ops], -1)
 
         print_step = max(1, int(n / 10))
         to_percent = 100.0 / n
@@ -431,6 +443,8 @@ class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
                 print int(k * to_percent),
             if callback is not None:
                 callback(V, ((n - k) * dt))
+            if mixed is not None:
+                V += mixed.apply(V)
             for L in Ls:
                 V = L.solve(V).T
         crumbs.append(V.copy())
@@ -487,7 +501,6 @@ def replicate(n, x):
 
 class BandedOperator(object):
 
-    glb = None
 
     def __init__(self, data_offsets, residual=None, inplace=True):
         """
@@ -720,7 +733,7 @@ class BandedOperator(object):
                     raise NotImplementedError
             data = np.zeros((len(offsets),len(d)))
             m = offsets.index(0)
-            print "OFFSETS from forward 1:", m, offsets
+            # print "OFFSETS from forward 1:", m, offsets
             assert m-2 >= 0
             assert m < data.shape[0]
             for i in range(1,len(d)-2):
@@ -743,7 +756,7 @@ class BandedOperator(object):
             if force_bandwidth is not None:
                 l, u = [int(o) for o in force_bandwidth]
                 offsets = range(u, l-1, -1)
-                print "High and low", u, l
+                # print "High and low", u, l
             else:
                 if order == 2:
                     offsets = [2, 1, 0,-1]
@@ -751,7 +764,7 @@ class BandedOperator(object):
                     raise NotImplementedError
             data = np.zeros((len(offsets),len(d)))
             m = offsets.index(0)
-            print "OFFSETS from forward 2:", m, offsets
+            # print "OFFSETS from forward 2:", m, offsets
             for i in range(1,len(d)-2):
                 denom = (0.5*(d[i+2]+d[i+1])*d[i+2]*d[i+1]);
                 data[m-2,i+2] =   d[i+1]         / denom
@@ -787,7 +800,7 @@ class BandedOperator(object):
                     raise NotImplementedError
             data = np.zeros((len(offsets),len(d)))
             m = offsets.index(0)
-            print "OFFSETS from center 1:", m, offsets
+            # print "OFFSETS from center 1:", m, offsets
             assert m-1 >= 0
             assert m+1 < data.shape[0]
             for i in range(1,len(d)-1):
@@ -806,7 +819,7 @@ class BandedOperator(object):
                     raise NotImplementedError
             data = np.zeros((len(offsets),len(d)))
             m = offsets.index(0)
-            print "OFFSETS from center 2:", m, offsets
+            # print "OFFSETS from center 2:", m, offsets
             # Inner rows
             for i in range(1,len(d)-1):
                 data[m-1,i+1] =  2 / (d[i+1]*(d[i]+d[i+1]))

@@ -60,22 +60,22 @@ from visualize import fp, anim, wireframe
 # ion()
 
 H = HestonOption( spot=100
-                 , strike=99
-                 , interest_rate=0.06
+                 , strike=100
+                 , interest_rate=0.03
                  , volatility = 0.2
                  , tenor=1.0
                  , dt=1/100.0
                  , mean_reversion = 1
                  , mean_variance = 0.04
                  , vol_of_variance = 0.4
-                 , correlation = 0
+                 , correlation = 0.3
                  )
 
 spot_max = 1500.0
 var_max = 13.0
 
 nspots = 100
-nvols = 50
+nvols = 100
 
 spotdensity = 7.0  # infinity is linear?
 varexp = 4
@@ -98,8 +98,8 @@ V_init = G.domain.copy()
 
 trims = (H.strike * .2 < spots) & (spots < H.strike * 2.0)
 trimv = (0.01 < vars) & (vars < 1)  # v0*2.0)
-trims = slice(None)
-trimv = slice(None)
+# trims = slice(None)
+# trimv = slice(None)
 
 # Does better without upwinding here
 up_or_down_spot = ''
@@ -145,15 +145,18 @@ def mu_v(t, *dim):
     return H.mean_reversion * (H.mean_variance - dim[1])
 def gamma2_v(t, *dim):
     return 0.5 * H.vol_of_variance**2 * dim[1]
+def cross(t, *dim):
+    return H.correlation * H.vol_of_variance * dim[0] * dim[1]
 
 coeffs = {()   : lambda t: -H.interest_rate.value,
           (0,) : mu_s,
           (0,0): gamma2_s,
           (1,) : mu_v,
-          (1,1): gamma2_v}
+          (1,1): gamma2_v,
+          (0,1): cross
+          }
 
-bounds = {
-                # D: U = 0              VN: dU/dS = 1
+bounds = {      # D: U = 0              VN: dU/dS = 1
         (0,)  : ((0, lambda *args: 0.0), (1, lambda *args: 1.0)),
                 # D: U = 0              Free boundary
         (0,0) : ((0, lambda *args: 0.0), (None, lambda *x: None)),
@@ -331,6 +334,13 @@ def impl(V, L1, R1x, L2, R2x, dt, n, crumbs=[], callback=None):
     offsets1 = (abs(min(L1i.offsets)), abs(max(L1i.offsets)))
     offsets2 = (abs(min(L2i.offsets)), abs(max(L2i.offsets)))
 
+    dx = np.gradient(spots)[:,np.newaxis]
+    dy = np.gradient(vars)
+    X, Y = [dim.T for dim in np.meshgrid(spots, vars)]
+    gradgrid = dt * coeffs[(0,1)](0, X, Y) / (dx * dy)
+    gradgrid[:,0] = 0; gradgrid[:,-1] = 0
+    gradgrid[0,:] = 0; gradgrid[-1,:] = 0
+
     print_step = max(1, int(n / 10))
     to_percent = 100.0 / n
     utils.tic("Impl:")
@@ -342,8 +352,9 @@ def impl(V, L1, R1x, L2, R2x, dt, n, crumbs=[], callback=None):
             print int(k * to_percent),
         if callback is not None:
             callback(V, ((n - k) * dt))
+        Vsv = np.gradient(np.gradient(V)[0])[1] * gradgrid
         V = spl.solve_banded(offsets2, L2i.data,
-                             (V + R2).flat, overwrite_b=True).reshape(V.shape)
+                             (V + Vsv + R2).flat, overwrite_b=True).reshape(V.shape)
         V = spl.solve_banded(offsets1, L1i.data,
                              (V + R1).T.flat, overwrite_b=True).reshape(V.shape[::-1]).T
     crumbs.append(V.copy())
@@ -359,7 +370,8 @@ def flatten_tensor(mats):
 
 def crank(V, L1, R1x, L2, R2x, dt, n, crumbs=[], callback=None):
     V = V.copy()
-    dt *= 0.5
+    theta = 0.5
+    # dt *= 0.5
 
     # L1e = flatten_tensor(L1)
     L1e = L1.copy()
@@ -383,21 +395,27 @@ def crank(V, L1, R1x, L2, R2x, dt, n, crumbs=[], callback=None):
 
     m = 2
 
-    # L  = (As + Ass - H.interest_rate*np.eye(nspots))*-dt + np.eye(nspots)
-    L1e.data *= dt
-    L1e.data[m, :] += 1
-    L1i.data *= -dt
-    L1i.data[m, :] += 1
-    R1 *= dt
+    I = np.ones(L1.shape[0])
 
-    L2e.data *= dt
-    L2e.data[m, :] += 1
-    L2i.data *= -dt
+    # L  = (As + Ass - H.interest_rate*np.eye(nspots))*-dt + np.eye(nspots)
+
+    L1i.data *= -theta*dt
+    L1i.data[m, :] += 1
+    # R1 *= dt
+
+    L2i.data *= -theta*dt
     L2i.data[m, :] += 1
-    R2 *= dt
+    # R2 *= dt
 
     offsets1 = (abs(min(L1i.offsets)), abs(max(L1i.offsets)))
     offsets2 = (abs(min(L2i.offsets)), abs(max(L2i.offsets)))
+
+    dx = np.gradient(spots)[:,np.newaxis]
+    dy = np.gradient(vars)
+    X, Y = [dim.T for dim in np.meshgrid(spots, vars)]
+    gradgrid = dt * coeffs[(0,1)](0, X, Y) / (dx*dy)
+    gradgrid[:,0] = 0; gradgrid[:,-1] = 0
+    gradgrid[0,:] = 0; gradgrid[-1,:] = 0
 
     print_step = max(1, int(n / 10))
     to_percent = 100.0 / n
@@ -413,10 +431,20 @@ def crank(V, L1, R1x, L2, R2x, dt, n, crumbs=[], callback=None):
             print int(k * to_percent),
         if callback is not None:
             callback(V, ((n - k) * dt))
-        V = (L2e.dot(V.flat).reshape(normal_shape) + R).T
-        V = spl.solve_banded(offsets1, L1i.data, V.flat, overwrite_b=True)
-        V = (L1e.dot(V).reshape(transposed_shape).T) + R
-        V = spl.solve_banded(offsets2, L2i.data, V.flat, overwrite_b=True).reshape(normal_shape)
+
+        Vsv = np.gradient(np.gradient(V)[0])[1] * gradgrid
+        V1 = (L1e.dot(V.T.flat).reshape(transposed_shape)).T
+        V2 = (L2e.dot(V.flat).reshape(normal_shape))
+        Y0 = V + dt*(Vsv + V1 + V2 + R)
+
+        V1 = Y0 - theta * dt * L1e.dot(V.T.flat).reshape(transposed_shape).T
+        Y1 = spl.solve_banded(offsets1, L1i.data, V1.T.flat, overwrite_b=True).reshape(transposed_shape).T
+
+        V2 = Y1 - theta * dt * L2e.dot(V.flat).reshape(normal_shape)
+        Y2 = spl.solve_banded(offsets2, L2i.data, V2.flat, overwrite_b=True).reshape(normal_shape)
+        V = Y2
+
+
         crumbs.append(V.copy())
     utils.toc()
     return crumbs
@@ -472,22 +500,23 @@ L1 = F.operators[0].D
 L2 = F.operators[1].D
 R1 = F.operators[0].R.reshape(V_init.T.shape)
 R2 = F.operators[1].R.reshape(V_init.shape)
-# "Old"
-# fp(flatten_tensor(L1_).data)
-# "new"
-# fp(L1.data)
-# "diff"
-# fp(L1.data - flatten_tensor(L1_).data)
-assert (flatten_tensor(L1_).data == L1.data).all()
-assert (flatten_tensor(L2_).data == L2.data).all()
+# print "Old"
+# fp(np.array(R1_))
+# print "new"
+# fp(R1)
+# print "diff"
+# fp(R1 - np.array(R1_), fmt='e')
+# assert (flatten_tensor(L1_).data == L1.data).all()
+# assert (flatten_tensor(L2_).data == L2.data).all()
 assert np.array(R1).shape == np.array(R1_).shape
 assert np.array(R2).shape == np.array(R2_).shape
-assert (np.array(R1) == np.array(R1_)).all()
-assert (np.array(R2) == np.array(R2_)).all()
+assert np.allclose(np.array(R1), np.array(R1_))
+assert np.allclose(np.array(R2), np.array(R2_))
+assert (V_init == F.grid.domain).all()
 
-print "OK"
+# print "OK"
 
-sys.exit()
+# sys.exit()
 Vs = impl(V_init, L1, R1, L2, R2,
           H.dt, int(H.tenor / H.dt), crumbs=[V_init]
           # , callback=lambda v, H.tenor: force_boundary(v, hs)
@@ -504,31 +533,31 @@ Vs = crank(V_init, L1, R1, L2, R2,
            )
 Vc = Vs[-1]
 print tr(Vc)[ids, idv] - tr(hs)[ids, idv]
-Vs = F.crank(H.tenor/H.dt, H.dt, crumbs=[], callback=None)
-Vfc = Vs[-1]
-print tr(Vfc)[ids, idv] - tr(hs)[ids, idv]
+# Vs = F.crank(H.tenor/H.dt, H.dt, crumbs=[], callback=None)
+# Vfc = Vs[-1]
+# print tr(Vfc)[ids, idv] - tr(hs)[ids, idv]
 
 # Rannacher smoothing to damp oscilations at the discontinuity
-smoothing_steps = 2
-Vs = impl(V_init, L1, R1, L2, R2,
-          H.dt/2, 2*smoothing_steps, crumbs=[V_init]
-          # , callback=lambda v, H.tenor: force_boundary(v, hs)
-          )
-Vs = crank(Vs[-1], L1, R1, L2, R2,
-          H.dt, int(H.tenor / H.dt) - smoothing_steps, crumbs=Vs
-          # , callback=lambda v, H.tenor: force_boundary(v, hs)
-          )
-Vr = Vs[-1]
-print tr(Vr)[ids, idv] - tr(hs)[ids, idv]
-Vs = F.smooth(H.tenor/H.dt, H.dt, crumbs=[], callback=None,
-              smoothing_steps=smoothing_steps)
-Vfr = Vs[-1]
-print tr(Vfr)[ids, idv] - tr(hs)[ids, idv]
+# smoothing_steps = 2
+# Vs = impl(V_init, L1, R1, L2, R2,
+          # H.dt/2, 2*smoothing_steps, crumbs=[V_init]
+          # # , callback=lambda v, H.tenor: force_boundary(v, hs)
+          # )
+# Vs = crank(Vs[-1], L1, R1, L2, R2,
+          # H.dt, int(H.tenor / H.dt) - smoothing_steps, crumbs=Vs
+          # # , callback=lambda v, H.tenor: force_boundary(v, hs)
+          # )
+# Vr = Vs[-1]
+# print tr(Vr)[ids, idv] - tr(hs)[ids, idv]
+# Vs = F.smooth(H.tenor/H.dt, H.dt, crumbs=[], callback=None,
+              # smoothing_steps=smoothing_steps)
+# Vfr = Vs[-1]
+# print tr(Vfr)[ids, idv] - tr(hs)[ids, idv]
 
 ion()
 # p(tr(Vi), tr(hs), spots[trims], vars[trimv], 1, "impl")
 # p(tr(Vfi), tr(hs), spots[trims], vars[trimv], 1, "FD impl")
-# p(tr(Vc), tr(hs), spots[trims], vars[trimv], 2, "crank")
+p(tr(Vc), tr(hs), spots[trims], vars[trimv], 2, "crank")
 # p(tr(Vfc), tr(hs), spots[trims], vars[trimv], 2, "FD crank")
 # p(tr(Vr), tr(hs), spots[trims], vars[trimv], 3, "smooth")
 # p(tr(Vfr), tr(hs), spots[trims], vars[trimv], 3, "FD smooth")
