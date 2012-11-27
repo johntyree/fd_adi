@@ -13,9 +13,8 @@ import scipy.sparse
 import itertools
 import utils
 import scipy.linalg as spl
-# In order to do the boundary conditions correctly, we MUST handle them with
-# the FiniteDifferenceEngine so that we'll have full access to grid.mesh and
-# time, required for lambda t, *dims:...
+
+from visualize import fp
 
 
 
@@ -165,7 +164,7 @@ class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
         for sd in self.schemes.get(derivative_tuple, ({},)): # a tuple of dicts
             # print "checking scheme from %s: %s" % (derivative_tuple, sd)
             s = sd.get('scheme', self.default_scheme)
-            if sd.get('from', 0) == 0: # We're overwritting previous schemes
+            if sd.get('from', 0) == 0: # We're overwriting previous schemes
                 # print "Reset!"
                 high = low = 0
             if s == 'center' or '':
@@ -196,6 +195,7 @@ class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
             # print ("High free boundary requires backward"
                    # " difference (%i): %i (have %i)" % (d, l, low))
             low = min(l, low)
+        # print "%s requires (%s, %s)" % (derivative_tuple, high, low)
         return low, high
 
 
@@ -287,9 +287,9 @@ class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
                     # If it's a dirichlet boundary we mark it because we have to
                     # handle it absolutely last, it doesn't get scaled.
                     lf = hf = None
-                    if b[0][0] == 0: # 0(th derivative) is dirichlet
+                    if B.is_dirichlet[0]:
                         lf = lowfunc
-                    if b[1][0] == 0:
+                    if B.is_dirichlet[1]:
                         hf = highfunc
                     if lf or hf:
                         if dim not in dirichlets:
@@ -354,8 +354,6 @@ class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
             Bbs = [Bb1 * 0] + replicate(d0_size-2, Bb1) +  [Bb1 * 0]
             Bms = replicate(d0_size-2, Bm1) + [Bm1 * 0, Bm1 * 0]
 
-            # B0 = FD.flatten_tensor([Bs * 0] + replicate(d1-2, Bs) +  [Bs * 0])
-            # B1 = FD.flatten_tensor([x.copy() for x in Bbs])
             offsets = Bs.offsets
             data = [Bps, Bbs, Bms]
             for row, o in enumerate(offsets):
@@ -364,23 +362,31 @@ class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
                         # print "(%i, %i)" % (row, i+o), "Block", i, i+o, "*", Bs.data[row, i+o]
                         a = (np.array(self.grid.mesh[0][i]).repeat(d1_size),)
                         vec = evalvectorfunc(coeffs[d], a, 1)
+                        print "= high"
+                        fp(data[row][i+o])
                         data[row][i+o].vectorized_scale(vec)
+                        fp(data[row][i+o])
+                        print "="
                         data[row][i+o] *= Bs.data[row, i+o]
                 else:
                     for i in xrange(abs(o), Bs.shape[0]):
                         # print "(%i, %i)" % (row, i-abs(o)), "Block", i, i-abs(o), "*", Bs.data[row, i-abs(o)]
                         a = (np.array(self.grid.mesh[0][i]).repeat(d1_size),)
                         vec = evalvectorfunc(coeffs[d], a, 1)
+                        print "= low"
+                        fp(data[row][i-abs(o)])
                         data[row][i-abs(o)].vectorized_scale(vec)
+                        fp(data[row][i-abs(o)])
+                        print "="
                         data[row][i-abs(o)] *= Bs.data[row, i-abs(o)]
 
 
             # We flatten here because it's faster
             Bps[0].offsets += d1_size
             Bms[0].offsets -= d1_size
-            BP = flatten_tensor(Bps)
-            BB = flatten_tensor(Bbs)
-            BM = flatten_tensor(Bms)
+            BP = flatten_tensor_aligned(Bps, check=False)
+            BB = flatten_tensor_aligned(Bbs, check=False)
+            BM = flatten_tensor_aligned(Bms, check=False)
             self.operators[d] = BP+BB+BM
 
         # Now everything else is done we can apply dirichlet boundaries
@@ -400,11 +406,9 @@ class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
 
         # Flatten into one large operator for speed
         # We'll apply this to a flattened domain and then reshape it.
-        for d in range(ndim):
-            # if d == 1:
-                # for x in self.operators[d]:
-                    # print x.data
-            self.operators[d] = flatten_tensor(self.operators[d])
+        for d in self.operators.keys():
+            if isinstance(self.operators[d], list):
+                self.operators[d] = flatten_tensor_misaligned(self.operators[d])
         return
 
 
@@ -533,6 +537,7 @@ class BandedOperator(object):
         self.order = None
         self.deltas = np.array([np.nan])
         self.solve_banded_offsets = (abs(min(offsets)), abs(max(offsets)))
+        self.is_dirichlet = [False, False]
 
     @classmethod
     def for_vector(cls, vector, scheme="center", derivative=1, order=2, residual=None, force_bandwidth=None):
@@ -569,6 +574,7 @@ class BandedOperator(object):
         B.derivative = self.derivative
         B.order = self.order
         B.deltas = self.deltas
+        B.is_dirichlet = self.is_dirichlet
         return B
 
 
@@ -603,6 +609,7 @@ class BandedOperator(object):
         # Doing lower boundary
         if lower_type == 0:
             # Dirichlet boundary. No derivatives.
+            self.is_dirichlet[0] = True
             pass
         elif lower_type == 1:
             # Von Neumann boundary, we specify it directly.
@@ -638,6 +645,7 @@ class BandedOperator(object):
         # Doing upper boundary
         if upper_type == 0:
             # Dirichlet boundary. No derivatives.
+            self.is_dirichlet[1] = True
             pass
         elif upper_type == 1:
             # Von Neumann boundary, we specify it directly.
@@ -724,7 +732,7 @@ class BandedOperator(object):
         if derivative == 1:
             if force_bandwidth is not None:
                 l, u = [int(o) for o in force_bandwidth]
-                print "High and low", u, l
+                # print "High and low", u, l
                 offsets = range(u, l-1, -1)
             else:
                 if order == 2:
@@ -790,7 +798,7 @@ class BandedOperator(object):
         if derivative == 1:
             if force_bandwidth is not None:
                 l, u = [int(o) for o in force_bandwidth]
-                print "High and low", u, l
+                # print "High and low", u, l
                 offsets = range(u, l-1, -1)
             else:
                 if order == 2:
@@ -912,6 +920,7 @@ class BandedOperator(object):
                 B.order = bottom.order
                 B.derivative = bottom.derivative
                 B.deltas = bottom.deltas
+                B.is_dirichlet = bottom.is_dirichlet
             else:
                 B = bottom.copy()
 
@@ -949,6 +958,8 @@ class BandedOperator(object):
             B.order = self.order
             B.derivative = self.derivative
             B.deltas = self.deltas
+            B.is_dirichlet[0] = self.is_dirichlet[0]
+            B.is_dirichlet[1] = bottom.is_dirichlet[1]
         return B
 
 
@@ -962,8 +973,15 @@ class BandedOperator(object):
             B = self
         else:
             B = self.copy()
-        B.data *= val
-        B.R *= val
+
+        if not B.is_dirichlet[0]:
+            B.data[0] *= val
+            B.R[0] *= val
+        if not B.is_dirichlet[1]:
+            B.data[-1] *= val
+            B.R[-1] *= val
+        B.data[1:-1] *= val
+        B.R[1:-1] *= val
         return B
 
 
@@ -1065,21 +1083,20 @@ class BandedOperator(object):
 
         See FiniteDifferenceEngine.coefficients.
         """
+        bottom = 0
+        top = last = self.shape[0]
+        if self.is_dirichlet[0]:
+            bottom += 1
+        if self.is_dirichlet[1]:
+            top -= 1
         for row, o in enumerate(self.offsets):
-            if o < 0:
-                self.data[row, :o] *= vec[-o:]
-            elif o > 0:
-                self.data[row, o:] *= vec[:-o]
-            else:
-                self.data[row] *= vec
-        self.R *= vec
-
-        # (2 to end)     (begin to end-1)
-        # As.data[m - 2, 2:] *= mu_s[:-2]
-        # As.data[m - 1, 1:] *= mu_s[:-1]
-        # As.data[m, :] *= mu_s
-        # As.data[m + 1, :-1] *= mu_s[1:]
-        # As.data[m + 2, :-2] *= mu_s[2:]
+            if o > 0:
+                self.data[row, bottom+o:] *= vec[bottom:last-o]
+            elif o == 0:
+                self.data[row, bottom:top] *= vec[bottom:top]
+            elif o < 0:
+                self.data[row, :top+o] *= vec[-o:top]
+        self.R[bottom:top] *= vec[bottom:top]
 
 
     def scale(self, func):
@@ -1092,25 +1109,30 @@ class BandedOperator(object):
 
         See FiniteDifferenceEngine.coefficients.
         """
+        bottom = 0
+        top = self.shape[0]
+        if self.is_dirichlet[0]:
+            bottom += 1
+        if self.is_dirichlet[1]:
+            top -= 1
         for row, o in enumerate(self.offsets):
-            if o >= 0:
-                for i in xrange(self.shape[0]-o):
+            if o > 0:
+                for i in xrange(bottom, self.shape[0]-o):
                     self.data[row,i+o] *= func(i)
-            else:
-                for i in xrange(abs(o),self.shape[0]):
+            elif o == 0:
+                for i in xrange(bottom, top):
+                    self.data[row,i] *= func(i)
+            elif o < 0:
+                for i in xrange(top):
                     self.data[row, i-abs(o)] *= func(i)
-        for i in xrange(self.shape[0]):
+
+        for i in xrange(bottom, top):
             self.R[i] *= func(i)
 
 
     def compound_with(self, other):
         """
-        This function is unlike the other scalers. Here, we use THIS operator
-        in a "higher order" way to scale the operators in @data@.
-
-        THIS CHANGES @data@!
-
-        Other than that, it works the same was as scale and is used for making
+        It works the same was as scale and is used for making
         mixed derivatives.
         """
         offsets = self.offsets
@@ -1118,23 +1140,44 @@ class BandedOperator(object):
         for row, o in enumerate(offsets):
             if o >= 0:
                 for i in xrange(Bs.shape[0]-o):
-                    # print "(%i, %i)" % (row, i+o), "Block", i, i+o, "*",
-                    # Bs.data[row, i+o]
-                    # print data[row][i+o].data
+                    print "(%i, %i)" % (row, i+o), "Block", i, i+o, "*",
+                    Bs.data[row, i+o]
+                    print data[row][i+o].data
                     data[row][i+o] *= Bs.data[row, i+o]
                     # print data[row][i+o].data
             else:
                 for i in xrange(abs(o), Bs.shape[0]):
-                    # print "(%i, %i)" % (row, i-abs(o)), "Block", i, i-abs(o), "*", Bs.data[row, i-abs(o)]
+                    print "(%i, %i)" % (row, i-abs(o)), "Block", i, i-abs(o), "*", Bs.data[row, i-abs(o)]
                     data[row][i-abs(o)] *= Bs.data[row, i-abs(o)]
                     # print data[row][i-abs(o)].data
             # print
 
 
-def flatten_tensor(mats):
-    diags = np.hstack([x.data for x in mats])
+def flatten_tensor_aligned(mats, check=True):
+    if check:
+        assert len(set(tuple(m.offsets) for m in mats)) == 1
     residual = np.hstack([x.R for x in mats])
-    flatmat = BandedOperator((diags, mats[0].offsets), residual=residual)
+    diags = np.hstack([x.data for x in mats])
+    return BandedOperator((diags, mats[0].offsets), residual=residual)
+
+
+
+def flatten_tensor_misaligned(mats):
+    offsets = set()
+    offsets.update(*[set(tuple(m.offsets)) for m in mats])
+    offsets = sorted(offsets, reverse=True)
+    newlen = sum(len(m.data[0]) for m in mats)
+    newdata = np.zeros((len(offsets), newlen))
+    bottom = top = 0
+    #TODO: Search sorted magic?
+    for m in mats:
+        top += len(m.data[0])
+        for fro, o in enumerate(m.offsets):
+            to = offsets.index(o)
+            newdata[to, bottom:top] += m.data[fro]
+        bottom = top
+    residual = np.hstack([x.R for x in mats])
+    flatmat = BandedOperator((newdata, offsets), residual=residual)
     return flatmat
 
 

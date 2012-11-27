@@ -102,14 +102,17 @@ class FiniteDifferenceEngineADI_test(unittest.TestCase):
         v1_enable = 1
         v2_enable = 1
         r_enable = 1
+        dirichlet_s = 1
+        dirichlet_v = 1
         kappa = 1
         r = 0.06
         theta = 0.04
         sigma = 0.4
+        rho = 0.2
         spot_max = 1500.0
         var_max = 13.0
         nspots = 5
-        nvols = 4
+        nvols = 5
         spotdensity = 7.0  # infinity is linear?
         varexp = 4
 
@@ -137,22 +140,22 @@ class FiniteDifferenceEngineADI_test(unittest.TestCase):
                   (0,0): gamma2_s,
                   (1,) : mu_v,
                   (1,1): gamma2_v,
-                  (0,1): lambda t, *dim: dim[0] * dim[1] * 0.06 * 0.4
+                  (0,1): lambda t, *dim: dim[0] * dim[1] * rho * sigma
                   }
         bounds = {
                         # D: U = 0              VN: dU/dS = 1
-                (0,)  : ((0, lambda *args: 0.0), (1, lambda *args: 1.0)),
+                (0,)  : ((0 if dirichlet_s else 1, lambda *args: 0.0), (1, lambda *args: 1.0)),
                         # D: U = 0              Free boundary
-                (0,0) : ((0, lambda *args: 0.0), (None, lambda *x: None)),
+                (0,0) : ((0 if dirichlet_s else 1, lambda *args: 0.0), (None, lambda *x: None)),
                         # Free boundary at low variance
                 (1,)  : ((None, lambda *x: None),
                         # (0.0, lambda t, *dim: 0),
                         # # D intrinsic value at high variance
-                        (0, lambda t, *dim: np.maximum(0.0, dim[0]-k))),
+                        (0 if dirichlet_v else 1, lambda t, *dim: np.maximum(0.0, dim[0]-k))),
                         # # Free boundary
                 (1,1) : ((None, lambda *x: None),
                         # D intrinsic value at high variance
-                        (0, lambda t, *dim: np.maximum(0.0, dim[0]-k)))
+                        (0 if dirichlet_v else 1, lambda t, *dim: np.maximum(0.0, dim[0]-k)))
                 }
 
         schemes = {}
@@ -170,7 +173,7 @@ class FiniteDifferenceEngineADI_test(unittest.TestCase):
         assert(not np.isnan(As_.data).any())
         assert(not np.isnan(Ass_.data).any())
         for j, v in enumerate(vars):
-            # Be careful not to inplace our operators
+            # Be careful not to overwrite operators
             As, Ass = As_.copy(), Ass_.copy()
             m = 2
 
@@ -211,7 +214,7 @@ class FiniteDifferenceEngineADI_test(unittest.TestCase):
             L1_.append(As.copy())
             L1_[j].data += Ass.data
             L1_[j].data[m, :] -=  0.5 * r * r_enable
-            L1_[j].data[m, 0] = -1
+            L1_[j].data[m, 0] = -1 * dirichlet_s
 
             R1_.append((Rs + Rss).copy())
             R1_[j][0] = 0
@@ -226,12 +229,12 @@ class FiniteDifferenceEngineADI_test(unittest.TestCase):
         for i, s in enumerate(spots):
             mu_v = kappa * (theta - vars) * v1_enable
             gamma2_v = 0.5 * sigma ** 2 * vars * v2_enable
-            for j, z in enumerate(mu_v):
-                assert z == coeffs[1,](0, 0, vars[j])
-            for j, z in enumerate(gamma2_v):
-                assert z == coeffs[1,1](0, 0, vars[j])
+            # for j, z in enumerate(mu_v):
+                # assert z == coeffs[1,](0, 0, vars[j])
+            # for j, z in enumerate(gamma2_v):
+                # assert z == coeffs[1,1](0, 0, vars[j])
 
-            # Be careful not to inplace our operators
+            # Be careful not to overwrite our operators
             Av, Avv = Av_.copy(), Avv_.copy()
 
             m = 2
@@ -239,11 +242,6 @@ class FiniteDifferenceEngineADI_test(unittest.TestCase):
             Av.data[m - 2, 2] = -dvs[1] / (dvs[2] * (dvs[1] + dvs[2]))
             Av.data[m - 1, 1] = (dvs[1] + dvs[2]) / (dvs[1] * dvs[2])
             Av.data[m    , 0] = (-2 * dvs[1] - dvs[2]) / (dvs[1] * (dvs[1] + dvs[2]))
-            if i == 0:
-                print Av.todense()
-                print
-                print Av.data
-                print
 
             Av.data[m - 2, 2:] *= mu_v[:-2]
             Av.data[m - 1, 1:] *= mu_v[:-1]
@@ -270,7 +268,7 @@ class FiniteDifferenceEngineADI_test(unittest.TestCase):
             L2_.append(Av.copy())
             L2_[i].data += Avv.data
             L2_[i].data[m, :] -= 0.5 * r * r_enable
-            L2_[i].data[m, -1] = -1  # This is to cancel out the previous value so we can
+            L2_[i].data[m, -1] = -1 * dirichlet_v  # This is to cancel out the previous value so we can
                                 # set the dirichlet boundary condition using R.
                                 # Then we have U_i + -U_i + R
 
@@ -303,6 +301,7 @@ class FiniteDifferenceEngineADI_test(unittest.TestCase):
 
 
     def test_combine_dimensional_operators(self):
+        # assert False
         oldL1 = self.L1_.copy()
         oldL1 = scipy.sparse.dia_matrix(oldL1.todense())
         oldL1.data = oldL1.data[::-1]
@@ -325,7 +324,6 @@ class FiniteDifferenceEngineADI_test(unittest.TestCase):
         oldR2 = self.R2_.flatten()
 
         L1 = self.F.operators[0]
-        L2 = self.F.operators[1]
 
         # oldL1.data = oldL1.data[:-1]
         # oldL1.offsets = oldL1.offsets[:-1]
@@ -334,15 +332,15 @@ class FiniteDifferenceEngineADI_test(unittest.TestCase):
 
         print "offsets"
         print oldL1.offsets, L1.offsets
-        # print "old"
-        # fp(oldL1.data)
-        # print
-        # print "new"
-        # fp(L1.data)
-        # print
-        # print "diff"
-        # fp(L1.data - oldL1.data)
-        # print
+        print "old"
+        fp(oldL1.data)
+        print
+        print "new"
+        fp(L1.data)
+        print
+        print "diff"
+        fp(L1.data - oldL1.data)
+        print
         print "old"
         fp(oldL1.todense())
         print
@@ -359,6 +357,11 @@ class FiniteDifferenceEngineADI_test(unittest.TestCase):
         # print "new"
         # print L1.R
         assert (L1.R == oldR1).all()
+
+        return
+
+        L2 = self.F.operators[1]
+
         print "old"
         fp(oldL2.data)
         print
@@ -400,8 +403,13 @@ class FiniteDifferenceEngineADI_test(unittest.TestCase):
 
         d2gdxdy = crossOp.apply(g)
 
+        fp(crossOp.todense())
+
+        print "manual"
         fp(manuald2gdxdy)
+        print "new"
         fp(d2gdxdy)
+        print "diff"
         fp(d2gdxdy - manuald2gdxdy, fmt='e')
         assert np.allclose(d2gdxdy, manuald2gdxdy)
 
@@ -586,102 +594,6 @@ class BandedOperator_test(unittest.TestCase):
         assert (B2.data is not origB2.data)
         assert (B2.data != origB2.data).any() # Operations changed our operator
 
-    def test_vectorizedscale(self):
-        no_nan = np.nan_to_num
-        vec = self.vec
-        def coeff(high,low=None):
-            if low is not None:
-                high, low = low, high
-            return np.linspace(0, 1, len(vec))[low:high]
-        def fcoeff(i):
-            return np.linspace(0, 1, len(vec))[i]
-        def f0(x): return x*0
-        def fx(x): return x
-        data = np.ones((5,len(vec)))
-        data[0][:2] = 0
-        data[1][0] = 0
-        data[3][-1] = 0
-        data[4][-2:] = 0
-        offsets = [2,1,0,-1,-2]
-        res = np.ones_like(vec)
-        oldB = FD.BandedOperator((data, offsets), res)
-
-        newB = oldB.copy()
-        vecB = oldB.copy()
-        newB.scale(f0)
-        vecB.vectorized_scale(f0(vec))
-        assert (no_nan(newB.data) == 0).all()
-        assert (no_nan(vecB.data) == 0).all()
-        assert newB == vecB
-
-        manualB = oldB.copy()
-        newB = oldB.copy()
-        vecB = oldB.copy()
-        manualB.data[0][2:] *= coeff(len(vec)-2)
-        manualB.data[1][1:] *= coeff(len(vec)-1)
-        manualB.data[2] *= coeff(len(vec))
-        manualB.data[3][:-1] *= coeff(1, len(vec))
-        manualB.data[4][:-2] *= coeff(2, len(vec))
-        manualB.R *= coeff(len(vec))
-        newB.scale(fcoeff)
-        vecB.vectorized_scale(coeff(len(vec)))
-        # print "manual"
-        # fp(manualB.data)
-        # print
-        # print "new"
-        # fp(newB.data)
-        # print
-        # print "vec"
-        # print fp(vecB.data)
-        # print
-        # print "manualR"
-        # print manualB.R
-        # print
-        # print "newR"
-        # print newB.R
-        assert manualB == newB
-        assert manualB == vecB
-
-    def test_scale(self):
-        no_nan = np.nan_to_num
-        vec = self.vec
-        def f0(x): return 0
-        def fx(x): return x
-        data = np.ones((5,len(vec)))
-        data[0][:2] = 0
-        data[1][0] = 0
-        data[3][-1] = 0
-        data[4][-2:] = 0
-        offsets = [2,1,0,-1,-2]
-        res = np.ones_like(vec)
-        oldB = FD.BandedOperator((data, offsets), res)
-
-        newB = oldB.copy()
-        newB.scale(f0)
-        assert (no_nan(newB.data) == 0).all()
-
-        manualB = oldB.copy()
-        newB = oldB.copy()
-        manualB.data[0][2:] *= np.arange(len(vec)-2)
-        manualB.data[1][1:] *= np.arange(len(vec)-1)
-        manualB.data[2] *= np.arange(len(vec))
-        manualB.data[3][:-1] *= np.arange(1, len(vec))
-        manualB.data[4][:-2] *= np.arange(2, len(vec))
-        manualB.R *= np.arange(len(vec))
-        newB.scale(fx)
-        print "manual"
-        fp(manualB.data)
-        print
-        print "new"
-        fp(newB.data)
-        print
-        print "manualR"
-        print manualB.R
-        print
-        print "newR"
-        print newB.R
-        assert manualB == newB
-
 
     def test_copy(self):
         vec = self.vec
@@ -825,6 +737,261 @@ class BandedOperator_test(unittest.TestCase):
                     assert (X12.offsets == manualX12.offsets[::-1]).all(),  "%s+%s (dv %i) idx %i" % (sch0, sch1, dv, idx)
                     assert (X12.data.shape == manualX12.data.shape),  "%s+%s (dv %i) idx %i" % (sch0, sch1, dv, idx)
                     assert (X12.data == manualX12.data[::-1]).all(),  "%s+%s (dv %i) idx %i" % (sch0, sch1, dv, idx)
+
+
+class ScalingFuncs(unittest.TestCase):
+
+    def setUp(self):
+        k = 3.0
+        nspots = 7
+        spot_max = 1500.0
+        spotdensity = 7.0  # infinity is linear?
+        vec = utils.sinh_space(k, spot_max, spotdensity, nspots)
+        self.vec = vec
+
+        def coeff(high,low=None):
+            if low is not None:
+                high, low = low, high
+            return np.linspace(0, 1, len(vec))[low:high]
+        def fcoeff(i):
+            return np.linspace(0, 1, len(vec))[i]
+        def f0(x): return x*0
+        def fx(x): return x+2
+
+        data = np.ones((5,len(vec)))
+        data[0][:2] = 0
+        data[1][0] = 0
+        data[3][-1] = 0
+        data[4][-2:] = 0
+        offsets = [2,1,0,-1,-2]
+        res = np.ones_like(vec)
+        oldB = FD.BandedOperator((data, offsets), res)
+        self.oldB = oldB
+
+        manualB = oldB.copy()
+        newB = oldB.copy()
+        vecB = oldB.copy()
+        manualB.data[0][2:] *= coeff(len(vec)-2)
+        manualB.data[1][1:] *= coeff(len(vec)-1)
+        manualB.data[2] *= coeff(len(vec))
+        manualB.data[3][:-1] *= coeff(1, len(vec))
+        manualB.data[4][:-2] *= coeff(2, len(vec))
+        manualB.R *= coeff(len(vec))
+
+        self.manualB = manualB
+
+        self.coeff = coeff
+        self.fcoeff = fcoeff
+        self.f0 = f0
+        self.fx = fx
+
+    def test_vectorizedscale(self):
+        no_nan = np.nan_to_num
+        vec = self.vec
+        oldB = self.oldB
+        manualB = self.manualB
+        flag = int(1)
+        data = np.ones((5,len(vec)), dtype=int)*flag
+        data[0][:2] = 0
+        data[1][0] = 0
+        data[3][-1] = 0
+        data[4][-2:] = 0
+        offsets = [2,1,0,-1,-2]
+        res = np.ones_like(vec)
+
+        newB = oldB.copy()
+        newB.scale(self.f0)
+        vecB = oldB.copy()
+        vecB.vectorized_scale(self.f0(vec))
+
+        assert (no_nan(newB.data) == 0).all()
+        assert (no_nan(vecB.data) == 0).all()
+
+        for dchlet in itertools.product([True, False], repeat=2):
+            oldB = FD.BandedOperator((data.copy(), offsets), res.copy())
+            oldB.is_dirichlet = dchlet
+            veczeroB = oldB.copy()
+            veczeroB.vectorized_scale(self.f0(vec))
+
+            manualzeroB = np.zeros_like(veczeroB.data)
+            if veczeroB.is_dirichlet[0]:
+                manualzeroB[0, 2] = flag
+                manualzeroB[1, 1] = flag
+                manualzeroB[2, 0] = flag
+            if veczeroB.is_dirichlet[1]:
+                manualzeroB[2, -1] = flag
+                manualzeroB[3, -2] = flag
+                manualzeroB[4, -3] = flag
+
+            print dchlet
+            print
+            print "veczeroB"
+            fp(veczeroB.data)
+            print
+            print "manualzeroB"
+            fp(manualzeroB)
+            print
+
+            manualB = oldB.copy()
+            newB = oldB.copy()
+            vecB = oldB.copy()
+            bottom = 0
+            top = last = manualB.shape[0]
+            if dchlet[0]:
+                bottom += 1
+            if dchlet[1]:
+                top -= 1
+            manualB.data[0][bottom+2:]  *= vec[bottom : last-2]+2
+            manualB.data[1][bottom+1:]  *= vec[bottom : last-1]+2
+            manualB.data[2][bottom:top] *= vec[bottom : top]+2
+            manualB.data[3][:top-1]     *= vec[1      : top]+2
+            manualB.data[4][:top-2]     *= vec[2      : top]+2
+            manualB.R[bottom:top]       *= vec[bottom : top]+2
+            vecB.vectorized_scale(self.fx(vec))
+            newB.scale(lambda i: vec[i]+2)
+            print "vec"
+            fp(vec)
+            print
+            print "manual"
+            fp(manualB.data)
+            print
+            print "newB"
+            fp(newB.data)
+            print
+            print "vecB"
+            fp(vecB.data)
+            print
+            print "manualR"
+            print manualB.R
+            print
+            print "vecR"
+            print vecB.R
+            assert (veczeroB.data == manualzeroB).all()
+            assert newB == vecB
+            assert manualB == newB
+            assert manualB == vecB
+
+        newB = oldB.copy()
+        newB.scale(self.fcoeff)
+        vecB = oldB.copy()
+        vecB.vectorized_scale(self.coeff(len(vec)))
+        print "new"
+        fp(newB.data)
+        print
+        print "vec"
+        fp(vecB.data)
+        print
+        print "newR"
+        print newB.R
+        assert newB == vecB
+
+
+    def test_scale_dirichlet(self):
+        no_nan = np.nan_to_num
+        vec = self.vec
+        flag = int(1)
+        data = np.ones((5,len(vec)), dtype=int)*flag
+        data[0][:2] = 0
+        data[1][0] = 0
+        data[3][-1] = 0
+        data[4][-2:] = 0
+        offsets = [2,1,0,-1,-2]
+        res = np.ones_like(vec)
+
+        for dchlet in itertools.product([True, False], repeat=2):
+            oldB = FD.BandedOperator((data.copy(), offsets), res.copy())
+            oldB.is_dirichlet = dchlet
+            zeroB = oldB.copy()
+            zeroB.scale(self.f0)
+
+            manualzeroB = np.zeros_like(zeroB.data)
+            if zeroB.is_dirichlet[0]:
+                manualzeroB[0, 2] = flag
+                manualzeroB[1, 1] = flag
+                manualzeroB[2, 0] = flag
+            if zeroB.is_dirichlet[1]:
+                manualzeroB[2, -1] = flag
+                manualzeroB[3, -2] = flag
+                manualzeroB[4, -3] = flag
+
+            print dchlet
+            print
+            print "zeroB"
+            fp(zeroB.data)
+            print
+            print "manualzeroB"
+            fp(manualzeroB)
+            print
+
+            manualB = oldB.copy()
+            newB = oldB.copy()
+            bottom = 0
+            top = manualB.shape[0]
+            if dchlet[0]:
+                bottom += 1
+            if dchlet[1]:
+                top -= 1
+            manualB.data[0][bottom+2:] *= np.arange(bottom, manualB.shape[0]-2)+2
+            manualB.data[1][bottom+1:] *= np.arange(bottom, manualB.shape[0]-1)+2
+            manualB.data[2][bottom:top] *= np.arange(bottom, top)+2
+            manualB.data[3][:top-1] *= np.arange(1, top)+2
+            manualB.data[4][:top-2] *= np.arange(2, top)+2
+            manualB.R[bottom:top] *= np.arange(bottom, top)+2
+            newB.scale(self.fx)
+            print "manual"
+            fp(manualB.data)
+            print
+            print "new"
+            fp(newB.data)
+            print
+            print "manualR"
+            print manualB.R
+            print
+            print "newR"
+            print newB.R
+            assert (zeroB.data == manualzeroB).all()
+            assert manualB == newB
+
+
+    def test_scale_no_dirichlet(self):
+        no_nan = np.nan_to_num
+        vec = self.vec
+        def f0(x): return 0
+        def fx(x): return x
+        data = np.ones((5,len(vec)))
+        data[0][:2] = 0
+        data[1][0] = 0
+        data[3][-1] = 0
+        data[4][-2:] = 0
+        offsets = [2,1,0,-1,-2]
+        res = np.ones_like(vec)
+        oldB = FD.BandedOperator((data, offsets), res)
+
+        newB = oldB.copy()
+        newB.scale(f0)
+        assert (no_nan(newB.data) == 0).all()
+
+        manualB = oldB.copy()
+        newB = oldB.copy()
+        manualB.data[0][2:] *= np.arange(len(vec)-2)
+        manualB.data[1][1:] *= np.arange(len(vec)-1)
+        manualB.data[2] *= np.arange(len(vec))
+        manualB.data[3][:-1] *= np.arange(1, len(vec))
+        manualB.data[4][:-2] *= np.arange(2, len(vec))
+        manualB.R *= np.arange(len(vec))
+        newB.scale(fx)
+        print "manual"
+        fp(manualB.data)
+        print
+        print "new"
+        fp(newB.data)
+        print
+        print "manualR"
+        print manualB.R
+        print
+        print "newR"
+        print newB.R
+        assert manualB == newB
 
 
 def main():
