@@ -73,7 +73,7 @@ class BlackScholesOption_test(unittest.TestCase):
 
     def test_implicit(self):
         t, dt = self.BS.tenor, self.dt
-        V = self.F.impl(t/dt, dt)[-1][self.spot_idx]
+        V = self.F.solve_implicit(t/dt, dt)[-1][self.spot_idx]
         ans = self.BS.analytical
         print "Spot:", self.BS.spot
         print "Price:", V, ans, V - ans
@@ -81,7 +81,7 @@ class BlackScholesOption_test(unittest.TestCase):
 
     def test_crank(self):
         t, dt = self.BS.tenor, self.dt
-        V = self.F.crank(t/dt, dt)[-1][self.spot_idx]
+        V = self.F.solve_adi(t/dt, dt)[-1][self.spot_idx]
         ans = self.BS.analytical
         print "Spot:", self.BS.spot
         print "Price:", V, ans, V - ans
@@ -362,19 +362,19 @@ class FiniteDifferenceEngineADI_test(unittest.TestCase):
 
         L2 = self.F.operators[1]
 
-        print "old"
-        fp(oldL2.data)
-        print
-        print "new"
-        fp(L2.data)
-        print "old"
-        fp(oldL2.todense())
-        print
-        print "new"
-        fp(L2.todense())
-        print
-        print "diff"
-        fp(oldL2.todense() - L2.todense())
+        # print "old"
+        # fp(oldL2.data)
+        # print
+        # print "new"
+        # fp(L2.data)
+        # print "old"
+        # fp(oldL2.todense())
+        # print
+        # print "new"
+        # fp(L2.todense())
+        # print
+        # print "diff"
+        # fp(oldL2.todense() - L2.todense())
         assert np.allclose(L2.data, oldL2.data)
         # print "old"
         # print oldR2

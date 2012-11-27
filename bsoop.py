@@ -395,8 +395,6 @@ def crank(V, L1, R1x, L2, R2x, dt, n, crumbs=[], callback=None):
 
     m = 2
 
-    I = np.ones(L1.shape[0])
-
     # L  = (As + Ass - H.interest_rate*np.eye(nspots))*-dt + np.eye(nspots)
 
     L1i.data *= -theta*dt
@@ -433,9 +431,19 @@ def crank(V, L1, R1x, L2, R2x, dt, n, crumbs=[], callback=None):
             callback(V, ((n - k) * dt))
 
         Vsv = np.gradient(np.gradient(V)[0])[1] * gradgrid
+
+        # V12 = (V
+                # + Vsv
+                # + (1-theta)*dt*L1e.dot(V.T.flat).reshape(transposed_shape).T
+                # + (1-theta)*dt*L2e.dot(V.flat).reshape(normal_shape)
+                # + dt * R)
+
+        # V1 = spl.solve_banded(offsets2, L2i.data, V12.flat, overwrite_b=True).reshape(normal_shape)
+        # V  = spl.solve_banded(offsets1, L1i.data, V1.T.flat, overwrite_b=True).reshape(transposed_shape).T
+
         V1 = (L1e.dot(V.T.flat).reshape(transposed_shape)).T
         V2 = (L2e.dot(V.flat).reshape(normal_shape))
-        Y0 = V + dt*(Vsv + V1 + V2 + R)
+        Y0 = V + Vsv + dt*(V1 + V2 + R)
 
         V1 = Y0 - theta * dt * L1e.dot(V.T.flat).reshape(transposed_shape).T
         Y1 = spl.solve_banded(offsets1, L1i.data, V1.T.flat, overwrite_b=True).reshape(transposed_shape).T
@@ -506,8 +514,8 @@ R2 = F.operators[1].R.reshape(V_init.shape)
 # fp(R1)
 # print "diff"
 # fp(R1 - np.array(R1_), fmt='e')
-# assert (flatten_tensor(L1_).data == L1.data).all()
-# assert (flatten_tensor(L2_).data == L2.data).all()
+assert (flatten_tensor(L1_).data == L1.data).all()
+assert (flatten_tensor(L2_).data == L2.data).all()
 assert np.array(R1).shape == np.array(R1_).shape
 assert np.array(R2).shape == np.array(R2_).shape
 assert np.allclose(np.array(R1), np.array(R1_))
@@ -523,7 +531,7 @@ Vs = impl(V_init, L1, R1, L2, R2,
           )
 Vi = Vs[-1]
 print tr(Vi)[ids, idv] - tr(hs)[ids, idv]
-Vs = F.impl(H.tenor/H.dt, H.dt, crumbs=[], callback=None)
+Vs = F.solve_implicit(H.tenor/H.dt, H.dt, crumbs=[], callback=None)
 Vfi = Vs[-1]
 print tr(Vfi)[ids, idv] - tr(hs)[ids, idv]
 
@@ -533,9 +541,9 @@ Vs = crank(V_init, L1, R1, L2, R2,
            )
 Vc = Vs[-1]
 print tr(Vc)[ids, idv] - tr(hs)[ids, idv]
-# Vs = F.crank(H.tenor/H.dt, H.dt, crumbs=[], callback=None)
-# Vfc = Vs[-1]
-# print tr(Vfc)[ids, idv] - tr(hs)[ids, idv]
+Vs = F.solve_adi(H.tenor/H.dt, H.dt, crumbs=[], callback=None)
+Vfc = Vs[-1]
+print tr(Vfc)[ids, idv] - tr(hs)[ids, idv]
 
 # Rannacher smoothing to damp oscilations at the discontinuity
 # smoothing_steps = 2
@@ -557,7 +565,7 @@ print tr(Vc)[ids, idv] - tr(hs)[ids, idv]
 ion()
 # p(tr(Vi), tr(hs), spots[trims], vars[trimv], 1, "impl")
 # p(tr(Vfi), tr(hs), spots[trims], vars[trimv], 1, "FD impl")
-p(tr(Vc), tr(hs), spots[trims], vars[trimv], 2, "crank")
+# p(tr(Vc), tr(hs), spots[trims], vars[trimv], 2, "crank")
 # p(tr(Vfc), tr(hs), spots[trims], vars[trimv], 2, "FD crank")
 # p(tr(Vr), tr(hs), spots[trims], vars[trimv], 3, "smooth")
 # p(tr(Vfr), tr(hs), spots[trims], vars[trimv], 3, "FD smooth")

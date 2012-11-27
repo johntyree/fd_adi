@@ -159,7 +159,7 @@ class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
         return Binit
 
     def min_possible_bandwidth(self, derivative_tuple):
-        explain = True
+        explain = False
         high = low = 0
         d = len(derivative_tuple)
         if derivative_tuple not in self.boundaries:
@@ -274,11 +274,7 @@ class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
             offs = Binit.offsets
             assert max(offs) >= high, "(%s < %s)" % (max(offs), high)
             assert min(offs) <= low,  "(%s > %s)" % (min(offs), low)
-            # m is the main diagonal's index in B.data
-            m = tuple(Binit.offsets).index(0)
-            if m > len(Binit.offsets)-1:
-                #TODO: Why no main diag? Should be possible, if not probable.
-                raise ValueError("No main diagonal!")
+
             # Take cartesian product of other dimension values
             argset = itertools.product(*(self.grid.mesh[i] for i in otherdims))
             # Pair our current dimension with all combinations of the other
@@ -422,7 +418,7 @@ class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
         return
 
 
-    def impl(self, n, dt, crumbs=[], callback=None):
+    def solve_implicit(self, n, dt, crumbs=[], callback=None):
         n = int(n)
         if crumbs:
             V = crumbs[-1]
@@ -466,7 +462,59 @@ class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
         return crumbs
 
 
-    def crank(self, n, dt, crumbs=[], callback=None):
+    def solve_douglas(self, n, dt, crumbs=[], theta=0.5, callback=None):
+        assert self.grid.domain.ndim == 2
+
+        n = int(n)
+        if crumbs:
+            V = crumbs[-1]
+        else:
+            V = self.grid.domain.copy()
+            crumbs.append(V)
+        dt *= 0.5
+        crumbs.append(V)
+
+        L1e, L2e = self.operators[0], self.operators[1]
+        L1i, L2i = self.operators[0], self.operators[1]
+
+        L1i = (L1i * (-theta*dt)).add(1, inplace=True)
+        L2i = (L2i * (-theta*dt)).add(1, inplace=True)
+        L1i.R = L2i.R = 0
+
+        L12 = self.operators[(0,1)]
+
+        print_step = max(1, int(n / 10))
+        to_percent = 100.0 / n
+        utils.tic("Douglas:")
+        for k in xrange(n):
+            if not k % print_step:
+                if np.isnan(V).any():
+                    print "Crank fail @ t = %f (%i steps)" % (dt * k, k)
+                    return crumbs
+                print int(k * to_percent),
+            if callback is not None:
+                callback(V, ((n - k) * dt))
+
+            Vsv = L12.apply(V)
+
+            # V1 = (L1e.dot(V.T.flat).reshape(transposed_shape)).T
+            # V2 = (L2e.dot(V.flat).reshape(normal_shape))
+            V1 = L1e.apply(V)
+            V2 = L2e.apply(V)
+            Y0 = V + dt*(Vsv + V1 + V2)
+
+            V1 = Y0 - theta * dt * L1e.apply(V.T)
+            Y1 = L1i.solve(V1.T)
+
+            V2 = Y1 - theta * dt * L2e.apply(V.flat)
+            Y2 = L2i.solve(V2)
+            V = Y2
+
+            crumbs.append(V.copy())
+        utils.toc()
+
+
+    def solve_adi(self, n, dt, crumbs=[], callback=None):
         n = int(n)
         if crumbs:
             V = crumbs[-1]
@@ -478,6 +526,7 @@ class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
 
         ordered_ops = sorted(self.operators.items())
         # Have to roll the first one because of the scheme
+        # TODO: What the hell does that mean? Explain it.
         Les = np.roll([(op *  dt).add(1, inplace=True) for d, op in ordered_ops], -1)
         Lis = ((op * -dt).add(1, inplace=True) for d, op in ordered_ops)
         Ls = zip(Les, Lis)
@@ -503,8 +552,9 @@ class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
 
 
     def smooth(self, n, dt, crumbs=[], callback=None, smoothing_steps=2):
-        V = self.impl(smoothing_steps*2, dt*0.5, crumbs=crumbs)
-        return self.crank(n-smoothing_steps, dt, crumbs=V)
+        V = self.solve_implicit(smoothing_steps*2, dt*0.5, crumbs=crumbs)
+        return self.solve_adi(n-smoothing_steps, dt, crumbs=V)
+
 
 def replicate(n, x):
     ret = []
@@ -703,8 +753,6 @@ class BandedOperator(object):
                 raise NotImplementedError, "Can't do more than 2nd order derivatives."
             if len(set(d)) != 1:
                 mixed = True
-                # #TODO
-                # raise NotImplementedError, "Restricted to 2D problems without cross derivatives."
             map(int, d)
             d = len(d)
         except TypeError:
