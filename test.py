@@ -108,24 +108,24 @@ class FiniteDifferenceEngineADI_test(unittest.TestCase):
         sigma = 0.4
         spot_max = 1500.0
         var_max = 13.0
-        nspots = 5
-        nvols = 4
+        nspots = 13
+        nvols = 10
         spotdensity = 7.0  # infinity is linear?
         varexp = 4
 
         #TODO:!!!!XXX TODO XXX
-        var_max = nvols-1
-        spot_max = nspots-1
+        # var_max = nvols-1
+        # spot_max = nspots-1
 
-        up_or_down_spot = ''
-        up_or_down_var = ''
+        up_or_down_spot = 'up'
+        up_or_down_var = 'down'
         flip_idx_spot = 1
         flip_idx_var = 1
         k = spot_max / 4.0
         spots = np.linspace(0, spot_max, nspots)
         vars = np.linspace(0, var_max, nvols)
-        # spots = utils.sinh_space(k, spot_max, spotdensity, nspots)
-        # vars = utils.exponential_space(0.00, 0.04, var_max, varexp, nvols)
+        spots = utils.sinh_space(k, spot_max, spotdensity, nspots)
+        vars = utils.exponential_space(0.00, 0.04, var_max, varexp, nvols)
         def mu_s(t, *dim): return r * dim[0] * s1_enable
         def gamma2_s(t, *dim): return 0.5 * dim[1] * dim[0]**2 * s2_enable
 
@@ -136,7 +136,9 @@ class FiniteDifferenceEngineADI_test(unittest.TestCase):
                   (0,) : mu_s,
                   (0,0): gamma2_s,
                   (1,) : mu_v,
-                  (1,1): gamma2_v}
+                  (1,1): gamma2_v,
+                  (0,1): lambda t, *dim: dim[0]*0 + 1
+                  }
         bounds = {
                         # D: U = 0              VN: dU/dS = 1
                 (0,)  : ((0, lambda *args: 0.0), (1, lambda *args: 1.0)),
@@ -292,7 +294,8 @@ class FiniteDifferenceEngineADI_test(unittest.TestCase):
         self.R1_ = R1
         self.L2_ = L2
         self.R2_ = R2
-        G = Grid.Grid((spots, vars), initializer=lambda x0,x1: np.maximum(x0-k,0))
+        # G = Grid.Grid((spots, vars), initializer=lambda x0,x1: np.maximum(x0-k,0))
+        G = Grid.Grid((spots, vars), initializer=lambda x0,x1: x0*x1)
         # print G
 
         self.F = FD.FiniteDifferenceEngineADI(G, coefficients=coeffs,
@@ -381,29 +384,20 @@ class FiniteDifferenceEngineADI_test(unittest.TestCase):
 
 
     def test_cross_derivative(self):
-        target = np.array([
-            [ 0.  , 0.   , 0.  , 0.  , 0.   , 0.   , 0.  , 0.  , 0.   , 0.   , 0.  , 0.  , 0.   , 0.   , 0.  , 0.  , 0.   , 0.   , 0.  , 0. ] ,
-            [ 0.  , 0.   , 0.  , 0.  , 0.   , 0.   , 0.  , 0.  , 0.   , 0.   , 0.  , 0.  , 0.   , 0.   , 0.  , 0.  , 0.   , 0.   , 0.  , 0. ] ,
-            [ 0.  , 0.   , 0.  , 0.  , 0.   , 0.   , 0.  , 0.  , 0.   , 0.   , 0.  , 0.  , 0.   , 0.   , 0.  , 0.  , 0.   , 0.   , 0.  , 0. ] ,
-            [ 0.  , 0.   , 0.  , 0.  , 0.   , 0.   , 0.  , 0.  , 0.   , 0.   , 0.  , 0.  , 0.   , 0.   , 0.  , 0.  , 0.   , 0.   , 0.  , 0. ] ,
-            [ 0.  , 0.   , 0.  , 0.  , 0.   , 0.   , 0.  , 0.  , 0.   , 0.   , 0.  , 0.  , 0.   , 0.   , 0.  , 0.  , 0.   , 0.   , 0.  , 0. ] ,
-            [-0.5 , 0.   , 0.5 , 0.  , -0.5 , 0.   , 0.5 , 0.  , -0.5 , 0.   , 0.5 , 0.  , 0.   , 0.   , 0.  , 0.  , 0.   , 0.   , 0.  , 0. ] ,
-            [ 0.  , -0.5 , 0.  , 0.5 , 0.   , -0.5 , 0.  , 0.5 , 0.   , -0.5 , 0.  , 0.5 , 0.   , 0.   , 0.  , 0.  , 0.   , 0.   , 0.  , 0. ] ,
-            [ 0.  , 0.   , 0.  , 0.  , 0.   , 0.   , 0.  , 0.  , 0.   , 0.   , 0.  , 0.  , 0.   , 0.   , 0.  , 0.  , 0.   , 0.   , 0.  , 0. ] ,
-            [ 0.  , 0.   , 0.  , 0.  , 0.   , 0.   , 0.  , 0.  , 0.   , 0.   , 0.  , 0.  , 0.   , 0.   , 0.  , 0.  , 0.   , 0.   , 0.  , 0. ] ,
-            [ 0.  , 0.   , 0.  , 0.  , -0.5 , 0.   , 0.5 , 0.  , -0.5 , 0.   , 0.5 , 0.  , -0.5 , 0.   , 0.5 , 0.  , 0.   , 0.   , 0.  , 0. ] ,
-            [ 0.  , 0.   , 0.  , 0.  , 0.   , -0.5 , 0.  , 0.5 , 0.   , -0.5 , 0.  , 0.5 , 0.   , -0.5 , 0.  , 0.5 , 0.   , 0.   , 0.  , 0. ] ,
-            [ 0.  , 0.   , 0.  , 0.  , 0.   , 0.   , 0.  , 0.  , 0.   , 0.   , 0.  , 0.  , 0.   , 0.   , 0.  , 0.  , 0.   , 0.   , 0.  , 0. ] ,
-            [ 0.  , 0.   , 0.  , 0.  , 0.   , 0.   , 0.  , 0.  , 0.   , 0.   , 0.  , 0.  , 0.   , 0.   , 0.  , 0.  , 0.   , 0.   , 0.  , 0. ] ,
-            [ 0.  , 0.   , 0.  , 0.  , 0.   , 0.   , 0.  , 0.  , -0.5 , 0.   , 0.5 , 0.  , -0.5 , 0.   , 0.5 , 0.  , -0.5 , 0.   , 0.5 , 0. ] ,
-            [ 0.  , 0.   , 0.  , 0.  , 0.   , 0.   , 0.  , 0.  , 0.   , -0.5 , 0.  , 0.5 , 0.   , -0.5 , 0.  , 0.5 , 0.   , -0.5 , 0.  , 0.5] ,
-            [ 0.  , 0.   , 0.  , 0.  , 0.   , 0.   , 0.  , 0.  , 0.   , 0.   , 0.  , 0.  , 0.   , 0.   , 0.  , 0.  , 0.   , 0.   , 0.  , 0. ] ,
-            [ 0.  , 0.   , 0.  , 0.  , 0.   , 0.   , 0.  , 0.  , 0.   , 0.   , 0.  , 0.  , 0.   , 0.   , 0.  , 0.  , 0.   , 0.   , 0.  , 0. ] ,
-            [ 0.  , 0.   , 0.  , 0.  , 0.   , 0.   , 0.  , 0.  , 0.   , 0.   , 0.  , 0.  , 0.   , 0.   , 0.  , 0.  , 0.   , 0.   , 0.  , 0. ] ,
-            [ 0.  , 0.   , 0.  , 0.  , 0.   , 0.   , 0.  , 0.  , 0.   , 0.   , 0.  , 0.  , 0.   , 0.   , 0.  , 0.  , 0.   , 0.   , 0.  , 0. ] ,
-            [ 0.  , 0.   , 0.  , 0.  , 0.   , 0.   , 0.  , 0.  , 0.   , 0.   , 0.  , 0.  , 0.   , 0.   , 0.  , 0.  , 0.   , 0.   , 0.  , 0. ]
-        ])
+        crossOp = self.F.operators[(0,1)]
+        fp(crossOp, 2)
+        g = self.F.grid.domain
 
+        dx = np.gradient(self.F.grid.mesh[0])[:,np.newaxis]
+        dy = np.gradient(self.F.grid.mesh[1])
+        dgdx = np.gradient(g, 1)[0]
+        d2gdxdy = np.gradient(dgdx)[1] / (dx * dy)
+        d2gdxdy[:,0] = 0; d2gdxdy[:,-1] = 0
+        d2gdxdy[0,:] = 0; d2gdxdy[-1,:] = 0
+        fp(d2gdxdy)
+        fp(crossOp.apply(g))
+        fp(crossOp.apply(g) - d2gdxdy, fmt='e')
+        assert np.allclose(d2gdxdy, crossOp.apply(g))
 
 class Grid_test(unittest.TestCase):
 

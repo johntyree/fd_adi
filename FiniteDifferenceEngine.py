@@ -144,16 +144,16 @@ class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
                     scheme=s, derivative=len(d), order=o,
                     force_bandwidth=force_bandwidth)
             if Binit is not None:
-                print "splicing with %s at %i," % (s, idx),
+                # print "splicing with %s at %i," % (s, idx),
                 # They asked for more than one scheme,
                 # Splice the operators together at row idx
                 # TODO: Not inplace until we figure out how to pre-allocate the
                 # right size
                 Binit = Binit.splice_with(B, idx, inplace=False)
             else:
-                print "%s: Starting with %s," % (d, s),
+                # print "%s: Starting with %s," % (d, s),
                 Binit = B
-        print "done."
+        # print "done."
         return Binit
 
     def min_possible_bandwidth(self, derivative_tuple):
@@ -163,38 +163,38 @@ class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
             self.boundaries[derivative_tuple] = ((None, None), (None, None))
         b = self.boundaries[derivative_tuple]
         for sd in self.schemes.get(derivative_tuple, ({},)): # a tuple of dicts
-            print "checking scheme from %s: %s" % (derivative_tuple, sd)
+            # print "checking scheme from %s: %s" % (derivative_tuple, sd)
             s = sd.get('scheme', self.default_scheme)
             if sd.get('from', 0) == 0: # We're overwritting previous schemes
-                print "Reset!"
+                # print "Reset!"
                 high = low = 0
             if s == 'center' or '':
-                print "Center requires -1, 1"
+                # print "Center requires -1, 1"
                 high = max(1, high)
                 low = min(-1, low)
             elif s == 'forward' or s == 'up':
-                print "Forward requires 0, 2"
+                # print "Forward requires 0, 2"
                 high = max(2, high)
                 low = min(0, low)
             elif s == 'backward' or s == 'down':
-                print "Backward requires -2, 0"
+                # print "Backward requires -2, 0"
                 high = max(0, high)
                 low = min(-2, low)
-        if b[0][0] == None:
+        if b[0][0] is None:
             if d == 1:
                 h = 2
             elif d == 2:
                 h = 1
-            print ("Low free boundary requires forward"
-                    " difference (%i): %i (have %i)" % (d, h, high))
+            # print ("Low free boundary requires forward"
+                    # " difference (%i): %i (have %i)" % (d, h, high))
             high = max(h, high)
-        if b[1][0] == None:
+        if b[1][0] is None:
             if d == 1:
                 l = -2
             elif d == 2:
                 l = -1
-            print ("High free boundary requires backward"
-                   " difference (%i): %i (have %i)" % (d, l, low))
+            # print ("High free boundary requires backward"
+                   # " difference (%i): %i (have %i)" % (d, l, low))
             low = min(l, low)
         return low, high
 
@@ -264,22 +264,6 @@ class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
             offs = Binit.offsets
             assert max(offs) >= high, "(%s < %s)" % (max(offs), high)
             assert min(offs) <= low,  "(%s > %s)" % (min(offs), low)
-            # Binit = None
-            # for sd in self.schemes.get(d, ({},)): # a tuple of dicts
-                # s = sd.get('scheme', self.default_scheme)
-                # idx = sd.get('from', 0)
-                # o = sd.get('order', self.default_order)
-                # B = BandedOperator.for_vector(self.grid.mesh[dim],
-                        # scheme=s, derivative=len(d), order=o,
-                        # force_bandwidth=force_bandwidth)
-                # if Binit is not None:
-                    # # They asked for more than one scheme,
-                    # # Splice the operators together at row idx
-                    # # Not inplace until we figure out how to pre-allocate the
-                    # # right size
-                    # Binit = Binit.splice_with(B, idx, inplace=False)
-                # else:
-                    # Binit = B
             # m is the main diagonal's index in B.data
             m = tuple(Binit.offsets).index(0)
             if m > len(Binit.offsets)-1:
@@ -365,9 +349,6 @@ class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
             Bb1 = Bm1.copy()
             Bp1 = Bm1.copy()
 
-            Bp1.offsets += d1_size
-            Bm1.offsets -= d1_size
-
             # TODO: Hardcoding in for centered differencing
             Bps = [Bp1 * 0, Bp1 * 0] + replicate(d0_size-2, Bp1)
             Bbs = [Bb1 * 0] + replicate(d0_size-2, Bb1) +  [Bb1 * 0]
@@ -377,23 +358,26 @@ class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
             # B1 = FD.flatten_tensor([x.copy() for x in Bbs])
             offsets = Bs.offsets
             data = [Bps, Bbs, Bms]
-
             for row, o in enumerate(offsets):
                 if o >= 0:
                     for i in xrange(Bs.shape[0]-o):
-                        # print "(%i, %i)" % (row, i+o), "Block", i, i+o, "*",
-                        # Bs.data[row, i+o]
-                        # print data[row][i+o].data
+                        # print "(%i, %i)" % (row, i+o), "Block", i, i+o, "*", Bs.data[row, i+o]
+                        a = (np.array(self.grid.mesh[0][i]).repeat(d1_size),)
+                        vec = evalvectorfunc(coeffs[d], a, 1)
+                        data[row][i+o].vectorized_scale(vec)
                         data[row][i+o] *= Bs.data[row, i+o]
-                        # print data[row][i+o].data
                 else:
                     for i in xrange(abs(o), Bs.shape[0]):
                         # print "(%i, %i)" % (row, i-abs(o)), "Block", i, i-abs(o), "*", Bs.data[row, i-abs(o)]
+                        a = (np.array(self.grid.mesh[0][i]).repeat(d1_size),)
+                        vec = evalvectorfunc(coeffs[d], a, 1)
+                        data[row][i-abs(o)].vectorized_scale(vec)
                         data[row][i-abs(o)] *= Bs.data[row, i-abs(o)]
-                        # print data[row][i-abs(o)].data
-                # print
+
 
             # We flatten here because it's faster
+            Bps[0].offsets += d1_size
+            Bms[0].offsets -= d1_size
             BP = flatten_tensor(Bps)
             BB = flatten_tensor(Bbs)
             BM = flatten_tensor(Bms)
