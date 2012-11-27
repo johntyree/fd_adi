@@ -191,8 +191,8 @@ def nonuniform_backward_coefficients(deltas):
         snd[m+2, i-2] = d[i]           / denom
 
     # Use first order approximation for the first (inner) row
-    # fst[m,   1] =  1 / d[-1]
-    # fst[m+1, 0] = -1 / d[-1]
+    # fst[m,   1] =  1 / d[1]
+    # fst[m+1, 0] = -1 / d[1]
     # fst[m+2, 0] = 0
     fst[m-1,2] =          d[1]  / (d[2]*(d[1]+d[2]))
     fst[m,  1] = (-d[1] + d[2]) /       (d[1]*d[2])
@@ -219,14 +219,14 @@ def nonuniform_forward_coefficients(deltas):
     fst = np.zeros((4,len(d)))
     snd = fst.copy()
     for i in range(1,len(d)-2):
-        fst[m-2, i+2] = -d[i+1]           / (d[i+2]*(d[i+1]+d[i+2]))
+        fst[m-2, i+2] = -d[i+1]            / (d[i+2]*(d[i+1]+d[i+2]))
         fst[m-1, i+1] = (d[i+1] + d[i+2])  /         (d[i+1]*d[i+2])
         fst[m  , i  ] = (-2*d[i+1]-d[i+2]) / (d[i+1]*(d[i+1]+d[i+2]))
 
         denom = (0.5*(d[i+2]+d[i+1])*d[i+2]*d[i+1]);
-        snd[m-2,  i+2] =   d[i+1]         / denom
+        snd[m-2,  i+2] = d[i+1]           / denom
         snd[m-1  ,i+1] = -(d[i+2]+d[i+1]) / denom
-        snd[m,i]   =   d[i+2]         / denom
+        snd[m,i]       = d[i+2]           / denom
 
     # Use first order approximation for the last (inner) row
     # fst[m-2,  0] = 0
@@ -322,6 +322,7 @@ def nonuniform_complete_coefficients(deltas, boundary=None, up_or_down=None,
 
         else:
             u = downwind_from
+            assert u-2 >= 0
 
             U1[m-2, :u+2] = 0
             U1[m-2, u+2:] = 0
@@ -356,6 +357,7 @@ def nonuniform_complete_coefficients(deltas, boundary=None, up_or_down=None,
                              " (upwind_from == %i > len(d)-1 (%i))" % (upwind_from, len(d)-1))
 
         u = upwind_from
+        assert u+2 < U1.shape[1]
 
         U1[m-2, :u+2]  = 0
         U1[m-2,  u+2:] = F1.data[f-2,u+2:]

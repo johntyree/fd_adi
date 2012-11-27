@@ -171,7 +171,7 @@ schemes = {(1,) : ({"scheme": "center"}, {"scheme": "backward", "from" : flip_id
 
 
 utils.tic("Building FD Engine")
-F = FD.FiniteDifferenceEngineADI(G, coefficients=coeffs, boundaries=bounds, schemes=schemes, force_bandwidth=5)
+F = FD.FiniteDifferenceEngineADI(G, coefficients=coeffs, boundaries=bounds, schemes=schemes, force_bandwidth=(-2, 2))
 utils.toc()
 
 L1_ = []
@@ -191,10 +191,10 @@ for j, v in enumerate(vars):
     As, Ass = As_.copy(), Ass_.copy()
     m = 2
 
-    # mu_s = H.interest_rate.value * spots
-    mu_s = mu_sfunc(0, spots, v)
-    gamma2_s = gamma2_sfunc(0, spots, v)
-    # gamma2_s = 0.5 * v * spots ** 2
+    mu_s = H.interest_rate.value * spots
+    # mu_s = mu_sfunc(0, spots, v)
+    # gamma2_s = gamma2_sfunc(0, spots, v)
+    gamma2_s = 0.5 * v * spots ** 2
     for i, z in enumerate(mu_s):
         # print z, coeffs[0,](0, spots[i])
         assert z == coeffs[0,](0, spots[i])
@@ -485,6 +485,9 @@ assert np.array(R2).shape == np.array(R2_).shape
 assert (np.array(R1) == np.array(R1_)).all()
 assert (np.array(R2) == np.array(R2_)).all()
 
+print "OK"
+
+sys.exit()
 Vs = impl(V_init, L1, R1, L2, R2,
           H.dt, int(H.tenor / H.dt), crumbs=[V_init]
           # , callback=lambda v, H.tenor: force_boundary(v, hs)

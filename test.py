@@ -18,104 +18,6 @@ from heston import HestonOption
 from Option import BlackScholesOption
 
 
-def nonuniform_forward_coefficients(deltas):
-    """
-    The coefficients for tridiagonal matrices operating on a non-uniform grid.
-
-    L = spl.dia_matrix((fst, (2,1,0)), shape=(fst.shape[1], fst.shape[1]))
-    """
-    d = deltas.copy()
-    fst = np.zeros((3,len(d)))
-    snd = fst.copy()
-    for i in range(1,len(d)-2):
-        fst[0,i]   = (-2*d[i+1]-d[i+2]) / (d[i+1]*(d[i+1]+d[i+2]))
-        fst[1,i+1] = (d[i+1] + d[i+2])  /         (d[i+1]*d[i+2])
-        fst[2,i+2] = -d[i+1]           / (d[i+2]*(d[i+1]+d[i+2]))
-
-        denom = (0.5*(d[i+2]+d[i+1])*d[i+2]*d[i+1]);
-        snd[0,i]   =   d[i+2]         / denom
-        snd[1,i+1] = -(d[i+2]+d[i+1]) / denom
-        snd[2,i+2] =   d[i+1]         / denom
-
-    # Use first order approximation for the last (inner) row
-    fst[0, -2] = -1 / d[-1]
-    fst[1, -1] =  1 / d[-1]
-
-
-    L1 = scipy.sparse.dia_matrix((fst.copy(), (0, 1, 2)), shape=(len(d),len(d)))
-    L2 = scipy.sparse.dia_matrix((snd.copy(), (0, 1, 2)), shape=(len(d),len(d)))
-    return L1,L2
-
-
-def nonuniform_center_coefficients(deltas):
-    """
-    The coefficients for tridiagonal matrices operating on a non-uniform grid.
-
-    L = spl.dia_matrix((fst, (1,0,-1)), shape=(fst.shape[1], fst.shape[1]))
-    """
-    d = deltas.copy()
-    fst = np.zeros((3,len(d)))
-    snd = fst.copy()
-    for i in range(1,len(d)-1):
-        fst[0,i-1] =         -d[i+1]  / (d[i  ]*(d[i]+d[i+1]))
-        fst[1,i]   = (-d[i] + d[i+1]) /         (d[i]*d[i+1])
-        fst[2,i+1] =            d[i]  / (d[i+1]*(d[i]+d[i+1]))
-
-        snd[0,i-1] = 2  / (d[i  ]*(d[i]+d[i+1]))
-        snd[1,i]   = -2 /       (d[i]*d[i+1])
-        snd[2,i+1] = 2  / (d[i+1]*(d[i]+d[i+1]))
-    L1 = scipy.sparse.dia_matrix((fst.copy(), (-1, 0, 1)), shape=(len(d),len(d)))
-    L2 = scipy.sparse.dia_matrix((snd.copy(), (-1, 0, 1)), shape=(len(d),len(d)))
-    return L1, L2
-
-
-def nonuniform_backward_coefficients(deltas):
-    """
-    The coefficients for tridiagonal matrices operating on a non-uniform grid.
-
-    L = spl.dia_matrix((fst, (0,-1,-2)), shape=(fst.shape[1], fst.shape[1]))
-    """
-    d = deltas.copy()
-    fst = np.zeros((3,len(d)))
-    snd = fst.copy()
-    for i in range(2,len(d)-1):
-        fst[0, i-2] = d[i]             / (d[i-1]*(d[i-1]+d[i]));
-        fst[1, i-1] = (-d[i-1] - d[i]) / (d[i-1]*d[i]);
-        fst[2, i]   = (d[i-1]+2*d[i])  / (d[i]*(d[i-1]+d[i]));
-
-        denom = (0.5*(d[i]+d[i-1])*d[i]*d[i-1]);
-        snd[0, i-2] = d[i] / denom;
-        snd[1, i-1] = -(d[i]+d[i-1]) / denom;
-        snd[2, i]   = d[i-1] / denom;
-
-
-    L1 = scipy.sparse.dia_matrix((fst.copy(), (-2, -1, 0)), shape=(len(d),len(d)))
-    L2 = scipy.sparse.dia_matrix((snd.copy(), (-2, -1, 0)), shape=(len(d),len(d)))
-    return L1,L2
-    return fst, snd
-
-
-def splice_diamatrix(top, bottom, idx=0):
-    newoffsets = sorted(set(top.offsets).union(set(bottom.offsets)))
-    newdata = np.zeros((len(newoffsets), top.shape[1]))
-
-    # Copy the top part
-    for torow, o in enumerate(newoffsets):
-        if idx + o < 0:
-            raise ValueError,("You are using forward or backward derivatives "
-                              "too close to the edge of the vector. "
-                              "(idx = %i, row offset = %i)" % (idx, o))
-        if o in top.offsets:
-            fromrow = bisect_left(top.offsets, o)
-            newdata[torow,:idx+o] = top.data[fromrow, :idx+o]
-        if o in bottom.offsets:
-            fromrow = bisect_left(bottom.offsets, o)
-            newdata[torow,idx+o:] = bottom.data[fromrow, idx+o:]
-
-    newShape = (newdata.shape[1], newdata.shape[1])
-    newOp = scipy.sparse.dia_matrix((newdata, newoffsets), shape=newShape)
-    return newOp
-
 
 
 class BlackScholesOption_test(unittest.TestCase):
@@ -192,27 +94,31 @@ class BlackScholesOption_test(unittest.TestCase):
         assert np.isclose(V, ans, rtol=0.001)
 
 
-
 class FiniteDifferenceEngineADI_test(unittest.TestCase):
 
     def setUp(self):
-        s1_enable = 0
-        s2_enable = 0
-        v1_enable = 0
-        v2_enable = 0
+        s1_enable = 1
+        s2_enable = 1
+        v1_enable = 1
+        v2_enable = 1
+        r_enable = 1
         kappa = 1
-        r = 0.0
+        r = 0.06
         theta = 0.04
         sigma = 0.4
         spot_max = 1500.0
         var_max = 13.0
-        nspots = 6
-        nvols = 5
+        nspots = 5
+        nvols = 4
         spotdensity = 7.0  # infinity is linear?
         varexp = 4
 
-        up_or_down_spot = 'up'
-        up_or_down_var = 'down'
+        #TODO:!!!!XXX TODO XXX
+        var_max = nvols-1
+        spot_max = nspots-1
+
+        up_or_down_spot = ''
+        up_or_down_var = ''
         flip_idx_spot = 1
         flip_idx_var = 1
         k = spot_max / 4.0
@@ -220,6 +126,36 @@ class FiniteDifferenceEngineADI_test(unittest.TestCase):
         vars = np.linspace(0, var_max, nvols)
         # spots = utils.sinh_space(k, spot_max, spotdensity, nspots)
         # vars = utils.exponential_space(0.00, 0.04, var_max, varexp, nvols)
+        def mu_s(t, *dim): return r * dim[0] * s1_enable
+        def gamma2_s(t, *dim): return 0.5 * dim[1] * dim[0]**2 * s2_enable
+
+        def mu_v(t, *dim): return kappa * (theta - dim[1]) * v1_enable
+        def gamma2_v(t, *dim): return 0.5 * sigma**2 * dim[1] * v2_enable
+
+        coeffs = {()   : lambda t: -r * r_enable,
+                  (0,) : mu_s,
+                  (0,0): gamma2_s,
+                  (1,) : mu_v,
+                  (1,1): gamma2_v}
+        bounds = {
+                        # D: U = 0              VN: dU/dS = 1
+                (0,)  : ((0, lambda *args: 0.0), (1, lambda *args: 1.0)),
+                        # D: U = 0              Free boundary
+                (0,0) : ((0, lambda *args: 0.0), (None, lambda *x: None)),
+                        # Free boundary at low variance
+                (1,)  : ((None, lambda *x: None),
+                        # (0.0, lambda t, *dim: 0),
+                        # # D intrinsic value at high variance
+                        (0, lambda t, *dim: np.maximum(0.0, dim[0]-k))),
+                        # # Free boundary
+                (1,1) : ((None, lambda *x: None),
+                        # D intrinsic value at high variance
+                        (0, lambda t, *dim: np.maximum(0.0, dim[0]-k)))
+                }
+
+        schemes = {}
+        schemes[(0,)] = ({"scheme": "center"}, {"scheme": up_or_down_spot, "from" : flip_idx_spot})
+        schemes[(1,)] = ({"scheme": "center"}, {"scheme": up_or_down_var, "from" : flip_idx_var})
 
         dss = np.hstack((np.nan, np.diff(spots)))
         dvs = np.hstack((np.nan, np.diff(vars)))
@@ -238,6 +174,12 @@ class FiniteDifferenceEngineADI_test(unittest.TestCase):
 
             mu_s = r * spots * s1_enable
             gamma2_s = 0.5 * v * spots ** 2 * s2_enable
+            for i, z in enumerate(mu_s):
+                # print z, coeffs[0,](0, spots[i])
+                assert z == coeffs[0,](0, spots[i])
+            for i, z in enumerate(gamma2_s):
+                # print z, coeffs[0,0](0, spots[i], v)
+                assert z == coeffs[0,0](0, spots[i], v)
 
             Rs = np.zeros(nspots)
             Rs[-1] = 1
@@ -266,8 +208,8 @@ class FiniteDifferenceEngineADI_test(unittest.TestCase):
 
             L1_.append(As.copy())
             L1_[j].data += Ass.data
-            L1_[j].data[m, :] -=  0.5 * r
-            # L1_[j].data[m, 0] = -1
+            L1_[j].data[m, :] -=  0.5 * r * r_enable
+            L1_[j].data[m, 0] = -1
 
             R1_.append((Rs + Rss).copy())
             R1_[j][0] = 0
@@ -282,6 +224,10 @@ class FiniteDifferenceEngineADI_test(unittest.TestCase):
         for i, s in enumerate(spots):
             mu_v = kappa * (theta - vars) * v1_enable
             gamma2_v = 0.5 * sigma ** 2 * vars * v2_enable
+            for j, z in enumerate(mu_v):
+                assert z == coeffs[1,](0, 0, vars[j])
+            for j, z in enumerate(gamma2_v):
+                assert z == coeffs[1,1](0, 0, vars[j])
 
             # Be careful not to inplace our operators
             Av, Avv = Av_.copy(), Avv_.copy()
@@ -291,6 +237,11 @@ class FiniteDifferenceEngineADI_test(unittest.TestCase):
             Av.data[m - 2, 2] = -dvs[1] / (dvs[2] * (dvs[1] + dvs[2]))
             Av.data[m - 1, 1] = (dvs[1] + dvs[2]) / (dvs[1] * dvs[2])
             Av.data[m    , 0] = (-2 * dvs[1] - dvs[2]) / (dvs[1] * (dvs[1] + dvs[2]))
+            if i == 0:
+                print Av.todense()
+                print
+                print Av.data
+                print
 
             Av.data[m - 2, 2:] *= mu_v[:-2]
             Av.data[m - 1, 1:] *= mu_v[:-1]
@@ -316,8 +267,8 @@ class FiniteDifferenceEngineADI_test(unittest.TestCase):
 
             L2_.append(Av.copy())
             L2_[i].data += Avv.data
-            L2_[i].data[m, :] -= 0.5 * r
-            # L2_[i].data[m, -1] = -1  # This is to cancel out the previous value so we can
+            L2_[i].data[m, :] -= 0.5 * r * r_enable
+            L2_[i].data[m, -1] = -1  # This is to cancel out the previous value so we can
                                 # set the dirichlet boundary condition using R.
                                 # Then we have U_i + -U_i + R
 
@@ -344,59 +295,28 @@ class FiniteDifferenceEngineADI_test(unittest.TestCase):
         G = Grid.Grid((spots, vars), initializer=lambda x0,x1: np.maximum(x0-k,0))
         # print G
 
-        def mu_s(t, *dim):
-            return r * dim[0] * s1_enable
-
-        def gamma2_s(t, *dim):
-            return 0.5 * dim[1] * dim[0]**2 * s2_enable
-
-        def mu_v(t, *dim):
-            return kappa * (theta - dim[1]) * v1_enable
-
-        def gamma2_v(t, *dim):
-            return 0.5 * sigma**2 * dim[1] * v2_enable
-
-        coeffs = {()   : lambda t: -r,
-                  (0,) : mu_s,
-                  (0,0): gamma2_s,
-                  (1,) : mu_v,
-                  (1,1): gamma2_v}
-        bounds = {
-                        # D: U = 0              VN: dU/dS = 1
-                # (0,)  : ((0, lambda *args: 0.0), (1, lambda *args: 1.0)),
-                        # # D: U = 0              Free boundary
-                # (0,0) : ((0, lambda *args: 0.0), (None, lambda *x: None)),
-                        # # Free boundary at low variance
-                (1,)  : (
-                        (None, lambda *x: None),
-                        # (0.0, lambda t, *dim: 0),
-                        # # D intrinsic value at high variance
-                        (0.0, lambda t, *dim: np.maximum(0.0, dim[0]-k))),
-                        # # Free boundary
-                # (1,1) : ((None, lambda *x: None),
-                        # # D intrinsic value at high variance
-                        # (0.0, lambda t, *dim: np.maximum(0.0, dim[0]-k)))
-                }
-
-        schemes = {}
-        schemes[(0,)] = ({"scheme": "center"}, {"scheme": up_or_down_spot, "from" : flip_idx_spot})
-        schemes[(1,)] = ({"scheme": "center"}, {"scheme": up_or_down_var, "from" : flip_idx_var})
         self.F = FD.FiniteDifferenceEngineADI(G, coefficients=coeffs,
                 boundaries=bounds, schemes=schemes, force_bandwidth=None)
 
 
     def test_combine_dimensional_operators(self):
         oldL1 = self.L1_.copy()
-        high, low = 2, -1
-        m = tuple(oldL1.offsets).index(0)
-        oldL1.data = oldL1.data[m-high:m-low+1]
-        oldL1.offsets = oldL1.offsets[m-high:m-low+1]
+        oldL1 = scipy.sparse.dia_matrix(oldL1.todense())
+        oldL1.data = oldL1.data[::-1]
+        oldL1.offsets = oldL1.offsets[::-1]
+        # high, low = 2, -2
+        # m = tuple(oldL1.offsets).index(0)
+        # oldL1.data = oldL1.data[m-high:m-low+1]
+        # oldL1.offsets = oldL1.offsets[m-high:m-low+1]
 
         oldL2 = self.L2_.copy()
-        high, low = 1, -2
-        m = tuple(oldL2.offsets).index(0)
-        oldL2.data = oldL2.data[m-high:m-low+1]
-        oldL2.offsets = oldL2.offsets[m-high:m-low+1]
+        oldL2 = scipy.sparse.dia_matrix(oldL2.todense())
+        oldL2.data = oldL2.data[::-1]
+        oldL2.offsets = oldL2.offsets[::-1]
+        # high, low = 2, -2
+        # m = tuple(oldL2.offsets).index(0)
+        # oldL2.data = oldL2.data[m-high:m-low+1]
+        # oldL2.offsets = oldL2.offsets[m-high:m-low+1]
 
         oldR1 = self.R1_.T.flatten()
         oldR2 = self.R2_.flatten()
@@ -409,19 +329,23 @@ class FiniteDifferenceEngineADI_test(unittest.TestCase):
         # oldL2.data = oldL2.data[1:]
         # oldL2.offsets = oldL2.offsets[1:]
 
-        # print "offsets"
-        # print oldL1.offsets, L1.offsets
+        print "offsets"
+        print oldL1.offsets, L1.offsets
         # print "old"
         # fp(oldL1.data)
         # print
         # print "new"
         # fp(L1.data)
-        # print "old"
-        # fp(oldL1.todense())
         # print
-        # print "new"
-        # fp(L1.todense())
+        # print "diff"
+        # fp(L1.data - oldL1.data)
         # print
+        print "old"
+        fp(oldL1.todense())
+        print
+        print "new"
+        fp(L1.todense())
+        print
         # print "diff"
         # fp(oldL1.todense() - L1.todense())
         assert (L1.todense() == oldL1.todense()).all()
@@ -454,6 +378,7 @@ class FiniteDifferenceEngineADI_test(unittest.TestCase):
         # print "diff"
         # fp(L2.R - oldR2)
         assert (L2.R == oldR2).all()
+
 
     def test_cross_derivative(self):
         target = np.array([
@@ -515,7 +440,7 @@ class BandedOperator_test(unittest.TestCase):
 
     def setUp(self):
         k = 3.0
-        nspots = 8
+        nspots = 7
         spot_max = 1500.0
         spotdensity = 7.0  # infinity is linear?
         spots = utils.sinh_space(k, spot_max, spotdensity, nspots)
@@ -565,8 +490,8 @@ class BandedOperator_test(unittest.TestCase):
         vec = self.vec
         idx = self.flip_idx
         d = np.hstack((np.nan, np.diff(vec)))
-        B2 = FD.BandedOperator.for_vector(vec, scheme='backward', derivative=2, order=2, force_bandwidth=5)
-        C2 = FD.BandedOperator.for_vector(vec, scheme='center', derivative=2, order=2, force_bandwidth=5)
+        B2 = FD.BandedOperator.for_vector(vec, scheme='backward', derivative=2, order=2, force_bandwidth=(-2,2))
+        C2 = FD.BandedOperator.for_vector(vec, scheme='center', derivative=2, order=2, force_bandwidth=(-2,2))
         oldCB2 = np.zeros((len(set(B2.offsets) | set(C2.offsets)), C2.shape[1]))
         oldCB2[1:,:] += B2.data[1:, :]
         oldCB2[1:4,:] += C2.data[1:4, :]
@@ -589,7 +514,7 @@ class BandedOperator_test(unittest.TestCase):
         vec = self.vec
         idx = self.flip_idx
         d = np.hstack((np.nan, np.diff(vec)))
-        B2 = FD.BandedOperator.for_vector(vec, scheme='backward', derivative=2, order=2, force_bandwidth=5)
+        B2 = FD.BandedOperator.for_vector(vec, scheme='backward', derivative=2, order=2, force_bandwidth=(-2,2))
         B2.R += 1
         BB2 = B2
         assert (B2 is not B2 * 1)
@@ -623,9 +548,9 @@ class BandedOperator_test(unittest.TestCase):
         vec = self.vec
         idx = self.flip_idx
         d = np.hstack((np.nan, np.diff(vec)))
-        B2 = FD.BandedOperator.for_vector(vec, scheme='backward', derivative=2, order=2, force_bandwidth=5)
+        B2 = FD.BandedOperator.for_vector(vec, scheme='backward', derivative=2, order=2, force_bandwidth=(-2,2))
         assert B2 == B2
-        C2 = FD.BandedOperator.for_vector(vec, scheme='center', derivative=2, order=2, force_bandwidth=5)
+        C2 = FD.BandedOperator.for_vector(vec, scheme='center', derivative=2, order=2, force_bandwidth=(-2,2))
         assert C2 != B2
 
 
@@ -633,7 +558,7 @@ class BandedOperator_test(unittest.TestCase):
         vec = self.vec
         idx = self.flip_idx
         d = np.hstack((np.nan, np.diff(vec)))
-        B2 = FD.BandedOperator.for_vector(vec, scheme='backward', derivative=2, order=2, force_bandwidth=5)
+        B2 = FD.BandedOperator.for_vector(vec, scheme='backward', derivative=2, order=2, force_bandwidth=(-2,2))
         origB2 = B2.copy()
         oldB2 = B2.copy()
 
@@ -650,7 +575,7 @@ class BandedOperator_test(unittest.TestCase):
         vec = self.vec
         idx = self.flip_idx
         d = np.hstack((np.nan, np.diff(vec)))
-        B2 = FD.BandedOperator.for_vector(vec, scheme='backward', derivative=2, order=2, force_bandwidth=5)
+        B2 = FD.BandedOperator.for_vector(vec, scheme='backward', derivative=2, order=2, force_bandwidth=(-2,2))
         origB2 = B2.copy()
         oldB2 = B2.copy()
 
@@ -762,7 +687,7 @@ class BandedOperator_test(unittest.TestCase):
         vec = self.vec
         idx = self.flip_idx
         d = np.hstack((np.nan, np.diff(vec)))
-        C1 = FD.BandedOperator.for_vector(vec, scheme='center', derivative=1, order=2, force_bandwidth=5)
+        C1 = FD.BandedOperator.for_vector(vec, scheme='center', derivative=1, order=2, force_bandwidth=(-2,2))
         CC1 = C1.copy()
         CCC1 = CC1.copy()
 
@@ -823,8 +748,8 @@ class BandedOperator_test(unittest.TestCase):
         for sch0,sch1 in itertools.product(['center', 'up', 'down'], repeat=2):
             for dv in [1,2]:
                 for idx in range(0, len(vec)-1):
-                    X1 = FD.BandedOperator.for_vector(vec, scheme=sch0, derivative=dv, order=2, force_bandwidth=5)+1
-                    X2 = FD.BandedOperator.for_vector(vec, scheme=sch1, derivative=dv, order=2, force_bandwidth=5)+1
+                    X1 = FD.BandedOperator.for_vector(vec, scheme=sch0, derivative=dv, order=2, force_bandwidth=(-2,2))+1
+                    X2 = FD.BandedOperator.for_vector(vec, scheme=sch1, derivative=dv, order=2, force_bandwidth=(-2,2))+1
                     X12 = X1.splice_with(X2, idx)
                     manualX12 = np.vstack((X1.todense()[:idx, :], X2.todense()[idx:,:]))
                     manualX12 = scipy.sparse.dia_matrix(manualX12)
@@ -863,17 +788,17 @@ class BandedOperator_test(unittest.TestCase):
         last = len(vec)-1
         deltas = np.hstack((np.nan, np.diff(vec)))
 
-        # When bandwidth is the same
+        # When bandwidth is possibly different
         print "Splicing operators of the different width."
         for sch0,sch1 in itertools.product(['center', 'up', 'down'], repeat=2):
             for dv in [1,2]:
                 for idx in range(0, len(vec)-1):
+                    # add identity to avoid empty center
                     X1 = FD.BandedOperator.for_vector(vec, scheme=sch0, derivative=dv, order=2)+1
                     X2 = FD.BandedOperator.for_vector(vec, scheme=sch1, derivative=dv, order=2)+1
                     X12 = X1.splice_with(X2, idx)
                     manualX12 = np.vstack((X1.todense()[:idx, :], X2.todense()[idx:,:]))
                     manualX12 = scipy.sparse.dia_matrix(manualX12)
-                    X12i = X1.splice_with(X2, idx)
 
                     high, low = 1,-1
                     if (sch0 == 'up' and idx > 1) or (sch1 == 'up' and idx < last-1):

@@ -38,8 +38,8 @@ bounds = {
 F = FD.FiniteDifferenceEngineADI(g, boundaries=bounds, coefficients=coeffs)
 
 
-Bs = FD.BandedOperator.for_vector(vec0, derivative=1)
 # B0.D = sps.dia_matrix((np.arange(3*d0).reshape((3,d0)), B0.offsets), shape=B0.shape)
+Bs = FD.BandedOperator.for_vector(vec0, derivative=1)
 Bm1 = FD.BandedOperator.for_vector(vec1, derivative=1)
 Bb1 = Bm1.copy()
 Bp1 = Bm1.copy()

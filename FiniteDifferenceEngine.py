@@ -136,20 +136,68 @@ class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
         Binit = None
         for sd in self.schemes.get(d, ({},)): # a tuple of dicts
             s = sd.get('scheme', self.default_scheme)
+            if not s:
+                s = self.default_scheme
             idx = sd.get('from', 0)
             o = sd.get('order', self.default_order)
             B = BandedOperator.for_vector(self.grid.mesh[dim],
                     scheme=s, derivative=len(d), order=o,
                     force_bandwidth=force_bandwidth)
             if Binit is not None:
+                print "splicing with %s at %i," % (s, idx),
                 # They asked for more than one scheme,
                 # Splice the operators together at row idx
                 # TODO: Not inplace until we figure out how to pre-allocate the
                 # right size
                 Binit = Binit.splice_with(B, idx, inplace=False)
             else:
+                print "%s: Starting with %s," % (d, s),
                 Binit = B
+        print "done."
         return Binit
+
+    def min_possible_bandwidth(self, derivative_tuple):
+        high = low = 0
+        d = len(derivative_tuple)
+        if derivative_tuple not in self.boundaries:
+            self.boundaries[derivative_tuple] = ((None, None), (None, None))
+        b = self.boundaries[derivative_tuple]
+        for sd in self.schemes.get(derivative_tuple, ({},)): # a tuple of dicts
+            print "checking scheme from %s: %s" % (derivative_tuple, sd)
+            s = sd.get('scheme', self.default_scheme)
+            if sd.get('from', 0) == 0: # We're overwritting previous schemes
+                print "Reset!"
+                high = low = 0
+            if s == 'center' or '':
+                print "Center requires -1, 1"
+                high = max(1, high)
+                low = min(-1, low)
+            elif s == 'forward' or s == 'up':
+                print "Forward requires 0, 2"
+                high = max(2, high)
+                low = min(0, low)
+            elif s == 'backward' or s == 'down':
+                print "Backward requires -2, 0"
+                high = max(0, high)
+                low = min(-2, low)
+        if b[0][0] == None:
+            if d == 1:
+                h = 2
+            elif d == 2:
+                h = 1
+            print ("Low free boundary requires forward"
+                    " difference (%i): %i (have %i)" % (d, h, high))
+            high = max(h, high)
+        if b[1][0] == None:
+            if d == 1:
+                l = -2
+            elif d == 2:
+                l = -1
+            print ("High free boundary requires backward"
+                   " difference (%i): %i (have %i)" % (d, l, low))
+            low = min(l, low)
+        return low, high
+
 
     def make_discrete_operators(self):
         ndim = self.grid.ndim
@@ -199,8 +247,23 @@ class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
             Bs = []
 
             # # Make an operator template for this dimension
+            low, high = self.min_possible_bandwidth(d)
+            bw = force_bandwidth
+            # print "Minimum bandwidth for %s: %s" % (d, (low, high))
+            if bw is not None:
+                if (bw[0] > low or bw[1] < high):
+                    raise ValueError("Your chosen scheme is too wide for the"
+                            " specified bandwidth. (%s needs %s)" %
+                            (bw, (low, high)))
+                low, high = bw
             Binit = self.make_operator_template(d, dim=dim,
-                    force_bandwidth=force_bandwidth)
+                    force_bandwidth=(low, high))
+            # if dim == 1:
+                # print Binit.data
+                # print
+            offs = Binit.offsets
+            assert max(offs) >= high, "(%s < %s)" % (max(offs), high)
+            assert min(offs) <= low,  "(%s > %s)" % (min(offs), low)
             # Binit = None
             # for sd in self.schemes.get(d, ({},)): # a tuple of dicts
                 # s = sd.get('scheme', self.default_scheme)
@@ -328,7 +391,7 @@ class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
                         # print "(%i, %i)" % (row, i-abs(o)), "Block", i, i-abs(o), "*", Bs.data[row, i-abs(o)]
                         data[row][i-abs(o)] *= Bs.data[row, i-abs(o)]
                         # print data[row][i-abs(o)].data
-                print
+                # print
 
             # We flatten here because it's faster
             BP = flatten_tensor(Bps)
@@ -354,6 +417,9 @@ class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
         # Flatten into one large operator for speed
         # We'll apply this to a flattened domain and then reshape it.
         for d in range(ndim):
+            # if d == 1:
+                # for x in self.operators[d]:
+                    # print x.data
             self.operators[d] = flatten_tensor(self.operators[d])
         return
 
@@ -436,6 +502,8 @@ def replicate(n, x):
 
 
 class BandedOperator(object):
+
+    glb = None
 
     def __init__(self, data_offsets, residual=None, inplace=True):
         """
@@ -545,12 +613,24 @@ class BandedOperator(object):
         elif lower_type is None and derivative == 1:
             # Free boundary
             # Second order forward approximation
+            # XXX: This is dangerous! We can't do it if data is not wide enough
+            assert m-2 >= 0, ("Not wide enough."
+                    "\nB.data.shape = %s"
+                    "\nB.derivative = %s"
+                    "\nB.offsets = %s"
+                    "\nm = %s"
+                    "\nboundary = %s"
+                    ) % (B.data.shape, B.derivative, B.offsets, m, boundary)
             B.data[m - 2, 2] = -d[1] / (d[2] * (d[1] + d[2]))
             B.data[m - 1, 1] = (d[1] + d[2]) / (d[1] * d[2])
             B.data[m,     0] = (-2 * d[1] - d[2]) / (d[1] * (d[1] + d[2]))
+            # B.data[m, 0] = -1.0 / d[1]
+            # B.data[m - 1, 1] = 1.0 / d[1]
+            # print B.data
         elif lower_type is None and derivative == 2:
             # Extrapolate second derivative by assuming the first stays
             # constant.
+            assert m-1 >= 0
             B.data[m-1, 1] =  2 / d[1]**2
             B.data[m,   0] = -2 / d[1]**2
             B.R[0]         =  2 / d[1]
@@ -567,14 +647,20 @@ class BandedOperator(object):
             B.R[-1] = upper_val
         elif upper_type is None and derivative == 1:
             # Second order backward approximation
+            assert m+2 < B.data.shape[0]
+            # XXX: This is dangerous! We can't do it if data is not wide enough
             B.data[m  , -1] = (d[-2]+2*d[-1])  / (d[-1]*(d[-2]+d[-1]))
             B.data[m+1, -2] = (-d[-2] - d[-1]) / (d[-2]*d[-1])
             B.data[m+2, -3] = d[-1]             / (d[-2]*(d[-2]+d[-1]))
+            # First order backward
+            # B.data[m, -1] = 1.0 / d[-1]
+            # B.data[m + 1, -2] = -1.0 / d[-1]
         elif upper_type is None and derivative == 2:
             if B.R is None:
                 B.R = np.zeros(B.data.shape[1])
             # Extrapolate second derivative by assuming the first stays
             # constant.
+            assert m+1 < B.data.shape[0]
             B.data[m+1, -2] =  2 / d[-1]**2
             B.data[m,   -1] = -2 / d[-1]**2
             B.R[-1]         =  2 / d[-1]
@@ -634,18 +720,15 @@ class BandedOperator(object):
     @classmethod
     def forwardcoeffs(cls, deltas, derivative=1, order=2, force_bandwidth=None):
         d = deltas
-        if force_bandwidth is not None:
-            # print "force bandwidth:", force_bandwidth
-            force_bandwidth = int(abs(force_bandwidth))
-            assert force_bandwidth % 2
 
         cls.check_derivative(derivative)
         cls.check_order(order)
 
-        bw = force_bandwidth
         if derivative == 1:
-            if bw is not None:
-                offsets = range(bw/2, -bw/2, -1)
+            if force_bandwidth is not None:
+                l, u = [int(o) for o in force_bandwidth]
+                print "High and low", u, l
+                offsets = range(u, l-1, -1)
             else:
                 if order == 2:
                     offsets = [2, 1,0,-1]
@@ -653,18 +736,30 @@ class BandedOperator(object):
                     raise NotImplementedError
             data = np.zeros((len(offsets),len(d)))
             m = offsets.index(0)
+            print "OFFSETS from forward 1:", m, offsets
+            assert m-2 >= 0
+            assert m < data.shape[0]
             for i in range(1,len(d)-2):
                 data[m-1,i+1] = (d[i+1] + d[i+2])  /         (d[i+1]*d[i+2])
                 data[m-2,i+2] = -d[i+1]            / (d[i+2]*(d[i+1]+d[i+2]))
                 data[m,i]     = (-2*d[i+1]-d[i+2]) / (d[i+1]*(d[i+1]+d[i+2]))
+                # data[m-1,i+1] = i
+                # data[m-2,i+2] = i
+                # data[m,i]     = i
             # Use centered approximation for the last (inner) row.
             data[m-1,-1] =           d[-2]  / (d[-1]*(d[-2]+d[-1]))
             data[m,  -2] = (-d[-2] + d[-1]) /        (d[-2]*d[-1])
             data[m+1,-3] =          -d[-1]  / (d[-2]*(d[-2]+d[-1]))
 
+            # print "DATA from forward"
+            # print data
+            # print
+
         elif derivative == 2:
-            if bw is not None:
-                offsets = range(bw//2, -bw//2, -1)
+            if force_bandwidth is not None:
+                l, u = [int(o) for o in force_bandwidth]
+                offsets = range(u, l-1, -1)
+                print "High and low", u, l
             else:
                 if order == 2:
                     offsets = [2, 1, 0,-1]
@@ -672,6 +767,7 @@ class BandedOperator(object):
                     raise NotImplementedError
             data = np.zeros((len(offsets),len(d)))
             m = offsets.index(0)
+            print "OFFSETS from forward 2:", m, offsets
             for i in range(1,len(d)-2):
                 denom = (0.5*(d[i+2]+d[i+1])*d[i+2]*d[i+1]);
                 data[m-2,i+2] =   d[i+1]         / denom
@@ -690,39 +786,43 @@ class BandedOperator(object):
     def centercoeffs(cls, deltas, derivative=1, order=2, force_bandwidth=None):
         """Centered differencing coefficients."""
         d = deltas
-        if force_bandwidth is not None:
-            # print "force bandwidth:", force_bandwidth
-            force_bandwidth = int(abs(force_bandwidth))
-            assert force_bandwidth % 2
 
         cls.check_derivative(derivative)
         cls.check_order(order)
 
-        bw = force_bandwidth
         if derivative == 1:
-            if bw is not None:
-                offsets = range(bw/2, -bw/2, -1)
+            if force_bandwidth is not None:
+                l, u = [int(o) for o in force_bandwidth]
+                print "High and low", u, l
+                offsets = range(u, l-1, -1)
             else:
                 if order == 2:
+                    # TODO: Be careful here, why is this 10-1?
                     offsets = [1,0,-1]
                 else:
                     raise NotImplementedError
             data = np.zeros((len(offsets),len(d)))
             m = offsets.index(0)
+            print "OFFSETS from center 1:", m, offsets
+            assert m-1 >= 0
+            assert m+1 < data.shape[0]
             for i in range(1,len(d)-1):
                 data[m-1,i+1] =            d[i]  / (d[i+1]*(d[i]+d[i+1]))
                 data[m  ,i  ] = (-d[i] + d[i+1]) /         (d[i]*d[i+1])
                 data[m+1,i-1] =         -d[i+1]  / (d[i  ]*(d[i]+d[i+1]))
         elif derivative == 2:
-            if bw is not None:
-                offsets = range(bw//2, -bw//2, -1)
+            if force_bandwidth is not None:
+                l, u = [int(o) for o in force_bandwidth]
+                offsets = range(u, l-1, -1)
             else:
                 if order == 2:
+                    # TODO: Be careful here, why is this 10-1?
                     offsets = [1,0,-1]
                 else:
                     raise NotImplementedError
             data = np.zeros((len(offsets),len(d)))
             m = offsets.index(0)
+            print "OFFSETS from center 2:", m, offsets
             # Inner rows
             for i in range(1,len(d)-1):
                 data[m-1,i+1] =  2 / (d[i+1]*(d[i]+d[i+1]))
@@ -737,18 +837,14 @@ class BandedOperator(object):
     @classmethod
     def backwardcoeffs(cls, deltas, derivative=1, order=2, force_bandwidth=None):
         d = deltas
-        if force_bandwidth is not None:
-            # print "force bandwidth:", force_bandwidth
-            force_bandwidth = int(abs(force_bandwidth))
-            assert force_bandwidth % 2
 
         cls.check_derivative(derivative)
         cls.check_order(order)
 
-        bw = force_bandwidth
         if derivative == 1:
-            if bw is not None:
-                offsets = range(bw/2, -bw/2, -1)
+            if force_bandwidth is not None:
+                l, u = [int(o) for o in force_bandwidth]
+                offsets = range(u, l-1, -1)
             else:
                 if order == 2:
                     offsets = [1,0,-1,-2]
@@ -765,8 +861,9 @@ class BandedOperator(object):
             data[m,  1] = (-d[1] + d[2]) /       (d[1]*d[2])
             data[m+1,0] =         -d[2]  / (d[1]*(d[1]+d[2]))
         elif derivative == 2:
-            if bw is not None:
-                offsets = range(bw//2, -bw//2, -1)
+            if force_bandwidth is not None:
+                l, u = [int(o) for o in force_bandwidth]
+                offsets = range(u, l-1, -1)
             else:
                 if order == 2:
                     offsets = [1,0,-1,-2]
@@ -1034,7 +1131,7 @@ class BandedOperator(object):
                     # print "(%i, %i)" % (row, i-abs(o)), "Block", i, i-abs(o), "*", Bs.data[row, i-abs(o)]
                     data[row][i-abs(o)] *= Bs.data[row, i-abs(o)]
                     # print data[row][i-abs(o)].data
-            print
+            # print
 
 
 def flatten_tensor(mats):
