@@ -114,6 +114,7 @@ class FiniteDifferenceEngine(object):
 
         # Setup
         self.operators = {}
+        self.simple_operators = {}
 
 
     def solve(self):
@@ -130,7 +131,7 @@ class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
                 boundaries=boundaries, schemes=schemes, force_bandwidth=force_bandwidth)
         self.make_discrete_operators()
 
-    def make_operator_template(self, d, dim=None, force_bandwidth=None):
+    def make_operator_template(self, d, dim, force_bandwidth=None):
         # Make an operator template for this dimension
         Binit = None
         for sd in self.schemes.get(d, ({},)): # a tuple of dicts
@@ -141,7 +142,7 @@ class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
             o = sd.get('order', self.default_order)
             B = BandedOperator.for_vector(self.grid.mesh[dim],
                     scheme=s, derivative=len(d), order=o,
-                    force_bandwidth=force_bandwidth)
+                    force_bandwidth=force_bandwidth, axis=dim)
             if Binit is not None:
                 if idx >= B.D.shape[0]-1:
                     raise ValueError("Cannot splice beyond the end of the "
@@ -163,8 +164,9 @@ class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
         high = low = 0
         d = len(derivative_tuple)
         if derivative_tuple not in self.boundaries:
-            self.boundaries[derivative_tuple] = ((None, None), (None, None))
-        b = self.boundaries[derivative_tuple]
+            b = ((None, None), (None, None))
+        else:
+            b = self.boundaries[derivative_tuple]
         for sd in self.schemes.get(derivative_tuple, ({},)): # a tuple of dicts
             # print "checking scheme from %s: %s" % (derivative_tuple, sd)
             s = sd.get('scheme', self.default_scheme)
@@ -252,8 +254,6 @@ class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
                 continue
 
             dim = d[0]
-            otherdims = range(ndim)
-            otherdims.remove(dim)
             Bs = []
 
             # # Make an operator template for this dimension
@@ -266,8 +266,9 @@ class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
                             " specified bandwidth. (%s needs %s)" %
                             (bw, (low, high)))
                 low, high = bw
-            Binit = self.make_operator_template(d, dim=dim,
+            Binit = self.make_operator_template(d, dim,
                     force_bandwidth=(low, high))
+            assert Binit.axis == dim, "Binit.axis %s, dim %s" % (Binit.axis, dim)
             # if dim == 1:
                 # print Binit.data
                 # print
@@ -276,12 +277,15 @@ class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
             assert min(offs) <= low,  "(%s > %s)" % (min(offs), low)
 
             # Take cartesian product of other dimension values
+            otherdims = range(ndim)
+            otherdims.remove(dim)
             argset = itertools.product(*(self.grid.mesh[i] for i in otherdims))
             # Pair our current dimension with all combinations of the other
             # dimension values
             for a in argset:
                 # Make a new operator from our template
                 B = Binit.copy()
+                assert Binit.axis == dim, "Binit.axis %s, dim %s" % (Binit.axis, dim)
 
                 # Adjust the boundary conditions as necessary
                 if d in bounds:
@@ -290,6 +294,7 @@ class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
                     highfunc = wrapscalarfunc(b[1][1], a, dim)
                     b = ((b[0][0], lowfunc(0)), (b[1][0], highfunc(-1)))
                     B.applyboundary(b)
+                    assert Binit.axis == dim, "Binit.axis %s, dim %s" % (Binit.axis, dim)
                     # If it's a dirichlet boundary we mark it because we have to
                     # handle it absolutely last, it doesn't get scaled.
                     lf = hf = None
@@ -308,6 +313,10 @@ class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
                 if d in coeffs:
                     B.vectorized_scale(evalvectorfunc(coeffs[d], a, dim))
                 Bs.append(B)
+                for b in Bs:
+                    assert b.axis == dim, "b.axis %s, dim %s" % (b.axis, dim)
+            self.simple_operators[d] = flatten_tensor_aligned(Bs)
+
 
             # Combine scaled derivatives for this dimension
             if dim not in self.operators:
@@ -315,9 +324,11 @@ class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
             else:
                 ops = self.operators[dim] # list reference
                 for col, b in enumerate(Bs):
+                    assert b.axis == dim
                     if tuple(ops[col].offsets) == tuple(b.offsets):
                         ops[col] += b
                     else:
+                        # print col, dim, ops[col].axis, b.axis
                         ops[col] = ops[col] + b
 
         # Now the 0th derivative (x * V)
@@ -350,8 +361,10 @@ class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
             # now at the meta-operator level.
             # Bs = self.make_operator_template(d, dim=d[0])
             # Bm1 = self.make_operator_template(d, dim=d[1])
-            Bs = BandedOperator.for_vector(self.grid.mesh[0], derivative=1)
-            Bm1 = BandedOperator.for_vector(self.grid.mesh[1], derivative=1)
+            # TODO: We'll need to do complicated transposing for this in the
+            # general case
+            Bs = BandedOperator.for_vector(self.grid.mesh[0], derivative=1, axis=0)
+            Bm1 = BandedOperator.for_vector(self.grid.mesh[1], derivative=1, axis=1)
             Bb1 = Bm1.copy()
             Bp1 = Bm1.copy()
 
@@ -426,25 +439,16 @@ class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
             V = self.grid.domain.copy()
             crumbs.append(V)
 
-        ops = []
-        mixed = None
-        for d, op in self.operators.items():
-            if not isinstance(d, tuple):
-                ops.append(op)
-            else:
-                if mixed:
-                    mixed += op
-                else:
-                    mixed = op
-        if mixed is not None:
-            mixed *= dt
 
-        ordered_ops = sorted(ops)
-        Ls = np.roll([(op * -dt).add(1, inplace=True) for op in ordered_ops], -1)
+        Lis = [(o * -dt).add(1, inplace=True)
+               for d, o in sorted(self.operators.iteritems())
+               if type(d) != tuple]
+
+        Lis = np.roll(Lis, -1)
 
         print_step = max(1, int(n / 10))
         to_percent = 100.0 / n
-        utils.tic("Impl:")
+        utils.tic("solve_implicit:\t")
         for k in xrange(n):
             if not k % print_step:
                 if np.isnan(V).any():
@@ -453,12 +457,11 @@ class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
                 print int(k * to_percent),
             if callback is not None:
                 callback(V, ((n - k) * dt))
-            if mixed is not None:
-                V += mixed.apply(V)
-            for L in Ls:
-                V = L.solve(V).T
+            # V += self.cross_term(V) * dt
+            for L in Lis:
+                V = L.solve(V)
         crumbs.append(V.copy())
-        utils.toc()
+        utils.toc(':  \t')
         return crumbs
 
 
@@ -471,83 +474,115 @@ class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
         else:
             V = self.grid.domain.copy()
             crumbs.append(V)
-        dt *= 0.5
         crumbs.append(V)
 
-        L1e, L2e = self.operators[0], self.operators[1]
-        L1i, L2i = self.operators[0], self.operators[1]
+        L1e, L2e = self.operators[0].copy(), self.operators[1].copy()
+        L1i, L2i = self.operators[0].copy(), self.operators[1].copy()
 
-        L1i = (L1i * (-theta*dt)).add(1, inplace=True)
-        L2i = (L2i * (-theta*dt)).add(1, inplace=True)
-        L1i.R = L2i.R = 0
+        # Le = L2e + self.operators[(0,1)] + 1
+        Le = L2e.copy()
+        LTe = L1e.copy()
 
-        L12 = self.operators[(0,1)]
+        L1e *= theta * dt
+        L2e *= theta * dt
+        L1e.R = L2e.R = None
+
+        L1i *= -theta*dt
+        L1i += 1
+        L2i *= -theta*dt
+        L2i += 1
+        L1i.R = L2i.R = None
 
         print_step = max(1, int(n / 10))
         to_percent = 100.0 / n
-        utils.tic("Douglas:")
+        utils.tic("Douglas:\t")
         for k in xrange(n):
             if not k % print_step:
                 if np.isnan(V).any():
-                    print "Crank fail @ t = %f (%i steps)" % (dt * k, k)
+                    print "Douglass fail @ t = %f (%i steps)" % (dt * k, k)
                     return crumbs
                 print int(k * to_percent),
             if callback is not None:
                 callback(V, ((n - k) * dt))
 
-            Vsv = L12.apply(V)
 
-            # V1 = (L1e.dot(V.T.flat).reshape(transposed_shape)).T
-            # V2 = (L2e.dot(V.flat).reshape(normal_shape))
-            V1 = L1e.apply(V)
-            V2 = L2e.apply(V)
+            V1 = LTe.apply(V)
+            V2 = Le.apply(V)
+            Vsv = self.cross_term(V) * dt
+
             Y0 = V + dt*(Vsv + V1 + V2)
 
-            V1 = Y0 - theta * dt * L1e.apply(V.T)
-            Y1 = L1i.solve(V1.T)
+            V1 = Y0 - L1e.apply(V)
+            Y1 = L1i.solve(V1)
 
-            V2 = Y1 - theta * dt * L2e.apply(V.flat)
+            V2 = Y1 - L2e.apply(V)
             Y2 = L2i.solve(V2)
             V = Y2
 
             crumbs.append(V.copy())
-        utils.toc()
+        utils.toc(':  \t')
+        return crumbs
+
+
+    def cross_term(self, V, numpy=True):
+        if (0,1) in self.coefficients:
+            if numpy:
+                x = self.grid.mesh[0]
+                y = self.grid.mesh[1]
+                dx = np.gradient(x)[:,np.newaxis]
+                dy = np.gradient(y)
+                Y, X = np.meshgrid(y, x)
+                gradgrid = self.coefficients[(0,1)](0, X, Y) / (dx * dy)
+                gradgrid[:,0] = 0; gradgrid[:,-1] = 0
+                gradgrid[0,:] = 0; gradgrid[-1,:] = 0
+                ret = np.gradient(np.gradient(V)[0])[1] * gradgrid
+            else:
+                ret = self.operators[(0,1)].apply(V)
+        else:
+            ret = 0
+        return ret
 
 
     def solve_adi(self, n, dt, crumbs=[], callback=None):
+        theta = 0.5
         n = int(n)
         if crumbs:
             V = crumbs[-1]
         else:
             V = self.grid.domain.copy()
             crumbs.append(V)
-        dt *= 0.5
         crumbs.append(V)
 
-        ordered_ops = sorted(self.operators.items())
+        Les = [(o * ((1-theta)*dt)).add(1, inplace=True)
+               for d, o in sorted(self.operators.iteritems())
+               if type(d) != tuple]
+        Lis = [(o * (-theta*dt)).add(1, inplace=True)
+               for d, o in sorted(self.operators.iteritems())
+               if type(d) != tuple]
+
         # Have to roll the first one because of the scheme
         # TODO: What the hell does that mean? Explain it.
-        Les = np.roll([(op *  dt).add(1, inplace=True) for d, op in ordered_ops], -1)
-        Lis = ((op * -dt).add(1, inplace=True) for d, op in ordered_ops)
-        Ls = zip(Les, Lis)
+        Les = np.roll(Les, -1)
 
+        Leis = zip(Les, Lis)
 
         print_step = max(1, int(n / 10))
         to_percent = 100.0 / n
-        utils.tic("Crank:")
+        utils.tic("solve_adi:\t")
         for k in xrange(n):
             if not k % print_step:
                 if np.isnan(V).any():
-                    print "Crank fail @ t = %f (%i steps)" % (dt * k, k)
+                    print "solve_adi fail @ t = %f (%i steps)" % (dt * k, k)
                     return crumbs
                 print int(k * to_percent),
             if callback is not None:
                 callback(V, ((n - k) * dt))
-            for Le, Li in Ls:
+            V += self.cross_term(V) * dt
+            for Le, Li in Leis:
                 V = Le.apply(V).T
                 V = Li.solve(V)
             crumbs.append(V.copy())
-        utils.toc()
+        utils.toc(':  \t')
         return crumbs
 
 
@@ -565,8 +600,10 @@ def replicate(n, x):
 
 class BandedOperator(object):
 
+    attrs = ('derivative', 'order', 'axis', 'deltas', 'is_dirichlet')
 
-    def __init__(self, data_offsets, residual=None, inplace=True):
+    def __init__(self, data_offsets, residual=None, inplace=True,
+            derivative=1, order=2, deltas=None, axis=0):
         """
         A linear operator for discrete derivatives.
         Consist of a banded matrix (B.D) and a residual vector (B.R) for things
@@ -593,14 +630,47 @@ class BandedOperator(object):
         else:
             raise ValueError("Residual vector has wrong shape: got %i,"
                              "expected %i." % (residual.shape[0], size))
-        self.derivative = None
-        self.order = None
-        self.deltas = np.array([np.nan])
+
+        # NB: When adding something here, also add to BandedOperator.attrs
+        self.derivative = derivative
+        self.order = order
+        self.deltas = deltas if deltas is not None else np.array([np.nan])
         self.solve_banded_offsets = (abs(min(offsets)), abs(max(offsets)))
         self.is_dirichlet = [False, False]
+        self.axis = axis
+
+    def copy_meta_data(self, other, **kwargs):
+        for attr in self.attrs:
+            if attr not in kwargs:
+                setattr(self, attr, getattr(other, attr))
+            else:
+                setattr(self, attr, kwargs[attr])
+
+    def __eq__(self, other):
+        no_nan = np.nan_to_num
+        # assert (self.data == other.data).all()
+        # assert (self.offsets == other.offsets).all()
+        # assert (self.shape == other.shape)
+        # assert (no_nan(self.deltas) == no_nan(other.deltas)).all()
+        # assert (self.order == other.order)
+        # assert (self.derivative == other.derivative)
+        # assert (self.R == other.R).all()
+        for attr in self.attrs:
+            if attr == 'deltas':
+                continue
+            if getattr(self, attr) != getattr(other, attr):
+                return False
+
+        return ((self.data == other.data).all()
+                and (self.offsets == other.offsets).all()
+                and (self.R == other.R).all()
+                and (no_nan(self.deltas) == no_nan(other.deltas)).all()
+                and (self.shape == other.shape))
+
 
     @classmethod
-    def for_vector(cls, vector, scheme="center", derivative=1, order=2, residual=None, force_bandwidth=None):
+    def for_vector(cls, vector, scheme="center", derivative=1, order=2,
+            residual=None, force_bandwidth=None, axis=0):
         """
         A linear operator for discrete derivative of @vector@.
 
@@ -623,23 +693,56 @@ class BandedOperator(object):
         else:
             raise ValueError("Unknown scheme: %s" % scheme)
 
-        self = BandedOperator((data, offsets), residual=residual)
+        self = BandedOperator((data, offsets), residual=residual, axis=axis)
         self.derivative = derivative
         self.order = order
         self.deltas = deltas
+        self.axis = axis
         return self
 
     def copy(self):
         B = BandedOperator((self.data, self.offsets), residual=self.R, inplace=False)
-        B.derivative = self.derivative
-        B.order = self.order
-        B.deltas = self.deltas
-        B.is_dirichlet = self.is_dirichlet
+        B.copy_meta_data(self)
         return B
 
 
     def apply(self, V, overwrite=False):
-        return (self.D.dot(V.flat) + self.R).reshape(V.shape)
+        t = range(V.ndim)
+        utils.rolllist(t, self.axis, V.ndim-1)
+        V = np.transpose(V, axes=t)
+
+        if self.R is not None:
+            ret = self.D.dot(V.flat) + self.R
+        else:
+            ret = self.D.dot(V.flat)
+
+        ret = ret.reshape(V.shape)
+
+        t = range(V.ndim)
+        utils.rolllist(t, V.ndim-1, self.axis)
+        ret = np.transpose(ret, axes=t)
+
+        return ret
+
+    def solve(self, V, overwrite=False):
+        t = range(V.ndim)
+        utils.rolllist(t, self.axis, 0)
+        V = np.transpose(V, axes=t)
+
+        if self.R is not None:
+            V0 = V.flat - self.R
+        else:
+            V0 = V
+
+        ret = spl.solve_banded(self.solve_banded_offsets,
+                self.D.data, V0.flat,
+                overwrite_ab=overwrite, overwrite_b=True).reshape(V.shape)
+
+        t = range(V.ndim)
+        utils.rolllist(t, 0, self.axis)
+        ret = np.transpose(ret, axes=t)
+
+        return ret
 
 
     def applyboundary(self, boundary):
@@ -739,10 +842,6 @@ class BandedOperator(object):
             # print "R:", B.R
 
 
-    def solve(self, V, overwrite=False):
-        return spl.solve_banded(self.solve_banded_offsets,
-                self.D.data, (V.flat - self.R),
-                overwrite_ab=overwrite, overwrite_b=True).reshape(V.shape)
 
     @staticmethod
     def check_derivative(d):
@@ -975,10 +1074,7 @@ class BandedOperator(object):
                 B = self
                 B.D = bottom.D.copy()
                 B.R = bottom.R.copy()
-                B.order = bottom.order
-                B.derivative = bottom.derivative
-                B.deltas = bottom.deltas
-                B.is_dirichlet = bottom.is_dirichlet
+                B.copy_meta_data(bottom)
             else:
                 B = bottom.copy()
 
@@ -1013,9 +1109,7 @@ class BandedOperator(object):
                 B.R = bottom.R.copy()
                 B.R[:splitidx] = 0
 
-            B.order = self.order
-            B.derivative = self.derivative
-            B.deltas = self.deltas
+            B.copy_meta_data(self)
             B.is_dirichlet[0] = self.is_dirichlet[0]
             B.is_dirichlet[1] = bottom.is_dirichlet[1]
         return B
@@ -1043,27 +1137,6 @@ class BandedOperator(object):
         return B
 
 
-    def __eq__(self, other):
-        no_nan = np.nan_to_num
-        # assert (self.data == other.data).all()
-        # assert (self.offsets == other.offsets).all()
-        # assert (self.shape == other.shape)
-        # assert (no_nan(self.deltas) == no_nan(other.deltas)).all()
-        # assert (self.order == other.order)
-        # assert (self.derivative == other.derivative)
-        # assert (self.R == other.R).all()
-        try:
-            return ((self.data == other.data).all()
-                and (self.offsets == other.offsets).all()
-                and (self.shape == other.shape)
-                and (no_nan(self.deltas) == no_nan(other.deltas)).all()
-                and (self.order == other.order)
-                and (self.derivative == other.derivative)
-                and (self.R == other.R).all())
-        except:
-            return False
-
-
     def __add__(self, other):
         return self.add(other, inplace=False)
     def __iadd__(self, other):
@@ -1079,6 +1152,10 @@ class BandedOperator(object):
 
         # If we're adding two operators together
         if isinstance(other, BandedOperator):
+
+            if self.axis != other.axis:
+                raise ValueError("Both operators must operate on the same axis."
+                        " (%s != %s)" % (self.axis, other.axis))
             otheroffsets = tuple(other.offsets)
             # Verify that they are compatible
             if self.shape[1] != other.shape[1]:
@@ -1107,6 +1184,7 @@ class BandedOperator(object):
                     to = Boffsets.index(o)
                     # print "fro(%i) -> to(%i)" % (fro, to)
                     B.data[to] += self.data[fro]
+                B.copy_meta_data(self)
             # Copy the data from the other operator over
             for o in otheroffsets:
                 fro = otheroffsets.index(o)
@@ -1216,7 +1294,9 @@ def flatten_tensor_aligned(mats, check=True):
         assert len(set(tuple(m.offsets) for m in mats)) == 1
     residual = np.hstack([x.R for x in mats])
     diags = np.hstack([x.data for x in mats])
-    return BandedOperator((diags, mats[0].offsets), residual=residual)
+    B = BandedOperator((diags, mats[0].offsets), residual=residual)
+    B.copy_meta_data(mats[0], derivative=None)
+    return B
 
 
 
@@ -1236,6 +1316,7 @@ def flatten_tensor_misaligned(mats):
         bottom = top
     residual = np.hstack([x.R for x in mats])
     flatmat = BandedOperator((newdata, offsets), residual=residual)
+    flatmat.copy_meta_data(mats[0], is_dirichlet=flatmat.is_dirichlet)
     return flatmat
 
 

@@ -8,6 +8,7 @@ from bisect import bisect_left
 import unittest
 
 import numpy as np
+import numpy.testing as npt
 import scipy.sparse
 
 import utils
@@ -20,6 +21,21 @@ from heston import HestonOption
 from Option import BlackScholesOption
 
 
+
+#TODO: Switch to numpy.testing asserts
+
+
+def test_numpy_transpose_vs_rollaxis():
+    a = np.ones((3,1,4,2,0,5))
+    b = a.copy()
+    for axis in range(len(a.shape)):
+        t = range(len(a.shape))
+        utils.rolllist(t, axis, 0)
+        ta = np.transpose(a, axes=t)
+        assert np.rollaxis(a, axis).shape == ta.shape
+        utils.rolllist(t, 0, axis)
+        ta = np.transpose(a, axes=t)
+        assert a.shape == np.transpose(ta, axes=t).shape
 
 
 class BlackScholesOption_test(unittest.TestCase):
@@ -113,8 +129,8 @@ class FiniteDifferenceEngineADI_test(unittest.TestCase):
         rho = 0.2
         spot_max = 1500.0
         var_max = 13.0
-        nspots = 10
-        nvols = 6
+        nspots = 50
+        nvols = 35
         spotdensity = 7.0  # infinity is linear?
         varexp = 4
 
@@ -124,12 +140,12 @@ class FiniteDifferenceEngineADI_test(unittest.TestCase):
 
         up_or_down_spot = 'up'
         up_or_down_var = 'down'
-        flip_idx_spot = 7
-        flip_idx_var = 4
+        flip_idx_spot = 18
+        flip_idx_var = 10
         k = spot_max / 4.0
-        # spots = np.linspace(0, spot_max, nspots)
+        spots = np.linspace(0, spot_max, nspots)
         vars = np.linspace(0, var_max, nvols)
-        spots = utils.sinh_space(k, spot_max, spotdensity, nspots)
+        # spots = utils.sinh_space(k, spot_max, spotdensity, nspots)
         # vars = utils.exponential_space(0.00, 0.04, var_max, varexp, nvols)
         def mu_s(t, *dim): return r * dim[0] * s1_enable
         def gamma2_s(t, *dim): return 0.5 * dim[1] * dim[0]**2 * s2_enable
@@ -142,7 +158,7 @@ class FiniteDifferenceEngineADI_test(unittest.TestCase):
                   (0,0): gamma2_s,
                   (1,) : mu_v,
                   (1,1): gamma2_v,
-                  (0,1): lambda t, *dim: dim[0] * dim[1] * rho * sigma
+                  (0,1): lambda t, *dim: dim[0] * dim[1] * rho * sigma * 0 + 1
                   }
         bounds = {
                         # D: U = 0              VN: dU/dS = 1
@@ -386,6 +402,77 @@ class FiniteDifferenceEngineADI_test(unittest.TestCase):
         assert np.allclose(L2.R, oldR2)
 
 
+    def test_numpy_vs_operators(self):
+        spots = np.linspace(0,1, 15)
+        vars = np.linspace(0,10, 10)
+        G = Grid.Grid((spots, vars), initializer=lambda x0,x1: x1*1)
+        coeffs = {()   : lambda t: 0,
+                  (0,) : lambda t, *dim: dim[0] * 0 + 1,
+                  (0,0): lambda t, *dim: dim[0] * 0 + 1,
+                  (1,) : lambda t, *dim: dim[1] * 0 + 1,
+                  (1,1): lambda t, *dim: dim[1] * 0 + 1,
+                  (0,1): lambda t, *dim: dim[0] * dim[1] * 0 + 1
+                  }
+        F = FD.FiniteDifferenceEngineADI(G, coefficients=coeffs, force_bandwidth=None)
+
+        cb = utils.clear_boundary
+        g = F.grid.domain
+
+        op_ = {'delta': {}, 'grid_delta': {}, 'derivative': {}}
+        np_ = {'delta': {}, 'grid_delta': {}, 'derivative': {}}
+
+        dims = coeffs.keys()
+        dims.remove(())
+
+        F.simple_operators[(0,1)] = F.operators[(0,1)]
+        for dim in dims:
+            op_['grid_delta'][dim] = F.simple_operators[dim].copy()
+            op_['grid_delta'][dim].R = None
+
+        op_['delta'][(0,)] = op_['grid_delta'][(0,)].deltas[:,np.newaxis]
+        op_['delta'][(1,)] = op_['grid_delta'][(1,)].deltas
+
+        x = F.grid.mesh[0]; y = F.grid.mesh[1]
+        np_['delta'][(0,)] = np.gradient(x)[:,np.newaxis]
+        np_['delta'][(1,)] = np.gradient(y)
+        np_['delta'][(0,)][0,0] = np.nan
+        np_['delta'][(1,)][0] = np.nan
+
+        for f in (op_, np_):
+            f['delta'][(0,0)] = f['delta'][(0,)]**2
+            f['delta'][(1,1)] = f['delta'][(1,)]**2
+            f['delta'][(0,1)] = f['delta'][(1,)] * f['delta'][(0,)]
+            f['delta'][(1,0)] = f['delta'][(1,)] * f['delta'][(0,)]
+
+
+
+        np_['grid_delta'][(0,)], np_['grid_delta'][(1,)] = np.gradient(g)
+        for fst in [0,1]:
+            np_['grid_delta'][(fst,0)], np_['grid_delta'][(fst,1)] = np.gradient(np_['grid_delta'][(fst,)])
+
+
+        Y,X = np.meshgrid(y, x)
+        for dim in dims:
+            op_['derivative'][dim] = cb(op_['grid_delta'][dim].apply(g), inplace=True)
+            print dim, op_['derivative'][dim].shape, g.shape
+            assert op_['derivative'][dim].shape == g.shape
+            np_['derivative'][dim] = cb(np_['grid_delta'][dim] / np_['delta'][dim], inplace=True)
+            np_['derivative'][dim] *= F.coefficients[dim](0,X,Y)
+
+        np_['derivative'][(1,0)] = cb(np_['grid_delta'][(1,0)] / np_['delta'][(1,0)], inplace=True)
+        np_['derivative'][(1,0)] *= F.coefficients[(0,1)](0,X,Y)
+
+        for dim in dims:
+            for x in ('delta', 'derivative'):
+                msg = "Comparing %s in dimension %s" % (x, dim)
+                print msg, op_['grid_delta'][dim].axis
+                fp(op_[x][dim] - np_[x][dim], fmt='e')
+                npt.assert_array_almost_equal(op_[x][dim], np_[x][dim], decimal=12, err_msg=msg)
+
+
+        npt.assert_array_equal(np_['derivative'][(0,1)], np_['derivative'][(1,0)], err_msg=msg)
+
+
     def test_cross_derivative(self):
         crossOp = self.F.operators[(0,1)]
         g = self.F.grid.domain
@@ -394,11 +481,11 @@ class FiniteDifferenceEngineADI_test(unittest.TestCase):
 
         dx = np.gradient(x)[:,np.newaxis]
         dy = np.gradient(y)
-        dgdx = np.gradient(g, 1)[0]
+        dgdx = np.gradient(g)[0]
         manuald2gdxdy = np.gradient(dgdx)[1] / (dx * dy)
         manuald2gdxdy[:,0] = 0; manuald2gdxdy[:,-1] = 0
         manuald2gdxdy[0,:] = 0; manuald2gdxdy[-1,:] = 0
-        X,Y = [a.T for a in np.meshgrid(x, y)]
+        X,Y = np.meshgrid(y, x)
         manuald2gdxdy *= self.F.coefficients[(0,1)](0, X, Y)
 
         d2gdxdy = crossOp.apply(g)
@@ -407,11 +494,14 @@ class FiniteDifferenceEngineADI_test(unittest.TestCase):
 
         # print "manual"
         # fp(manuald2gdxdy)
+        # print
         # print "new"
         # fp(d2gdxdy)
+        # print
         # print "diff"
-        # fp(d2gdxdy - manuald2gdxdy, fmt='e')
-        assert np.allclose(d2gdxdy, manuald2gdxdy)
+        # fp((d2gdxdy - manuald2gdxdy) / manuald2gdxdy, fmt='e')
+        npt.assert_array_almost_equal(d2gdxdy, manuald2gdxdy)
+        # npt.assert_array_equal(d2gdxdy, manuald2gdxdy)
 
 class Grid_test(unittest.TestCase):
 
@@ -623,10 +713,11 @@ class BandedOperator_test(unittest.TestCase):
         d = np.hstack((np.nan, np.diff(vec)))
         deltas = d
         sch0 = 'center'
+        axis = 1
         for sch1 in ['center', 'up', 'down']:
             for dv in [1,2]:
                 oldX1 = utils.nonuniform_complete_coefficients(deltas, up_or_down=sch1, flip_idx=idx)[dv-1]
-                X1 = FD.BandedOperator.for_vector(vec, scheme=sch1, derivative=dv, order=2)
+                X1 = FD.BandedOperator.for_vector(vec, scheme=sch1, derivative=dv, order=2, axis=axis)
 
                 high, low = 1,-1
                 if (sch0 == 'up' and idx > 1) or (sch1 == 'up' and idx < last-1):
@@ -644,6 +735,7 @@ class BandedOperator_test(unittest.TestCase):
                 # print
                 # print X1.shape, oldX1.shape
                 # print (X1.offsets, oldX1.offsets),  "%s+%s (dv %i) idx %i" % (sch0, sch1, dv, idx)
+                assert X1.axis == axis
                 assert (X1.todense() == oldX1.todense()).all(),  "%s+%s (dv %i) idx %i" % (sch0, sch1, dv, idx)
                 assert (X1.offsets == oldX1.offsets).all(),  "%s+%s (dv %i) idx %i" % (sch0, sch1, dv, idx)
                 assert (X1.data.shape == oldX1.data.shape),  "%s+%s (dv %i) idx %i" % (sch0, sch1, dv, idx)

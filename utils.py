@@ -447,3 +447,19 @@ def cs(deltas, upwind_from=None):
     F1,F2 = nonuniform_forward_coefficients(deltas)
     U1,U2 = nonuniform_center_forward_coefficients(delta, upwind_from=upwind_from)
     return F1,F2,C1,C2,B1,B2,U1,U2
+
+def clear_boundary(domain, inplace=False):
+    if not inplace:
+        domain = domain.copy()
+    domain[0,:] = 0
+    domain[:,0] = 0
+    domain[:,-1] = 0
+    domain[-1,:] = 0
+    return domain
+
+def rolllist(l, fromindex, toindex):
+    """
+    Move an element in the list, preserving the relative positions of the
+    other elements."""
+    n = l.pop(fromindex)
+    l.insert(toindex, n)
