@@ -1,43 +1,6 @@
 #!/usr/bin/env python
 """Demonstration of 2D Heston using BTCS CTCS and Smoothed CTCS."""
 
-# Defaults: spot = k = 100
-#           v0 = 0.2
-#           dt = 1/100.0
-#           H.mean_reversion = 1
-#           H.mean_variance = v0
-#           H.vol_of_variance = 0.2
-#           rho = 0
-#           nspots = 200
-#           nvols = 200
-
-# Pretty much everything goes to infinity at high vol boundary. Trimming shows
-# the interesting area looks reasonable.
-
-# High H.mean_variance oscillates wildly at (vol < v0)
-# H.mean_variance = 3.2
-
-# For low H.mean_variance, Analytical has problems at low vol and spot (FD ok)
-# H.mean_variance = 0.01
-
-# At high H.vol_of_variance, FD explodes around strike at low vol. Analytical jagged but
-# better.
-# H.vol_of_variance = 3
-# Still well behaved at H.vol_of_variance = 1
-
-# Crank explodes around strike at low vol if nvols is low. Implicit ok.
-# nvols = 40
-# H.vol_of_variance = 1
-# With H.vol_of_variance at 0.2 again, both explode.
-
-# Well behaved when nspots is low
-# nspots = 40
-
-# Crank has small oscillations when dt is exactly 1/10.0. Implicit is way way too large. O(5000)
-# dt = 1/10.0
-# At other large dt, everything is ok again.
-# dt = 1/2.0 ... 1/8.0 .. 1/11.0.. etc
-
 import sys
 import numpy as np
 # import scipy.stats
@@ -45,16 +8,16 @@ import scipy.linalg as spl
 import scipy.sparse as sps
 from pylab import plot, title, xlabel, ylabel, legend, show, ion, ioff
 import pylab
-import utils
-from visualize import surface
-from heston import HestonOption, hs_call_vector
+from FiniteDifference import utils
+from FiniteDifference.visualize import surface
+from FiniteDifference.heston import HestonOption, hs_call_vector
 
-from Option import BlackScholesOption
-from Grid import Grid
-import FiniteDifferenceEngine as FD
+from FiniteDifference.Option import BlackScholesOption
+from FiniteDifference.Grid import Grid
+from FiniteDifference import FiniteDifferenceEngine as FD
 
 # Debug imports
-from visualize import fp, anim, wireframe
+# from FiniteDifference.visualize import fp, anim, wireframe
 
 
 # ion()
@@ -596,10 +559,10 @@ ion()
 # p(tr(Vr), tr(hs), spots[trims], vars[trimv], 3, "smooth")
 # p(tr(Vfr), tr(hs), spots[trims], vars[trimv], 3, "FD smooth")
 # p(tr(Vd), tr(hs), spots[trims], vars[trimv], 3, "douglas")
-p(tr(Vfd), tr(hs), spots[trims], vars[trimv], 3, "FD douglas")
+# p(tr(Vfd), tr(hs), spots[trims], vars[trimv], 3, "FD douglas")
 # p(tr(Vfcs), tr(hs), spots[trims], vars[trimv], 3, "FD craigsneyd")
 # p(tr(Vfcs2), tr(hs), spots[trims], vars[trimv], 3, "FD craigsneyd2")
-p(tr(Vfhv), tr(hs), spots[trims], vars[trimv], 3, "FD hundsdorferverwer")
+# p(tr(Vfhv), tr(hs), spots[trims], vars[trimv], 3, "FD hundsdorferverwer")
 ioff()
 show()
 # p(V_init, hs, spots, vars, 1, "impl")
