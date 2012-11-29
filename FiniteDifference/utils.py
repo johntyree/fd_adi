@@ -8,6 +8,7 @@ import pylab
 import scipy.sparse
 import scipy.optimize
 import inspect
+from bisect import bisect_left
 
 def attr_dict(a):
     return dict(inspect.getmembers(a))
@@ -106,18 +107,39 @@ def sinh_space(exact, high, density, size):
     """
     # def g(x, K, c, p): return K + c/p * np.sinh(p*x + np.arcsinh(-p*K/c))
     # c = float(density)
-    if size == 1:
-        return array([exact])
     density = float(density)
-    K = float(exact)
-    Smax = float(high)
-    # p = scipy.optimize.root(lambda p: g(1.0, K, c, p)-1.0, 1)
-    # print p
-    # print p.success, p.r, g(1.0, K, c, p.r)-1
-    # p = p.r
-    deps = 1./size * (np.arcsinh((Smax - K)*(1/density)) - np.arcsinh(-K/density))
-    eps = np.arcsinh(-K/density) + np.arange(size)*deps
-    space = K + density * np.sinh(eps)
+    high_orig = high
+    if size == 1:
+        return np.asarray(exact)
+
+    def newspace(high):
+        Smax = high
+        K = exact
+        deps = 1./size * (np.arcsinh((Smax - K)*(1/density)) - np.arcsinh(-K/density))
+        eps = np.arcsinh(-K/density) + np.arange(size)*deps
+        space = K + density * np.sinh(eps)
+        space -= min(space)
+        return space
+
+    def energy(high):
+        space = newspace(high)
+        try:
+            best = space[bisect_left(space, exact)]
+        except IndexError:
+            best = space[-2]
+        print best
+        return abs(exact - best)
+
+    newmax, best, failed, _ = scipy.optimize.fminbound(energy, high*0.95, high*1.05, full_output=True)
+    if failed:
+        print newspace(newmax)
+        raise ValueError("Unable to create a suitable space. %s\n%s" % ((exact, high, density, size), newmax))
+    space = newspace(newmax)
+    idx = bisect_left(space, exact)
+    try:
+        space[idx] = exact
+    except IndexError:
+        print "Boy, this is terrible."
     return space
 
 
