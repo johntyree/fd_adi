@@ -31,7 +31,7 @@ class FiniteDifferenceEngine(object):
         Still need a good way to handle cross terms.
 
         N.B. You don't actually want to do this with lambdas. They aren't real
-        closures. Weird things will happen.
+        closures. Weird things might happen.
 
         Ex. (2D grid)
 
@@ -1458,7 +1458,6 @@ class BandedOperator(object):
                     # print data[row][i-abs(o)].data
             # print
 
-
 def flatten_tensor_aligned(mats, check=True):
     if check:
         assert len(set(tuple(m.offsets) for m in mats)) == 1
@@ -1467,7 +1466,6 @@ def flatten_tensor_aligned(mats, check=True):
     B = BandedOperator((diags, mats[0].offsets), residual=residual)
     B.copy_meta_data(mats[0], derivative=None)
     return B
-
 
 
 def flatten_tensor_misaligned(mats):
