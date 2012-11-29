@@ -62,7 +62,31 @@ class Option(object):
 
 
 class BlackScholesOption(Option):
-    __init__ = Option.__init__
+    def __init__(self
+                 , spot=100
+                 , strike=99
+                 , interest_rate=0.06
+                 , volatility=0.2
+                 , variance=None
+                 , tenor=1.0
+                 , dt = None
+                 ):
+        Option.__init__(self, spot, strike, interest_rate, volatility,
+                variance, tenor, dt)
+
+        def mu_s(t, *dim):     return r * dim[0]
+        def gamma2_s(t, *dim): return 0.5 * v * dim[0]**2
+        self.coefficients = {()   : lambda t: -self.interest_rate.value,
+                             (0,) : mu_s,
+                             (0,0): gamma2_s}
+
+        self.boundaries = {
+                            # D: U = 0              Von Neumann: dU/dS = 1
+                (0,)  : ((0, lambda *args: 0.0), (1, lambda t, x: 1.0)),
+                            # D: U = 0              Free boundary
+                (0,0) : ((0, lambda *args: 0.0), (None, lambda *x: None))}
+
+        self.schemes = {}
 
     @property
     def analytical(self):
