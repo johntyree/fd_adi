@@ -68,7 +68,7 @@ H = HestonOption( spot=100
                  , mean_reversion = 1
                  , mean_variance = 0.04
                  , vol_of_variance = 0.4
-                 , correlation = 0.3
+                 , correlation = 0.6
                  )
 
 spot_max = 1500.0
@@ -97,7 +97,7 @@ G = Gi.copy()
 V_init = G.domain.copy()
 
 trims = (H.strike * .2 < spots) & (spots < H.strike * 2.0)
-trimv = (0.01 < vars) & (vars < 1)  # v0*2.0)
+trimv = (0.0 < vars) & (vars < 1)  # v0*2.0)
 # trims = slice(None)
 # trimv = slice(None)
 
@@ -123,7 +123,7 @@ bs = BlackScholesOption(spot=spots[:, np.newaxis],
                         variance=vars[np.newaxis, :],
                         tenor=H.tenor).analytical
 
-utils.tic("Heston Analytical:")
+utils.tic("Heston Analytical:\t")
 hs = hs_call_vector(spots, H.strike, H.interest_rate.value, np.sqrt(vars),
              H.tenor, H.mean_reversion, H.mean_variance, H.vol_of_variance, H.correlation)
 utils.toc()
@@ -179,7 +179,7 @@ utils.toc()
 
 L1_ = []
 R1_ = []
-utils.tic("Building As(s):")
+utils.tic("Building As(s):\t")
 print "(Up/Down)wind from:", flip_idx_spot
 As_ = utils.nonuniform_complete_coefficients(dss, up_or_down=up_or_down_spot,
                                              flip_idx=flip_idx_spot)[0]
@@ -244,7 +244,7 @@ gamma2_v = 0.5 * H.vol_of_variance ** 2 * vars
 
 L2_ = []
 R2_ = []
-utils.tic("Building Av(v):")
+utils.tic("Building Av(v):\t")
 print "(Up/Down)wind from:", flip_idx_var
 # Avc_, Avvc_ = utils.nonuniform_center_coefficients(dvs)
 Av_ = utils.nonuniform_complete_coefficients(dvs, up_or_down=up_or_down_var,
@@ -295,7 +295,7 @@ for i, s in enumerate(spots):
     R2_.append(Rv + Rvv)
     R2_[i][-1] = np.maximum(0, s - H.strike)
 
-utils.toc()
+utils.toc(':  \t')
 
 
 def force_boundary(V, values=None, t=None):
@@ -325,25 +325,25 @@ def impl(V, L1, R1x, L2, R2x, dt, n, crumbs=[], callback=None):
     # L  = (As + Ass - H.interest_rate*np.eye(nspots))*-dt + np.eye(nspots)
     L1i.data *= -dt
     L1i.data[m, :] += 1
-    R1 *= dt
+    R1 *= -dt
 
     L2i.data *= -dt
     L2i.data[m, :] += 1
-    R2 *= dt
+    R2 *= -dt
 
     offsets1 = (abs(min(L1i.offsets)), abs(max(L1i.offsets)))
     offsets2 = (abs(min(L2i.offsets)), abs(max(L2i.offsets)))
 
     dx = np.gradient(spots)[:,np.newaxis]
     dy = np.gradient(vars)
-    X, Y = [dim.T for dim in np.meshgrid(spots, vars)]
+    Y, X = np.meshgrid(vars, spots)
     gradgrid = dt * coeffs[(0,1)](0, X, Y) / (dx * dy)
     gradgrid[:,0] = 0; gradgrid[:,-1] = 0
     gradgrid[0,:] = 0; gradgrid[-1,:] = 0
 
     print_step = max(1, int(n / 10))
     to_percent = 100.0 / n
-    utils.tic("Impl:")
+    utils.tic("Impl:\t")
     for k in xrange(n):
         if not k % print_step:
             if np.isnan(V).any():
@@ -353,12 +353,13 @@ def impl(V, L1, R1x, L2, R2x, dt, n, crumbs=[], callback=None):
         if callback is not None:
             callback(V, ((n - k) * dt))
         Vsv = np.gradient(np.gradient(V)[0])[1] * gradgrid
+        # Vsv = 0.0
         V = spl.solve_banded(offsets2, L2i.data,
-                             (V + Vsv + R2).flat, overwrite_b=True).reshape(V.shape)
+                             (V + Vsv - R2).flat, overwrite_b=True).reshape(V.shape)
         V = spl.solve_banded(offsets1, L1i.data,
-                             (V + R1).T.flat, overwrite_b=True).reshape(V.shape[::-1]).T
+                             (V - R1).T.flat, overwrite_b=True).reshape(V.shape[::-1]).T
     crumbs.append(V.copy())
-    utils.toc()
+    utils.toc(':  \t')
     return crumbs
 
 
@@ -368,7 +369,7 @@ def flatten_tensor(mats):
     return flatmat
 
 
-def crank(V, L1, R1x, L2, R2x, dt, n, crumbs=[], callback=None):
+def douglas(V, L1, R1x, L2, R2x, dt, n, crumbs=[], callback=None):
     V = V.copy()
     theta = 0.5
     # dt *= 0.5
@@ -411,20 +412,20 @@ def crank(V, L1, R1x, L2, R2x, dt, n, crumbs=[], callback=None):
     dx = np.gradient(spots)[:,np.newaxis]
     dy = np.gradient(vars)
     X, Y = [dim.T for dim in np.meshgrid(spots, vars)]
-    gradgrid = dt * coeffs[(0,1)](0, X, Y) / (dx*dy)
+    gradgrid = coeffs[(0,1)](0, X, Y) / (dx*dy)
     gradgrid[:,0] = 0; gradgrid[:,-1] = 0
     gradgrid[0,:] = 0; gradgrid[-1,:] = 0
 
     print_step = max(1, int(n / 10))
     to_percent = 100.0 / n
-    utils.tic("Crank:")
+    utils.tic("Douglas:\t")
     R = R1 + R2
     normal_shape = V.shape
-    transposed_shape = normal_shape[::-1]
+    transposed_shape = V.T.shape
     for k in xrange(n):
         if not k % print_step:
             if np.isnan(V).any():
-                print "Crank fail @ t = %f (%i steps)" % (dt * k, k)
+                print "Douglas fail @ t = %f (%i steps)" % (dt * k, k)
                 return crumbs
             print int(k * to_percent),
         if callback is not None:
@@ -443,7 +444,7 @@ def crank(V, L1, R1x, L2, R2x, dt, n, crumbs=[], callback=None):
 
         V1 = (L1e.dot(V.T.flat).reshape(transposed_shape)).T
         V2 = (L2e.dot(V.flat).reshape(normal_shape))
-        Y0 = V + Vsv + dt*(V1 + V2 + R)
+        Y0 = V + dt*(Vsv + V1 + V2 + R)
 
         V1 = Y0 - theta * dt * L1e.dot(V.T.flat).reshape(transposed_shape).T
         Y1 = spl.solve_banded(offsets1, L1i.data, V1.T.flat, overwrite_b=True).reshape(transposed_shape).T
@@ -454,7 +455,7 @@ def crank(V, L1, R1x, L2, R2x, dt, n, crumbs=[], callback=None):
 
 
         crumbs.append(V.copy())
-    utils.toc()
+    utils.toc(':  \t')
     return crumbs
 
 
@@ -466,9 +467,11 @@ line_width = 2
 markers = ['--', '--', ':', '--']
 
 
-def p1(V, analytical, spots, vars, marker_idx, label):
+def p_1D(V, analytical, spots, vars, marker_idx, label):
     if BADANALYTICAL:
         label += " - bad analytical!"
+    else:
+        label += " - ||V - V*|| = %.2e" % np.linalg.norm(V-analytical)
     plot((spots / H.strike * 100)[front:-back],
          (V - analytical)[front:-back],
          markers[marker_idx], lw=line_width, label=label)
@@ -478,31 +481,35 @@ def p1(V, analytical, spots, vars, marker_idx, label):
     legend(loc=0)
 
 
-def p2(V, analytical, spots, vars, marker_idx=0, label=""):
+def p_absolute_error(V, analytical, spots, vars, marker_idx=0, label=""):
     surface(V - analytical, spots, vars)
     if BADANALYTICAL:
         label += " - bad analytical!"
+    else:
+        label += " - ||V - V*|| = %.2e" % np.linalg.norm(V-analytical)
     title("Error in Price (%s)" % label)
     xlabel("Var")
     ylabel("% of strike")
     show()
 
 
-def p3(V, analytical, spots, vars, marker_idx=0, label=""):
+def p_relative_error(V, analytical, spots, vars, marker_idx=0, label=""):
     surface((V - analytical) / analytical, spots, vars)
     if BADANALYTICAL:
         label += " - bad analytical!"
+    else:
+        label += " - ||V - V*|| = %.2e" % np.linalg.norm(V-analytical)
     title("Relative Error in Price (%s)" % label)
     xlabel("Var")
     ylabel("% of strike")
     show()
 
 
-p = p2; V = None
-evis = lambda V=V, p=p2: p(V, hs, spots, vars, 0, "")
-evis2 = lambda V=V, p=p2: p(tr(V), tr(hs), spots[trims], vars[trimv], 0, "")
-vis = lambda V=V, p=p2: p(V, 0, spots, vars, 0, "")
-vis2 = lambda V=V, p=p2: p(tr(V), 0, spots[trims], vars[trimv], 0, "")
+p = p_absolute_error; V = None
+evis = lambda V=V, p=p_absolute_error: p(V, hs, spots, vars, 0, "")
+evis2 = lambda V=V, p=p_absolute_error: p(tr(V), tr(hs), spots[trims], vars[trimv], 0, "")
+vis = lambda V=V, p=p_absolute_error: p(V, 0, spots, vars, 0, "")
+vis2 = lambda V=V, p=p_absolute_error: p(tr(V), 0, spots[trims], vars[trimv], 0, "")
 
 L1 = F.operators[0].D
 L2 = F.operators[1].D
@@ -525,25 +532,44 @@ assert (V_init == F.grid.domain).all()
 # print "OK"
 
 # sys.exit()
-Vs = impl(V_init, L1, R1, L2, R2,
-          H.dt, int(H.tenor / H.dt), crumbs=[V_init]
-          # , callback=lambda v, H.tenor: force_boundary(v, hs)
-          )
-Vi = Vs[-1]
-print tr(Vi)[ids, idv] - tr(hs)[ids, idv]
-Vs = F.solve_implicit(H.tenor/H.dt, H.dt, crumbs=[], callback=None)
-Vfi = Vs[-1]
-print tr(Vfi)[ids, idv] - tr(hs)[ids, idv]
+# Vs = impl(V_init, L1, R1, L2, R2,
+          # H.dt, int(H.tenor / H.dt), crumbs=[V_init]
+          # # , callback=lambda v, H.tenor: force_boundary(v, hs)
+          # )
+# Vi = Vs[-1]
+# print tr(Vi)[ids, idv] - tr(hs)[ids, idv]
+# Vs = F.solve_implicit(H.tenor/H.dt, H.dt, crumbs=[], callback=None)
+# Vfi = Vs[-1]
+# print tr(Vfi)[ids, idv] - tr(hs)[ids, idv]
 
-Vs = crank(V_init, L1, R1, L2, R2,
-           H.dt, int(H.tenor / H.dt), crumbs=[V_init]
-           # , callback=lambda v, H.tenor: force_boundary(v, hs)
-           )
-Vc = Vs[-1]
-print tr(Vc)[ids, idv] - tr(hs)[ids, idv]
-Vs = F.solve_adi(H.tenor/H.dt, H.dt, crumbs=[], callback=None)
-Vfc = Vs[-1]
-print tr(Vfc)[ids, idv] - tr(hs)[ids, idv]
+# Vs = douglas(V_init, L1, R1, L2, R2,
+           # H.dt, int(H.tenor / H.dt), crumbs=[V_init]
+           # # , callback=lambda v, H.tenor: force_boundary(v, hs)
+           # )
+# Vd = Vs[-1]
+# print tr(Vd)[ids, idv] - tr(hs)[ids, idv]
+# Vs = F.solve_douglas(H.tenor/H.dt, H.dt, crumbs=[], callback=None)
+Vs = F.smooth(H.tenor/H.dt, H.dt, crumbs=[], callback=None, scheme=F.solve_douglas)
+Vfd = Vs[-1]
+print tr(Vfd)[ids, idv] - tr(hs)[ids, idv]
+
+# Vs = F.solve_craigsneyd(H.tenor/H.dt, H.dt, crumbs=[], callback=None)
+# Vfcs = Vs[-1]
+# print tr(Vfcs)[ids, idv] - tr(hs)[ids, idv]
+
+# Vs = F.solve_craigsneyd2(H.tenor/H.dt, H.dt, crumbs=[], callback=None)
+# Vfcs2 = Vs[-1]
+# print tr(Vfcs2)[ids, idv] - tr(hs)[ids, idv]
+
+# Vs = F.solve_hundsdorferverwer(H.tenor/H.dt, H.dt, crumbs=[], callback=None)
+Vs = F.smooth(H.tenor/H.dt, H.dt, crumbs=[], scheme=F.solve_hundsdorferverwer, callback=None)
+Vfhv = Vs[-1]
+print tr(Vfhv)[ids, idv] - tr(hs)[ids, idv]
+
+# Vs = F.solve_john_adi(H.tenor/H.dt, H.dt, crumbs=[], callback=None)
+# Vfc = Vs[-1]
+# print tr(Vfc)[ids, idv] - tr(hs)[ids, idv]
+
 
 # Rannacher smoothing to damp oscilations at the discontinuity
 # smoothing_steps = 2
@@ -551,7 +577,7 @@ print tr(Vfc)[ids, idv] - tr(hs)[ids, idv]
           # H.dt/2, 2*smoothing_steps, crumbs=[V_init]
           # # , callback=lambda v, H.tenor: force_boundary(v, hs)
           # )
-# Vs = crank(Vs[-1], L1, R1, L2, R2,
+# Vs = douglas(Vs[-1], L1, R1, L2, R2,
           # H.dt, int(H.tenor / H.dt) - smoothing_steps, crumbs=Vs
           # # , callback=lambda v, H.tenor: force_boundary(v, hs)
           # )
@@ -569,6 +595,11 @@ ion()
 # p(tr(Vfc), tr(hs), spots[trims], vars[trimv], 2, "FD crank")
 # p(tr(Vr), tr(hs), spots[trims], vars[trimv], 3, "smooth")
 # p(tr(Vfr), tr(hs), spots[trims], vars[trimv], 3, "FD smooth")
+# p(tr(Vd), tr(hs), spots[trims], vars[trimv], 3, "douglas")
+p(tr(Vfd), tr(hs), spots[trims], vars[trimv], 3, "FD douglas")
+# p(tr(Vfcs), tr(hs), spots[trims], vars[trimv], 3, "FD craigsneyd")
+# p(tr(Vfcs2), tr(hs), spots[trims], vars[trimv], 3, "FD craigsneyd2")
+p(tr(Vfhv), tr(hs), spots[trims], vars[trimv], 3, "FD hundsdorferverwer")
 ioff()
 show()
 # p(V_init, hs, spots, vars, 1, "impl")
@@ -576,5 +607,5 @@ show()
 # p(Vr, hs, spots, vars, 1, "smooth")
 
 
-if p is p1:
+if p is p_1D:
     show()

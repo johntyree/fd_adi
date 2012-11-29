@@ -19,7 +19,6 @@ from visualize import fp
 
 
 class FiniteDifferenceEngine(object):
-
     def __init__(self, grid, coefficients={}, boundaries={}, schemes={},
             force_bandwidth=None):
         """
@@ -430,100 +429,6 @@ class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
                 self.operators[d] = flatten_tensor_misaligned(self.operators[d])
         return
 
-
-    def solve_implicit(self, n, dt, crumbs=[], callback=None):
-        n = int(n)
-        if crumbs:
-            V = crumbs[-1]
-        else:
-            V = self.grid.domain.copy()
-            crumbs.append(V)
-
-
-        Lis = [(o * -dt).add(1, inplace=True)
-               for d, o in sorted(self.operators.iteritems())
-               if type(d) != tuple]
-
-        Lis = np.roll(Lis, -1)
-
-        print_step = max(1, int(n / 10))
-        to_percent = 100.0 / n
-        utils.tic("solve_implicit:\t")
-        for k in xrange(n):
-            if not k % print_step:
-                if np.isnan(V).any():
-                    print "Impl fail @ t = %f (%i steps)" % (dt * k, k)
-                    return crumbs
-                print int(k * to_percent),
-            if callback is not None:
-                callback(V, ((n - k) * dt))
-            # V += self.cross_term(V) * dt
-            for L in Lis:
-                V = L.solve(V)
-        crumbs.append(V.copy())
-        utils.toc(':  \t')
-        return crumbs
-
-
-    def solve_douglas(self, n, dt, crumbs=[], theta=0.5, callback=None):
-        assert self.grid.domain.ndim == 2
-
-        n = int(n)
-        if crumbs:
-            V = crumbs[-1]
-        else:
-            V = self.grid.domain.copy()
-            crumbs.append(V)
-        crumbs.append(V)
-
-        L1e, L2e = self.operators[0].copy(), self.operators[1].copy()
-        L1i, L2i = self.operators[0].copy(), self.operators[1].copy()
-
-        # Le = L2e + self.operators[(0,1)] + 1
-        Le = L2e.copy()
-        LTe = L1e.copy()
-
-        L1e *= theta * dt
-        L2e *= theta * dt
-        L1e.R = L2e.R = None
-
-        L1i *= -theta*dt
-        L1i += 1
-        L2i *= -theta*dt
-        L2i += 1
-        L1i.R = L2i.R = None
-
-        print_step = max(1, int(n / 10))
-        to_percent = 100.0 / n
-        utils.tic("Douglas:\t")
-        for k in xrange(n):
-            if not k % print_step:
-                if np.isnan(V).any():
-                    print "Douglass fail @ t = %f (%i steps)" % (dt * k, k)
-                    return crumbs
-                print int(k * to_percent),
-            if callback is not None:
-                callback(V, ((n - k) * dt))
-
-
-            V1 = LTe.apply(V)
-            V2 = Le.apply(V)
-            Vsv = self.cross_term(V) * dt
-
-            Y0 = V + dt*(Vsv + V1 + V2)
-
-            V1 = Y0 - L1e.apply(V)
-            Y1 = L1i.solve(V1)
-
-            V2 = Y1 - L2e.apply(V)
-            Y2 = L2i.solve(V2)
-            V = Y2
-
-            crumbs.append(V.copy())
-        utils.toc(':  \t')
-        return crumbs
-
-
     def cross_term(self, V, numpy=True):
         if (0,1) in self.coefficients:
             if numpy:
@@ -543,7 +448,269 @@ class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
         return ret
 
 
-    def solve_adi(self, n, dt, crumbs=[], callback=None):
+    def solve_implicit(self, n, dt, crumbs=[], callback=None, numpy=False):
+        n = int(n)
+        if crumbs:
+            V = crumbs[-1]
+        else:
+            V = self.grid.domain.copy()
+            crumbs.append(V)
+
+        Lis = [(o * -dt).add(1, inplace=True)
+               for d, o in sorted(self.operators.iteritems())
+               if type(d) != tuple]
+
+        Lis = np.roll(Lis, -1)
+
+        print_step = max(1, int(n / 10))
+        to_percent = 100.0 / n
+        utils.tic("solve_implicit:\t")
+        for k in xrange(n):
+            if not k % print_step:
+                if np.isnan(V).any():
+                    print "Impl fail @ t = %f (%i steps)" % (dt * k, k)
+                    return crumbs
+                print int(k * to_percent),
+            if callback is not None:
+                callback(V, ((n - k) * dt))
+            V += self.cross_term(V, numpy=numpy) * dt
+            for L in Lis:
+                V = L.solve(V)
+        crumbs.append(V.copy())
+        utils.toc(':  \t')
+        return crumbs
+
+
+    def solve_hundsdorferverwer(self, n, dt, crumbs=[], theta=0.5, callback=None,
+            numpy=False):
+
+        n = int(n)
+        if crumbs:
+            V = crumbs[-1]
+        else:
+            V = self.grid.domain.copy()
+            crumbs.append(V)
+        crumbs.append(V)
+
+        Firsts = [(o * dt) for o in self.operators.values()]
+
+        Les = [(o * theta * dt)
+               for d, o in sorted(self.operators.iteritems())
+               if type(d) != tuple]
+        Lis = [(o * (theta * -dt)).add(1, inplace=True)
+               for d, o in sorted(self.operators.iteritems())
+               if type(d) != tuple]
+
+        for L in itertools.chain(Les, Lis):
+            L.R = None
+
+        print_step = max(1, int(n / 10))
+        to_percent = 100.0 / n
+        utils.tic("Hundsdorfer-Verwer:\t")
+        for k in xrange(n):
+            if not k % print_step:
+                if np.isnan(V).any():
+                    print "Hundsdorfer-Verwer fail @ t = %f (%i steps)" % (dt * k, k)
+                    return crumbs
+                print int(k * to_percent),
+            if callback is not None:
+                callback(V, ((n - k) * dt))
+
+            Y = V.copy()
+            for L in Firsts:
+                Y += L.apply(V)
+            Y0 = Y.copy()
+
+            for Le, Li in zip(Les, Lis):
+                Y -= Le.apply(V)
+                Y = Li.solve(Y)
+            Y2 = Y.copy()
+
+            Y = Y0
+            for L in Firsts:
+                no_residual = L.R
+                L.R = None
+                Y += 0.5 * L.apply(Y2-V)
+                L.R = no_residual
+
+            V = Y2
+
+            for Le, Li in zip(Les, Lis):
+                Y -= Le.apply(V)
+                Y = Li.solve(Y)
+
+            V = Y
+
+            crumbs.append(V.copy())
+        utils.toc(':  \t')
+        return crumbs
+
+
+    def solve_craigsneyd2(self, n, dt, crumbs=[], theta=0.5, callback=None,
+            numpy=False):
+
+        n = int(n)
+        if crumbs:
+            V = crumbs[-1]
+        else:
+            V = self.grid.domain.copy()
+            crumbs.append(V)
+        crumbs.append(V)
+
+        Firsts = [(o * dt) for o in self.operators.values()]
+
+        Les = [(o * theta * dt)
+               for d, o in sorted(self.operators.iteritems())
+               if type(d) != tuple]
+        Lis = [(o * (theta * -dt)).add(1, inplace=True)
+               for d, o in sorted(self.operators.iteritems())
+               if type(d) != tuple]
+
+        for L in itertools.chain(Les, Lis):
+            L.R = None
+
+        print_step = max(1, int(n / 10))
+        to_percent = 100.0 / n
+        utils.tic("Craig-Sneyd 2:\t")
+        for k in xrange(n):
+            if not k % print_step:
+                if np.isnan(V).any():
+                    print "Craig-Sneyd 2 fail @ t = %f (%i steps)" % (dt * k, k)
+                    return crumbs
+                print int(k * to_percent),
+            if callback is not None:
+                callback(V, ((n - k) * dt))
+
+            Y = V.copy()
+            for L in Firsts:
+                Y += L.apply(V)
+            Y0 = Y.copy()
+
+            for Le, Li in zip(Les, Lis):
+                Y -= Le.apply(V)
+                Y = Li.solve(Y)
+            Y2 = Y.copy()
+
+            Y = Y0 + theta * dt * self.cross_term(Y2 - V, numpy=False)
+            for L in Firsts:
+                Y += (0.5 - theta) * L.apply(Y2-V)
+
+            for Le, Li in zip(Les, Lis):
+                Y -= Le.apply(V)
+                Y = Li.solve(Y)
+            V = Y
+
+            crumbs.append(V.copy())
+        utils.toc(':  \t')
+        return crumbs
+
+
+    def solve_craigsneyd(self, n, dt, crumbs=[], theta=0.5, callback=None,
+            numpy=False):
+
+        n = int(n)
+        if crumbs:
+            V = crumbs[-1]
+        else:
+            V = self.grid.domain.copy()
+            crumbs.append(V)
+        crumbs.append(V)
+
+        Firsts = [(o * dt) for o in self.operators.values()]
+
+        Les = [(o * theta * dt)
+               for d, o in sorted(self.operators.iteritems())
+               if type(d) != tuple]
+        Lis = [(o * (theta * -dt)).add(1, inplace=True)
+               for d, o in sorted(self.operators.iteritems())
+               if type(d) != tuple]
+
+        for L in itertools.chain(Les, Lis):
+            L.R = None
+
+        print_step = max(1, int(n / 10))
+        to_percent = 100.0 / n
+        utils.tic("Craig-Sneyd:\t")
+        for k in xrange(n):
+            if not k % print_step:
+                if np.isnan(V).any():
+                    print "Craig-Sneyd fail @ t = %f (%i steps)" % (dt * k, k)
+                    return crumbs
+                print int(k * to_percent),
+            if callback is not None:
+                callback(V, ((n - k) * dt))
+
+            Y = V.copy()
+            for L in Firsts:
+                Y += L.apply(V)
+            Y0 = Y.copy()
+
+            for Le, Li in zip(Les, Lis):
+                Y -= Le.apply(V)
+                Y = Li.solve(Y)
+
+            Y = Y0 + 0.5 *dt * self.cross_term(Y - V, numpy=False)
+            for Le, Li in zip(Les, Lis):
+                Y -= Le.apply(V)
+                Y = Li.solve(Y)
+            V = Y
+
+            crumbs.append(V.copy())
+        utils.toc(':  \t')
+        return crumbs
+
+
+    def solve_douglas(self, n, dt, crumbs=[], theta=0.5, callback=None,
+            numpy=False):
+
+        n = int(n)
+        if crumbs:
+            V = crumbs[-1]
+        else:
+            V = self.grid.domain.copy()
+            crumbs.append(V)
+        crumbs.append(V)
+
+        Firsts = [(o * dt) for o in self.operators.values()]
+
+        Les = [(o * theta * dt)
+               for d, o in sorted(self.operators.iteritems())
+               if type(d) != tuple]
+        Lis = [(o * (theta * -dt)).add(1, inplace=True)
+               for d, o in sorted(self.operators.iteritems())
+               if type(d) != tuple]
+
+        for L in itertools.chain(Les, Lis):
+            L.R = None
+
+        print_step = max(1, int(n / 10))
+        to_percent = 100.0 / n
+        utils.tic("Douglas:\t")
+        for k in xrange(n):
+            if not k % print_step:
+                if np.isnan(V).any():
+                    print "Douglas fail @ t = %f (%i steps)" % (dt * k, k)
+                    return crumbs
+                print int(k * to_percent),
+            if callback is not None:
+                callback(V, ((n - k) * dt))
+
+            Y = V.copy()
+            for L in Firsts:
+                Y += L.apply(V)
+
+            for Le, Li in zip(Les, Lis):
+                Y -= Le.apply(V)
+                Y = Li.solve(Y)
+            V = Y
+
+            crumbs.append(V.copy())
+        utils.toc(':  \t')
+        return crumbs
+
+
+    def solve_john_adi(self, n, dt, crumbs=[], callback=None, numpy=False):
+        #TODO: I don't think this satisfies... well.. anything.
         theta = 0.5
         n = int(n)
         if crumbs:
@@ -568,27 +735,30 @@ class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
 
         print_step = max(1, int(n / 10))
         to_percent = 100.0 / n
-        utils.tic("solve_adi:\t")
+        utils.tic("solve_john_adi:\t")
         for k in xrange(n):
             if not k % print_step:
                 if np.isnan(V).any():
-                    print "solve_adi fail @ t = %f (%i steps)" % (dt * k, k)
+                    print "solve_john_adi fail @ t = %f (%i steps)" % (dt * k, k)
                     return crumbs
                 print int(k * to_percent),
             if callback is not None:
                 callback(V, ((n - k) * dt))
-            V += self.cross_term(V) * dt
             for Le, Li in Leis:
-                V = Le.apply(V).T
+                V = Le.apply(V)
+                V += self.cross_term(V, numpy=numpy) * 0.5 * dt
                 V = Li.solve(V)
             crumbs.append(V.copy())
         utils.toc(':  \t')
         return crumbs
 
 
-    def smooth(self, n, dt, crumbs=[], callback=None, smoothing_steps=2):
+    def smooth(self, n, dt, crumbs=[], callback=None, smoothing_steps=2,
+            scheme=None):
+        if scheme is None:
+            scheme = self.solve_douglas
         V = self.solve_implicit(smoothing_steps*2, dt*0.5, crumbs=crumbs)
-        return self.solve_adi(n-smoothing_steps, dt, crumbs=V)
+        return scheme(n-smoothing_steps, dt, crumbs=V)
 
 
 def replicate(n, x):
@@ -726,7 +896,7 @@ class BandedOperator(object):
 
     def solve(self, V, overwrite=False):
         t = range(V.ndim)
-        utils.rolllist(t, self.axis, 0)
+        utils.rolllist(t, self.axis, V.ndim-1)
         V = np.transpose(V, axes=t)
 
         if self.R is not None:
@@ -739,7 +909,7 @@ class BandedOperator(object):
                 overwrite_ab=overwrite, overwrite_b=True).reshape(V.shape)
 
         t = range(V.ndim)
-        utils.rolllist(t, 0, self.axis)
+        utils.rolllist(t, V.ndim-1, self.axis)
         ret = np.transpose(ret, axes=t)
 
         return ret
