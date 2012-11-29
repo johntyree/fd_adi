@@ -127,7 +127,6 @@ def sinh_space(exact, high, density, size):
             best = space[bisect_left(space, exact)]
         except IndexError:
             best = space[-2]
-        print best
         return abs(exact - best)
 
     newmax, best, failed, _ = scipy.optimize.fminbound(energy, high*0.95, high*1.05, full_output=True)
