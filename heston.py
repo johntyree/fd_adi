@@ -47,6 +47,39 @@ class HestonOption(Option):
         self.vol_of_variance = vol_of_variance
         self.correlation = correlation
 
+        def mu_s(t, *dim): return self.interest_rate.value * dim[0]
+        def gamma2_s(t, *dim): return 0.5 * dim[1] * dim[0]**2
+
+        def mu_v(t, *dim): return self.mean_reversion * (self.mean_variance - dim[1])
+        def gamma2_v(t, *dim): return 0.5 * self.vol_of_variance**2 * dim[1]
+
+        coeffs = {()   : lambda t: -self.interest_rate.value,
+                  (0,) : mu_s,
+                  (0,0): gamma2_s,
+                  (1,) : mu_v,
+                  (1,1): gamma2_v,
+                  (0,1): lambda t, *dim: dim[0] * dim[1] * self.correlation * self.vol_of_variance
+                  }
+        bounds = {
+                        # D: U = 0              VN: dU/dS = 1
+                (0,)  : ((0, lambda *args: 0.0), (1, lambda *args: 1.0)),
+                        # D: U = 0              Free boundary
+                (0,0) : ((0, lambda *args: 0.0), (None, lambda *x: None)),
+                        # Free boundary at low variance
+                (1,)  : ((None, lambda *x: None),
+                        # # D intrinsic value at high variance
+                        (0, lambda t, *dim: np.maximum(0.0, dim[0]-self.strike))),
+                        # # Free boundary
+                (1,1) : ((None, lambda *x: None),
+                        # D intrinsic value at high variance
+                        (0, lambda t, *dim: np.maximum(0.0, dim[0]-self.strike)))
+                }
+
+        schemes = {
+            (1,): ({"scheme": "center"}, {"scheme": 'forward', "from" : 0})
+        }
+
+
 
     def __str__(self):
         s = Option.features(self)
