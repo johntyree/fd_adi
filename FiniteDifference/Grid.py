@@ -33,7 +33,6 @@ class Grid(object):
             self.domain.append(initializer(*mesh))
         else:
             self.domain.append(initializer(*(x.T for x in np.meshgrid(*mesh))))
-        self._shape = tuple(map(len, mesh))
         self.dx = [np.hstack((np.nan, np.diff(m))) for m in mesh]
 
         self.initializer = initializer
@@ -69,9 +68,6 @@ Grid object <%(hexid)s>
     def min(self, dim):
         return self.mesh[dim][0]
 
-    @property
-    def shape(self):
-        return self._shape
 
     def __getattr__(self, name):
         return self.domain[-1].__getattribute__(name)

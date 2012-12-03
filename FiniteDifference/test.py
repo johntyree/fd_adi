@@ -82,7 +82,7 @@ class BlackScholesOption_test(unittest.TestCase):
                 (0,)  : ((0, lambda *args: 0.0), (1, lambda t, x: 1.0)),
                 # (0,)  : ((0, lambda *args: 0.0), (1, lambda t, *x: np.exp(x[0]))),
                         # D: U = 0              Free boundary
-                (0,0) : ((0, lambda *args: 0.0), (None, lambda *x: None))}
+                (0,0) : ((0, lambda *args: 0.0), (None, lambda *x: 1.0))}
 
         self.dt = dt
         self.F = FD.FiniteDifferenceEngineADI(G, coefficients=coeffs, boundaries=bounds)
@@ -103,13 +103,13 @@ class BlackScholesOption_test(unittest.TestCase):
         print "Price:", V, ans, V - ans
         assert np.isclose(V, ans, rtol=0.001)
 
-    # def test_douglas(self):
-        # t, dt = self.BS.tenor, self.dt
-        # V = self.F.solve_john_adi(t/dt, dt)[self.spot_idx]
-        # ans = self.BS.analytical
-        # print "Spot:", self.BS.spot
-        # print "Price:", V, ans, V - ans
-        # assert np.isclose(V, ans, rtol=0.001)
+    def test_douglas(self):
+        t, dt = self.BS.tenor, self.dt
+        V = self.F.solve_douglas(t/dt, dt)[self.spot_idx]
+        ans = self.BS.analytical
+        print "Spot:", self.BS.spot
+        print "Price:", V, ans, V - ans
+        assert np.isclose(V, ans, rtol=0.001)
 
     def test_smooth(self):
         t, dt = self.BS.tenor, self.dt
@@ -137,8 +137,8 @@ class FiniteDifferenceEngineADI_test(unittest.TestCase):
         rho = 0.2
         spot_max = 1500.0
         var_max = 13.0
-        nspots = 50
-        nvols = 35
+        nspots = 6
+        nvols = 5
         spotdensity = 7.0  # infinity is linear?
         varexp = 4
 
@@ -148,8 +148,8 @@ class FiniteDifferenceEngineADI_test(unittest.TestCase):
 
         up_or_down_spot = 'up'
         up_or_down_var = 'down'
-        flip_idx_spot = 18
-        flip_idx_var = 10
+        flip_idx_spot = nspots//2
+        flip_idx_var = nvols//2
         k = spot_max / 4.0
         spots = np.linspace(0, spot_max, nspots)
         vars = np.linspace(0, var_max, nvols)
@@ -172,7 +172,7 @@ class FiniteDifferenceEngineADI_test(unittest.TestCase):
                         # D: U = 0              VN: dU/dS = 1
                 (0,)  : ((0 if dirichlet_s else 1, lambda *args: 0.0), (1, lambda *args: 1.0)),
                         # D: U = 0              Free boundary
-                (0,0) : ((0 if dirichlet_s else 1, lambda *args: 0.0), (None, lambda *x: None)),
+                (0,0) : ((0 if dirichlet_s else 1, lambda *args: 0.0), (None, lambda *x: 1.0)),
                         # Free boundary at low variance
                 (1,)  : ((None, lambda *x: None),
                         # (0.0, lambda t, *dim: 0),
@@ -240,7 +240,7 @@ class FiniteDifferenceEngineADI_test(unittest.TestCase):
             L1_.append(As.copy())
             L1_[j].data += Ass.data
             L1_[j].data[m, :] -=  0.5 * r * r_enable
-            L1_[j].data[m, 0] = -1 * dirichlet_s
+            L1_[j].data[m, 0] = 1 * dirichlet_s
 
             R1_.append((Rs + Rss).copy())
             R1_[j][0] = 0
@@ -294,13 +294,13 @@ class FiniteDifferenceEngineADI_test(unittest.TestCase):
             L2_.append(Av.copy())
             L2_[i].data += Avv.data
             L2_[i].data[m, :] -= 0.5 * r * r_enable
-            L2_[i].data[m, -1] = -1 * dirichlet_v  # This is to cancel out the previous value so we can
+            L2_[i].data[m, -1] = 1 * dirichlet_v  # This is to cancel out the previous value so we can
                                 # set the dirichlet boundary condition using R.
                                 # Then we have U_i + -U_i + R
 
 
             R2_.append(Rv + Rvv)
-            R2_[i][-1] = np.maximum(0, s - k)
+            R2_[i][-1] = 0# np.maximum(0, s - k)
 
         def flatten_tensor(mats):
             diags = np.hstack([x.data for x in mats])
@@ -319,10 +319,10 @@ class FiniteDifferenceEngineADI_test(unittest.TestCase):
         self.L2_ = L2
         self.R2_ = R2
         # G = Grid.Grid((spots, vars), initializer=lambda x0,x1: np.maximum(x0-k,0))
-        G = Grid.Grid((spots, vars), initializer=lambda x0,x1: x0*x1)
+        self.G = Grid.Grid((spots, vars), initializer=lambda x0,x1: x0*x1)
         # print G
 
-        self.F = FD.FiniteDifferenceEngineADI(G, coefficients=coeffs,
+        self.F = FD.FiniteDifferenceEngineADI(self.G, coefficients=coeffs,
                 boundaries=bounds, schemes=schemes, force_bandwidth=None)
 
 
@@ -367,11 +367,11 @@ class FiniteDifferenceEngineADI_test(unittest.TestCase):
         # print "diff"
         # fp(L1.data - oldL1.data)
         # print
-        # print "old"
-        # fp(oldL1.todense())
-        # print
-        # print "new"
-        # fp(L1.todense())
+        print "old"
+        fp(oldL1.todense())
+        print
+        print "new"
+        fp(L1.todense())
         # print
         # print "diff"
         # fp(oldL1.todense() - L1.todense())
@@ -411,20 +411,25 @@ class FiniteDifferenceEngineADI_test(unittest.TestCase):
 
 
     def test_numpy_vs_operators(self):
-        spots = np.linspace(0,1, 15)
-        vars = np.linspace(0,10, 10)
-        spots = self.F.grid.mesh[0]
-        vars = self.F.grid.mesh[1]
+        spots = np.linspace(0,1, 4)
+        vars = np.linspace(0,10, 4)
+        # spots = self.G.mesh[0]
+        # vars = self.G.mesh[1]
         G = Grid.Grid((spots, vars), initializer=lambda x0,x1: x1*1)
         coeffs = {()   : lambda t: 0,
                   (0,) : lambda t, *dim: dim[0],
                   (0,0): lambda t, *dim: dim[0],
-                  (1,) : lambda t, *dim: dim[1],
+                  (1,) : lambda t, *dim: 0*dim[1],
                   (1,1): lambda t, *dim: dim[1],
                   (0,1): lambda t, *dim: dim[0] * dim[1]
                   }
-        F = FD.FiniteDifferenceEngineADI(G, coefficients=coeffs, force_bandwidth=None)
-        F = self.F
+        bounds = {(0,) : ((None, lambda *x: None), (None, lambda *x: 3)),
+                  (0,0): ((None, lambda *x: None), (None, lambda *x: 3)),
+                  (1,) : ((None, lambda *x: None), (None, lambda *x: 1)),
+                  (1,1): ((None, lambda *x: None), (None, lambda *x: 1)),
+                  }
+        F = FD.FiniteDifferenceEngineADI(G, coefficients=coeffs, boundaries=bounds, force_bandwidth=None)
+        # F = self.F
 
         cb = utils.clear_boundary
         g = F.grid.domain[-1]
@@ -435,19 +440,23 @@ class FiniteDifferenceEngineADI_test(unittest.TestCase):
         dims = coeffs.keys()
         dims.remove(())
 
+
         F.simple_operators[(0,1)] = F.operators[(0,1)]
         for dim in dims:
             op_['grid_delta'][dim] = F.simple_operators[dim].copy()
             op_['grid_delta'][dim].R = None
 
+
         op_['delta'][(0,)] = op_['grid_delta'][(0,)].deltas[:,np.newaxis]
         op_['delta'][(1,)] = op_['grid_delta'][(1,)].deltas
+
 
         x = F.grid.mesh[0]; y = F.grid.mesh[1]
         np_['delta'][(0,)] = np.gradient(x)[:,np.newaxis]
         np_['delta'][(1,)] = np.gradient(y)
         np_['delta'][(0,)][0,0] = np.nan
         np_['delta'][(1,)][0] = np.nan
+
 
         for f in (op_, np_):
             f['delta'][(0,0)] = f['delta'][(0,)]**2
@@ -465,7 +474,7 @@ class FiniteDifferenceEngineADI_test(unittest.TestCase):
         Y,X = np.meshgrid(y, x)
         for dim in dims:
             op_['derivative'][dim] = cb(op_['grid_delta'][dim].apply(g), inplace=True)
-            assert op_['derivative'][dim].shape == g.shape
+            npt.assert_(op_['derivative'][dim].shape == g.shape)
             np_['derivative'][dim] = cb(np_['grid_delta'][dim] / np_['delta'][dim], inplace=True)
             np_['derivative'][dim] *= F.coefficients[dim](0,X,Y)
 
@@ -475,14 +484,73 @@ class FiniteDifferenceEngineADI_test(unittest.TestCase):
         for dim in dims:
             for x in ('delta', 'derivative'):
                 msg = "Comparing %s in dimension %s" % (x, dim)
-                # print msg, op_['grid_delta'][dim].axis
-                # fp((op_[x][dim]), fmt='e')
-                # fp((np_[x][dim]), fmt='e')
-                # fp((op_[x][dim] - np_[x][dim]), fmt='e')
+                try:
+                    npt.assert_array_almost_equal(op_[x][dim], np_[x][dim], decimal=7, err_msg=msg)
+                except AssertionError:
+                    print msg, op_['grid_delta'][dim].axis
+                    fp((op_['grid_delta'][dim]))
+                    fp((op_[x][dim]), fmt='f')
+                    fp((np_[x][dim]), fmt='f')
+                    fp((op_[x][dim] - np_[x][dim]), fmt='f')
                 # npt.assert_allclose(op_[x][dim], np_[x][dim], err_msg=msg)
                 npt.assert_array_almost_equal(op_[x][dim], np_[x][dim], decimal=7, err_msg=msg)
 
         npt.assert_array_almost_equal(np_['derivative'][(0,1)], np_['derivative'][(1,0)], err_msg=msg)
+
+
+    def test_dirichlet_boundary(self):
+        spots = np.arange(5.)
+        vars = np.arange(4.)
+
+        def rndgrid(x0, x1):
+            return np.random.random((x0.shape[0], x1.shape[1]))
+
+        G = Grid.Grid((spots, vars), initializer=rndgrid)
+        npt.assert_array_equal(G.shape, tuple(map(len, G.mesh)))
+        coeffs = bounds = {}
+        coeffs = {
+                  (0,) : lambda t, *dim: 1,
+                  # (0,0): lambda t, *dim: 0,
+                  (1,) : lambda t, *dim: 0,
+                  # (1,1): lambda t, *dim: 0,
+                  # (0,1): lambda t, *dim: 0
+                  }
+        bounds = {
+                  (0,) : ((None, lambda t, *x: 1), (None, lambda t, *x: 1)),
+                  # (0,0): ((None, lambda *x: 1), (0, lambda *x: 1)),
+                  (1,) : ((None, lambda *x: 1), (None, lambda *x: 1)),
+                  # (1,1): ((0, lambda *x: 1), (0, lambda *x: 1)),
+                  }
+        F = FD.FiniteDifferenceEngineADI(G, coefficients=coeffs, boundaries=bounds, force_bandwidth=None)
+
+        print
+        for d in bounds.keys():
+            B = F.simple_operators[d]
+            print B.dirichlet
+            g = B.apply(F.grid.domain[-1])
+            fp(B)
+            fp(g)
+            if B.axis == 1:
+                g = g.T
+            if B.dirichlet[0] is not None:
+                npt.assert_array_equal(g[0,:], 1)
+            if B.dirichlet[1] is not None:
+                npt.assert_array_equal(g[-1,:], 1)
+
+        for d in bounds.keys():
+            B = F.simple_operators[d]
+            print B.dirichlet
+            g = (B+1).solve(F.grid.domain[-1])
+            fp(B)
+            fp(g)
+            if B.axis == 1:
+                g = g.T
+            if B.dirichlet[0] is not None:
+                npt.assert_array_equal(g[0,:], 1)
+            if B.dirichlet[1] is not None:
+                npt.assert_array_equal(g[-1,:], 1)
+
+
 
 
     def test_cross_derivative(self):
@@ -532,17 +600,17 @@ class Grid_test(unittest.TestCase):
 
     def test_mesh(self):
         G = self.Grid
-        assert (G.mesh[0] == self.spots).all()
-        assert (G.mesh[1] == self.vars).all()
-        assert G.ndim == len(G.mesh)
-        assert G.shape == tuple(map(len, G.mesh))
+        npt.assert_array_equal(G.mesh[0], self.spots)
+        npt.assert_array_equal(G.mesh[1], self.vars)
+        npt.assert_(G.ndim == len(G.mesh))
+        npt.assert_(G.shape == tuple(map(len, G.mesh)))
 
     def test_domain(self):
         U = np.tile(np.maximum(0, self.spots - self.strike), (len(self.vars), 1)).T
         G = self.Grid
         # print G
         # print U
-        assert (G.domain == U).all()
+        npt.assert_array_equal(G.domain[-1], U)
 
 
 
@@ -844,7 +912,6 @@ class BandedOperator_test(unittest.TestCase):
 
 
 class ScalingFuncs(unittest.TestCase):
-
     def setUp(self):
         k = 3.0
         nspots = 7
@@ -889,6 +956,7 @@ class ScalingFuncs(unittest.TestCase):
         self.f0 = f0
         self.fx = fx
 
+
     def test_vectorizedscale(self):
         no_nan = np.nan_to_num
         vec = self.vec
@@ -908,21 +976,22 @@ class ScalingFuncs(unittest.TestCase):
         vecB = oldB.copy()
         vecB.vectorized_scale(self.f0(vec))
 
-        assert (no_nan(newB.data) == 0).all()
-        assert (no_nan(vecB.data) == 0).all()
 
-        for dchlet in itertools.product([True, False], repeat=2):
+        npt.assert_array_equal(no_nan(newB.data), 0)
+        npt.assert_array_equal(no_nan(vecB.data), 0)
+
+        for dchlet in itertools.product([1, None], repeat=2):
             oldB = FD.BandedOperator((data.copy(), offsets), res.copy())
-            oldB.is_dirichlet = dchlet
+            oldB.dirichlet = dchlet
             veczeroB = oldB.copy()
             veczeroB.vectorized_scale(self.f0(vec))
 
             manualzeroB = np.zeros_like(veczeroB.data)
-            if veczeroB.is_dirichlet[0]:
+            if veczeroB.dirichlet[0] is not None:
                 manualzeroB[0, 2] = flag
                 manualzeroB[1, 1] = flag
                 manualzeroB[2, 0] = flag
-            if veczeroB.is_dirichlet[1]:
+            if veczeroB.dirichlet[1] is not None:
                 manualzeroB[2, -1] = flag
                 manualzeroB[3, -2] = flag
                 manualzeroB[4, -3] = flag
@@ -950,30 +1019,39 @@ class ScalingFuncs(unittest.TestCase):
             manualB.data[2][bottom:top] *= vec[bottom : top]+2
             manualB.data[3][:top-1]     *= vec[1      : top]+2
             manualB.data[4][:top-2]     *= vec[2      : top]+2
-            manualB.R[bottom:top]       *= vec[bottom : top]+2
+            manualB.R[bottom:top]       *= vec[bottom:top]+2
             vecB.vectorized_scale(self.fx(vec))
             newB.scale(lambda i: vec[i]+2)
-            # print "vec"
-            # fp(vec)
-            # print
-            # print "manual"
-            # fp(manualB.data)
-            # print
-            # print "newB"
-            # fp(newB.data)
-            # print
-            # print "vecB"
-            # fp(vecB.data)
-            # print
-            # print "manualR"
-            # print manualB.R
-            # print
-            # print "vecR"
-            # print vecB.R
-            assert (veczeroB.data == manualzeroB).all()
-            assert newB == vecB
-            assert manualB == newB
-            assert manualB == vecB
+            print "vec"
+            fp(vec)
+            print
+            print "manual"
+            fp(manualB.data)
+            print
+            print "newB"
+            fp(newB.data)
+            print
+            print "vecB"
+            fp(vecB.data)
+            print
+            print "manualR"
+            print manualB.R
+            print
+            print "vecR"
+            print vecB.R
+            print
+            print "newR"
+            print newB.R
+            print
+            print "manual"
+            fp(manualB)
+            print
+            print "newB"
+            fp(newB)
+            npt.assert_array_equal(veczeroB.data, manualzeroB)
+            npt.assert_(newB == vecB)
+            npt.assert_array_equal(manualB, newB)
+            npt.assert_array_equal(manualB, vecB)
 
         newB = oldB.copy()
         newB.scale(self.fcoeff)
@@ -1002,29 +1080,31 @@ class ScalingFuncs(unittest.TestCase):
         offsets = [2,1,0,-1,-2]
         res = np.ones_like(vec)
 
-        for dchlet in itertools.product([True, False], repeat=2):
+        for dchlet in itertools.product([1, None], repeat=2):
             oldB = FD.BandedOperator((data.copy(), offsets), res.copy())
-            oldB.is_dirichlet = dchlet
+            oldB.dirichlet = dchlet
             zeroB = oldB.copy()
             zeroB.scale(self.f0)
 
             manualzeroB = np.zeros_like(zeroB.data)
-            if zeroB.is_dirichlet[0]:
+            if zeroB.dirichlet[0] is not None:
                 manualzeroB[0, 2] = flag
                 manualzeroB[1, 1] = flag
                 manualzeroB[2, 0] = flag
-            if zeroB.is_dirichlet[1]:
+            if zeroB.dirichlet[1] is not None:
                 manualzeroB[2, -1] = flag
                 manualzeroB[3, -2] = flag
                 manualzeroB[4, -3] = flag
 
-            # print dchlet
+            print "Dirichlet", dchlet
             # print
             # print "zeroB"
             # fp(zeroB.data)
+            # fp(zeroB.R)
             # print
             # print "manualzeroB"
             # fp(manualzeroB)
+            # fp(manualzeroB.R)
             # print
 
             manualB = oldB.copy()
@@ -1042,17 +1122,17 @@ class ScalingFuncs(unittest.TestCase):
             manualB.data[4][:top-2] *= np.arange(2, top)+2
             manualB.R[bottom:top] *= np.arange(bottom, top)+2
             newB.scale(self.fx)
-            # print "manual"
-            # fp(manualB.data)
-            # print
-            # print "new"
-            # fp(newB.data)
-            # print
-            # print "manualR"
-            # print manualB.R
-            # print
-            # print "newR"
-            # print newB.R
+            print "manual"
+            fp(manualB.data)
+            print
+            print "new"
+            fp(newB.data)
+            print
+            print "manualR"
+            print manualB.R
+            print
+            print "newR"
+            print newB.R
             assert (zeroB.data == manualzeroB).all()
             assert manualB == newB
 
@@ -1073,7 +1153,8 @@ class ScalingFuncs(unittest.TestCase):
 
         newB = oldB.copy()
         newB.scale(f0)
-        assert (no_nan(newB.data) == 0).all()
+        fp(newB.data)
+        npt.assert_array_equal(no_nan(newB.data), 0)
 
         manualB = oldB.copy()
         newB = oldB.copy()
@@ -1095,7 +1176,7 @@ class ScalingFuncs(unittest.TestCase):
         # print
         # print "newR"
         # print newB.R
-        assert manualB == newB
+        npt.assert_array_equal(manualB, newB)
 
 
 def main():

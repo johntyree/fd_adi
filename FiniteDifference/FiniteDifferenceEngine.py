@@ -106,6 +106,7 @@ class FiniteDifferenceEngine(object):
         Can't do this with C/Cuda of course... maybe cython?
         """
         self.grid = grid
+        self.shape = grid.shape
         self.ndim = self.grid.ndim
         self.coefficients = coefficients
         self.boundaries = boundaries
@@ -167,7 +168,8 @@ class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
         high = low = 0
         d = len(derivative_tuple)
         if derivative_tuple not in self.boundaries:
-            b = ((None, None), (None, None))
+            raise ValueError("%s has no boundary specified." %
+                    (derivative_tuple,))
         else:
             b = self.boundaries[derivative_tuple]
         for sd in self.schemes.get(derivative_tuple, ({},)): # a tuple of dicts
@@ -195,7 +197,10 @@ class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
             if d == 1:
                 h = 2
             elif d == 2:
-                h = 1
+                if b[0][1](0,0) is not None:
+                    h = 1
+                else:
+                    h = 2
             if explain:
                 print ("Low free boundary requires forward"
                     " difference (%i): %i (have %i)" % (d, h, high))
@@ -204,7 +209,10 @@ class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
             if d == 1:
                 l = -2
             elif d == 2:
-                l = -1
+                if b[1][1](0,0) is not None:
+                    l = -1
+                else:
+                    l = -2
             if explain:
                 print ("High free boundary requires backward"
                        " difference (%i): %i (have %i)" % (d, l, low))
@@ -225,7 +233,7 @@ class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
         # We partially apply the function to all of the values except this
         # dimension, and change the semantics to accept an index into mesh
         # rather than the mesh value itself. This way the caller doesn't need
-        # to know anything other than row it's working on.
+        # to know anything other than the row it's working on.
         # f : (t x R^n -> R) -> Z -> R
         def wrapscalarfunc(f, args, dim):
             x = list(args)
@@ -238,7 +246,6 @@ class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
         # Here we do the same except we go ahead and evalutate the function for
         # the entire vector. This is just for numpy's speed and is otherwise
         # redundant.
-
         def evalvectorfunc(f, args, dim):
             x = list(args)
             x.insert(dim, self.grid.mesh[dim])
@@ -291,7 +298,6 @@ class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
             for a in argset:
                 # Make a new operator from our template
                 B = Binit.copy()
-                assert Binit.axis == dim, "Binit.axis %s, dim %s" % (Binit.axis, dim)
 
                 # Adjust the boundary conditions as necessary
                 if d in bounds:
@@ -300,18 +306,25 @@ class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
                     highfunc = wrapscalarfunc(b[1][1], a, dim)
                     b = ((b[0][0], lowfunc(0)), (b[1][0], highfunc(-1)))
                     B.applyboundary(b, self.grid.mesh)
-                    assert Binit.axis == dim, "Binit.axis %s, dim %s" % (Binit.axis, dim)
+                    # If we have a dirichlet boundary, save our function
+                    if b[0][0] == 0:
+                        B.dirichlet[0] =  b[0][1]
+                    if b[1][0] == 0:
+                        B.dirichlet[1] =  b[1][1]
+
+
                     # If it's a dirichlet boundary we mark it because we have to
                     # handle it absolutely last, it doesn't get scaled.
-                    lf = hf = None
-                    if B.is_dirichlet[0]:
-                        lf = lowfunc
-                    if B.is_dirichlet[1]:
-                        hf = highfunc
-                    if lf or hf:
-                        if dim not in dirichlets:
-                            dirichlets[dim] = []
-                        dirichlets[dim].append((lf, hf))
+                    # lf = hf = None
+                    # if B.dirichlet[0] is not None:
+                        # lf = lowfunc
+                    # if B.dirichlet[1] is not None:
+                        # hf = highfunc
+                    # if lf or hf:
+                        # vals = dirichlets.setdefault(dim, [])
+                        # vals.append((lval, hval))
+                else:
+                    raise ValueError("%s has no boundary condition specified." % d)
 
                 # Give the operator the right coefficient
                 # Here we wrap the functions with the appropriate values for
@@ -319,8 +332,6 @@ class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
                 if d in coeffs:
                     B.vectorized_scale(evalvectorfunc(coeffs[d], a, dim))
                 Bs.append(B)
-                for b in Bs:
-                    assert b.axis == dim, "b.axis %s, dim %s" % (b.axis, dim)
             self.simple_operators[d] = flatten_tensor_aligned(Bs)
 
 
@@ -340,6 +351,8 @@ class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
         # Now the 0th derivative (x * V)
         # We split this evenly among each dimension
         #TODO: This function is ONLY dependent on time. NOT MESH
+        # Also, this gets plowed during the solve steps if we have dirichlet
+        # boundaries
         if () in coeffs:
             for Bs in self.operators.values():
                 for B in Bs:
@@ -414,20 +427,22 @@ class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
             BM = flatten_tensor_aligned(Bms, check=False)
             self.operators[d] = BP+BB+BM
 
-        # Now everything else is done we can apply dirichlet boundaries
-        for (dim, funcs) in dirichlets.items():
-            # For each operator in this dimension
-            for i, B in enumerate(self.operators[dim]):
-                m = tuple(B.offsets).index(0)
-                lowfunc, highfunc = funcs[i]
-                if lowfunc:
-                    # Cancel out the old value
-                    B.data[m, 0] = -1
-                    # Replace with the new one
-                    B.R[0] = lowfunc(0)
-                if highfunc:
-                    B.data[m, -1] = -1
-                    B.R[-1] = highfunc(-1)
+        # Dirichlet boundaries are handled in the apply and solve methods.
+
+        # # Now everything else is done we can apply dirichlet boundaries
+        # for (dim, funcs) in dirichlets.items():
+            # # For each operator in this dimension
+            # for i, B in enumerate(self.operators[dim]):
+                # m = tuple(B.offsets).index(0)
+                # lowfunc, highfunc = funcs[i]
+                # if lowfunc:
+                    # # Cancel out the old value
+                    # # B.data[m, 0] = -1
+                    # # Replace with the new one
+                    # B.R[0] = lowfunc(0)
+                # if highfunc:
+                    # # B.data[m, -1] = -1
+                    # B.R[-1] = highfunc(-1)
 
         # Flatten into one large operator for speed
         # We'll apply this to a flattened domain and then reshape it.
@@ -802,7 +817,7 @@ def replicate(n, x):
 
 class BandedOperator(object):
 
-    attrs = ('derivative', 'order', 'axis', 'deltas', 'is_dirichlet')
+    attrs = ('derivative', 'order', 'axis', 'deltas', 'dirichlet', 'blocks')
 
     def __init__(self, data_offsets, residual=None, inplace=True,
             derivative=1, order=2, deltas=None, axis=0):
@@ -834,11 +849,12 @@ class BandedOperator(object):
                              "expected %i." % (residual.shape[0], size))
 
         # NB: When adding something here, also add to BandedOperator.attrs
+        self.blocks = 1
         self.derivative = derivative
         self.order = order
         self.deltas = deltas if deltas is not None else np.array([np.nan])
         self.solve_banded_offsets = (abs(min(offsets)), abs(max(offsets)))
-        self.is_dirichlet = [False, False]
+        self.dirichlet = [None, None]
         self.axis = axis
 
     def copy_meta_data(self, other, **kwargs):
@@ -909,9 +925,19 @@ class BandedOperator(object):
 
 
     def apply(self, V, overwrite=False):
+        if not overwrite:
+            V = V.copy()
         t = range(V.ndim)
         utils.rolllist(t, self.axis, V.ndim-1)
         V = np.transpose(V, axes=t)
+
+        if self.dirichlet[0] is not None:
+            print "Setting V[0,:] to", self.dirichlet[0]
+            V[:,0] = self.dirichlet[0]
+        if self.dirichlet[1] is not None:
+            print "Setting V[-1,:] to", self.dirichlet[-1]
+            V[:,-1] = self.dirichlet[1]
+
 
         if self.R is not None:
             ret = self.D.dot(V.flat) + self.R
@@ -927,9 +953,16 @@ class BandedOperator(object):
         return ret
 
     def solve(self, V, overwrite=False):
+        if not overwrite:
+            V = V.copy()
         t = range(V.ndim)
         utils.rolllist(t, self.axis, V.ndim-1)
         V = np.transpose(V, axes=t)
+
+        if self.dirichlet[0] is not None:
+            V[:,0] = self.dirichlet[0]
+        if self.dirichlet[1] is not None:
+            V[:,-1] = self.dirichlet[1]
 
         if self.R is not None:
             V0 = V.flat - self.R
@@ -973,8 +1006,10 @@ class BandedOperator(object):
 
         # Doing lower boundary
         if lower_type == 0:
-            # Dirichlet boundary. No derivatives.
-            self.is_dirichlet[0] = True
+            # Dirichlet boundary. No derivatives, but we need to preserve the
+            # value we get, because we will have already forced it.
+            B.data[m, 0] = 1
+            B.dirichlet[0] = lower_val
             pass
         elif lower_type == 1:
             # Von Neumann boundary, we specify it directly.
@@ -1000,6 +1035,7 @@ class BandedOperator(object):
             # If we know the first derivative, Extrapolate second derivative by
             # assuming the first stays constant.
             if lower_val is not None:
+                print "%s %s Assuming first derivative is %s for second." % (B.axis, B.derivative, lower_val,)
                 fst_deriv = lower_val
                 assert m-1 >= 0
                 B.data[m-1, 1] =  2 / d[1]**2
@@ -1007,6 +1043,7 @@ class BandedOperator(object):
                 B.R[0]         =  -fst_deriv * 2 / d[1]
             # Otherwise just compute it with forward differencing
             else:
+                print "%s %s Computing second derivative directly." % (B.axis, B.derivative,)
                 assert m-2 >= 0
                 denom = (0.5*(d[2]+d[1])*d[2]*d[1]);
                 B.data[m-2,2] = d[1]         / denom
@@ -1018,8 +1055,10 @@ class BandedOperator(object):
 
         # Doing upper boundary
         if upper_type == 0:
-            # Dirichlet boundary. No derivatives.
-            self.is_dirichlet[1] = True
+            # Dirichlet boundary. No derivatives, but we need to preserve the
+            # value we get, because we will have already forced it.
+            B.data[m, -1] = 1
+            B.dirichlet[1] = upper_val
             pass
         elif upper_type == 1:
             # Von Neumann boundary, we specify it directly.
@@ -1330,8 +1369,8 @@ class BandedOperator(object):
                 B.R[:splitidx] = 0
 
             B.copy_meta_data(self)
-            B.is_dirichlet[0] = self.is_dirichlet[0]
-            B.is_dirichlet[1] = bottom.is_dirichlet[1]
+            B.dirichlet[0] = self.dirichlet[0]
+            B.dirichlet[1] = bottom.dirichlet[1]
         return B
 
 
@@ -1346,14 +1385,26 @@ class BandedOperator(object):
         else:
             B = self.copy()
 
-        if not B.is_dirichlet[0]:
-            B.data[0] *= val
-            B.R[0] *= val
-        if not B.is_dirichlet[1]:
-            B.data[-1] *= val
-            B.R[-1] *= val
-        B.data[1:-1] *= val
-        B.R[1:-1] *= val
+        B.vectorized_scale(np.ones(B.shape[0]) * val)
+        # block_len = B.shape[0] / float(B.blocks)
+        # assert block_len == int(block_len)
+        # for i in range(B.blocks):
+            # top = i*block_len
+            # if B.dirichlet[0] is not None:
+                # top += 1
+            # bottom = i*block_len + block_len
+            # if B.dirichlet[1] is not None:
+                # bottom -= 1
+            # B.data[m,top:bottom] *= val
+            # B.R[top:bottom] *= val
+
+        # if B.dirichlet[0] is None:
+            # B.data[0] *= val
+        # if B.dirichlet[1] is None:
+            # B.data[-1] *= val
+            # B.R[-1] *= val
+        # B.data[1:-1] *= val
+        # B.R[1:-1] *= val
         return B
 
 
@@ -1406,10 +1457,27 @@ class BandedOperator(object):
                     B.data[to] += self.data[fro]
                 B.copy_meta_data(self)
             # Copy the data from the other operator over
+            # Don't double the dirichlet boundaries!
             for o in otheroffsets:
                 fro = otheroffsets.index(o)
                 to = Boffsets.index(o)
-                B.data[to] += other.data[fro]
+                if o == 0:
+                    # We have to do the main diagonal block_wise becaues of the
+                    # dirichlet boundary
+                    block_len = B.shape[0] / float(B.blocks)
+                    assert block_len == int(block_len)
+                    for i in range(B.blocks):
+                        top = i*block_len
+                        if B.dirichlet[0] is not None:
+                            top += 1
+                        bottom = i*block_len + block_len
+                        if B.dirichlet[1] is not None:
+                            bottom -= 1
+                        B.data[to,top:bottom] += other.data[fro,top:bottom]
+                else:
+                    top = 0
+                    bottom = B.data.shape[1]
+                    B.data[to,top:bottom] += other.data[fro,top:bottom]
             # Now the residual vector from the other one
             if other.R is not None:
                 if B.R is None:
@@ -1427,7 +1495,23 @@ class BandedOperator(object):
                 B = self
             else:
                 B = self.copy()
-            B.data[m] += other
+            block_len = B.shape[0] / float(B.blocks)
+            assert block_len == int(block_len)
+            for i in range(B.blocks):
+                top = i*block_len
+                if B.dirichlet[0] is not None:
+                    top += 1
+                bottom = i*block_len + block_len
+                if B.dirichlet[1] is not None:
+                    bottom -= 1
+                B.data[m,top:bottom] += other
+            # top = 0
+            # if B.dirichlet[0] is not None:
+                # top += 1
+            # bottom = B.data.shape[1]
+            # if B.dirichlet[1] is not None:
+                # bottom -= 1
+            # B.data[m,top:bottom] += other
             # Don't touch the residual.
         return B
 
@@ -1439,20 +1523,39 @@ class BandedOperator(object):
 
         See FiniteDifferenceEngine.coefficients.
         """
-        bottom = 0
-        top = last = self.shape[0]
-        if self.is_dirichlet[0]:
-            bottom += 1
-        if self.is_dirichlet[1]:
-            top -= 1
-        for row, o in enumerate(self.offsets):
-            if o > 0:
-                self.data[row, bottom+o:] *= vec[bottom:last-o]
-            elif o == 0:
-                self.data[row, bottom:top] *= vec[bottom:top]
-            elif o < 0:
-                self.data[row, :top+o] *= vec[-o:top]
-        self.R[bottom:top] *= vec[bottom:top]
+        #TODO: THIS SHOULD NOT TOUCH THE DIRICHLET BOUNDARIES!
+        block_len = self.shape[0] / float(self.blocks)
+        assert block_len == int(block_len)
+        if len(vec) == block_len:
+            vec = np.tile(vec, self.blocks)
+        assert len(vec) == self.shape[0]
+        for i in range(self.blocks):
+            for row, o in enumerate(self.offsets):
+                bottom = i*block_len
+                top = i*block_len + block_len
+                # if o == 0:
+                if o >= 0 and self.dirichlet[0] is not None:
+                    bottom += 1
+                if o <= 0 and self.dirichlet[1] is not None:
+                    top -= 1
+                if o > 0:
+                    bottom += o
+                if o < 0:
+                    top += o
+                # print "offset %s, %i to %i" % (o, bottom, top)
+                self.data[row, bottom:top] *= np.roll(vec, o)[bottom:top]
+            bottom = i*block_len
+            top = i*block_len + block_len
+            if self.dirichlet[0] is not None:
+                bottom += 1
+            if self.dirichlet[1] is not None:
+                top -= 1
+            self.R[bottom:top] *= vec[bottom:top]
+                # self.data[row,top_us:bottom_us] *= np.roll(vec, o)[top_them:bottom_them]
+                # self.data[row, bottom:top] *= vec[bottom:top]
+            # elif o < 0:
+                # # self.data[row, :top+o] *= vec[-o:top]
+                # self.data[row, :] *= np.tile(np.roll(vec, o), self.blocks)
 
 
     def scale(self, func):
@@ -1465,25 +1568,44 @@ class BandedOperator(object):
 
         See FiniteDifferenceEngine.coefficients.
         """
-        bottom = 0
-        top = self.shape[0]
-        if self.is_dirichlet[0]:
-            bottom += 1
-        if self.is_dirichlet[1]:
-            top -= 1
-        for row, o in enumerate(self.offsets):
-            if o > 0:
-                for i in xrange(bottom, self.shape[0]-o):
-                    self.data[row,i+o] *= func(i)
-            elif o == 0:
-                for i in xrange(bottom, top):
-                    self.data[row,i] *= func(i)
-            elif o < 0:
-                for i in xrange(top):
-                    self.data[row, i-abs(o)] *= func(i)
+        block_len = self.shape[0] / float(self.blocks)
+        assert block_len == int(block_len)
+        block_len = int(block_len)
+        for i in range(self.blocks):
+            for row, o in enumerate(self.offsets):
+                bottom = i*block_len
+                top = i*block_len + block_len
+                # if o == 0:
+                if o >= 0 and self.dirichlet[0] is not None:
+                    bottom += 1
+                if o <= 0 and self.dirichlet[1] is not None:
+                    top -= 1
+                if o > 0:
+                    bottom += o
+                elif o < 0:
+                    top += o
+                # print "offset %s, %s to %s" % (o, bottom, top)
+                for k in xrange(bottom, top):
+                    # print "i =", k-bottom
+                    self.data[row, k] *= func(k-o)
+            bottom = i*block_len
+            top = i*block_len + block_len
+            if self.dirichlet[0] is not None:
+                bottom += 1
+            if self.dirichlet[1] is not None:
+                top -= 1
+            for k in xrange(bottom,top):
+                self.R[k] *= func(k)
+            # if o > 0:
+                # for i in xrange(bottom, self.shape[0]-o):
+                    # self.data[row,i+o] *= func(i)
+            # elif o == 0:
+                # for i in xrange(bottom, top):
+                    # self.data[row,i] *= func(i)
+            # elif o < 0:
+                # for i in xrange(top):
+                    # self.data[row, i-abs(o)] *= func(i)
 
-        for i in xrange(bottom, top):
-            self.R[i] *= func(i)
 
 
     def compound_with(self, other):
@@ -1515,6 +1637,7 @@ def flatten_tensor_aligned(mats, check=True):
     diags = np.hstack([x.data for x in mats])
     B = BandedOperator((diags, mats[0].offsets), residual=residual)
     B.copy_meta_data(mats[0], derivative=None)
+    B.blocks = len(mats)
     return B
 
 
@@ -1533,9 +1656,10 @@ def flatten_tensor_misaligned(mats):
             newdata[to, bottom:top] += m.data[fro]
         bottom = top
     residual = np.hstack([x.R for x in mats])
-    flatmat = BandedOperator((newdata, offsets), residual=residual)
-    flatmat.copy_meta_data(mats[0], is_dirichlet=flatmat.is_dirichlet)
-    return flatmat
+    B = BandedOperator((newdata, offsets), residual=residual)
+    B.copy_meta_data(mats[0], dirichlet=B.dirichlet)
+    B.blocks = len(mats)
+    return B
 
 
 
