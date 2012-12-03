@@ -34,12 +34,21 @@ class Option(object):
         self._variance = MeanRevertingProcess(mean=variance, volatility=0)
 
         self.tenor = tenor
-        self.dt = dt
+        self._analytical = None
 
     # We can fake const attributes by using properties wihtout setters.
+
+    @property
+    def analytical(self):
+        if self._analytical is None:
+            self._analytical = self.compute_analytical()
+        return self._analytical
+
+
     @property
     def variance(self):
         return self._variance
+
 
     @property
     def volatility(self):
@@ -48,6 +57,7 @@ class Option(object):
 
     # def __repr__(self):
         # return "\n\t".join(self.features())
+
 
     def __str__(self):
         return [ "Option <%s>" % hex(id(self))
@@ -69,10 +79,9 @@ class BlackScholesOption(Option):
                  , volatility=0.2
                  , variance=None
                  , tenor=1.0
-                 , dt = None
                  ):
         Option.__init__(self, spot, strike, interest_rate, volatility,
-                variance, tenor, dt)
+                variance, tenor)
 
         def mu_s(t, *dim):     return r * dim[0]
         def gamma2_s(t, *dim): return 0.5 * v * dim[0]**2
@@ -88,8 +97,9 @@ class BlackScholesOption(Option):
 
         self.schemes = {}
 
-    @property
-    def analytical(self):
+
+
+    def compute_analytical(self):
         return self._call_delta()[0]
 
     @property

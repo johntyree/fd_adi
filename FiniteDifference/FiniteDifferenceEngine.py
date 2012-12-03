@@ -6,6 +6,10 @@
 # import os
 # import itertools as it
 
+# TODO: This needs a partial redesign on how to handle boundary conditions.
+# This just isn't flexible enough. We need to be able to do things like enforce
+# 1st derivative boundaries when the is no first derivative operator, etc.
+
 from bisect import bisect_left
 
 import numpy as np
@@ -238,7 +242,10 @@ class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
         def evalvectorfunc(f, args, dim):
             x = list(args)
             x.insert(dim, self.grid.mesh[dim])
-            return f(self.t, *x)
+            vec = f(self.t, *x)
+            if np.isscalar(vec):
+                vec += np.zeros_like(self.grid.mesh[dim])
+            return vec
 
         # d = (0,0) or so...
         for d in coeffs.keys():
@@ -292,7 +299,7 @@ class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
                     lowfunc = wrapscalarfunc(b[0][1], a, dim)
                     highfunc = wrapscalarfunc(b[1][1], a, dim)
                     b = ((b[0][0], lowfunc(0)), (b[1][0], highfunc(-1)))
-                    B.applyboundary(b)
+                    B.applyboundary(b, self.grid.mesh)
                     assert Binit.axis == dim, "Binit.axis %s, dim %s" % (Binit.axis, dim)
                     # If it's a dirichlet boundary we mark it because we have to
                     # handle it absolutely last, it doesn't get scaled.
@@ -447,14 +454,43 @@ class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
             ret = 0
         return ret
 
-
-    def solve_implicit(self, n, dt, crumbs=[], callback=None, numpy=False):
+    def solve_implicit2(self, n, dt, initial=None, callback=None, numpy=False):
         n = int(n)
-        if crumbs:
-            V = crumbs[-1]
+        if initial is not None:
+            V = initial.copy()
         else:
-            V = self.grid.domain.copy()
-            crumbs.append(V)
+            V = self.grid.domain[0].copy()
+            self.grid.domain.append(V)
+
+        Lis = [(o * -dt).add(1, inplace=True)
+               for d, o in sorted(self.operators.iteritems())
+               if type(d) != tuple]
+
+        print_step = max(1, int(n / 10))
+        to_percent = 100.0 / n
+        utils.tic("solve_implicit:\t")
+        for k in xrange(n):
+            if not k % print_step:
+                if np.isnan(V).any():
+                    print "Impl fail @ t = %f (%i steps)" % (dt * k, k)
+                    return V
+                print int(k * to_percent),
+            if callback is not None:
+                callback(V, ((n - k) * dt))
+            V += self.cross_term(V, numpy=numpy) * dt
+            for L in Lis:
+                V = L.solve(V)
+        self.grid.domain.append(V.copy())
+        utils.toc(':  \t')
+        return V
+
+    def solve_implicit(self, n, dt, initial=None, callback=None, numpy=False):
+        n = int(n)
+        if initial is not None:
+            V = initial.copy()
+        else:
+            V = self.grid.domain[0].copy()
+            self.grid.domain.append(V)
 
         Lis = [(o * -dt).add(1, inplace=True)
                for d, o in sorted(self.operators.iteritems())
@@ -469,28 +505,27 @@ class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
             if not k % print_step:
                 if np.isnan(V).any():
                     print "Impl fail @ t = %f (%i steps)" % (dt * k, k)
-                    return crumbs
+                    return V
                 print int(k * to_percent),
             if callback is not None:
                 callback(V, ((n - k) * dt))
             V += self.cross_term(V, numpy=numpy) * dt
             for L in Lis:
                 V = L.solve(V)
-        crumbs.append(V.copy())
+            self.grid.domain.append(V.copy())
         utils.toc(':  \t')
-        return crumbs
+        return V
 
 
-    def solve_hundsdorferverwer(self, n, dt, crumbs=[], theta=0.5, callback=None,
+    def solve_hundsdorferverwer(self, n, dt, initial=None, theta=0.5, callback=None,
             numpy=False):
 
         n = int(n)
-        if crumbs:
-            V = crumbs[-1]
+        if initial is not None:
+            V = initial.copy()
         else:
-            V = self.grid.domain.copy()
-            crumbs.append(V)
-        crumbs.append(V)
+            V = self.grid.domain[0].copy()
+            self.grid.domain.append(V)
 
         Firsts = [(o * dt) for o in self.operators.values()]
 
@@ -511,7 +546,7 @@ class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
             if not k % print_step:
                 if np.isnan(V).any():
                     print "Hundsdorfer-Verwer fail @ t = %f (%i steps)" % (dt * k, k)
-                    return crumbs
+                    return V
                 print int(k * to_percent),
             if callback is not None:
                 callback(V, ((n - k) * dt))
@@ -541,21 +576,20 @@ class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
 
             V = Y
 
-            crumbs.append(V.copy())
+            self.grid.domain.append(V.copy())
         utils.toc(':  \t')
-        return crumbs
+        return V
 
 
-    def solve_craigsneyd2(self, n, dt, crumbs=[], theta=0.5, callback=None,
+    def solve_craigsneyd2(self, n, dt, initial=None, theta=0.5, callback=None,
             numpy=False):
 
         n = int(n)
-        if crumbs:
-            V = crumbs[-1]
+        if initial is not None:
+            V = initial.copy()
         else:
-            V = self.grid.domain.copy()
-            crumbs.append(V)
-        crumbs.append(V)
+            V = self.grid.domain[0].copy()
+            self.grid.domain.append(V)
 
         Firsts = [(o * dt) for o in self.operators.values()]
 
@@ -569,6 +603,7 @@ class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
         for L in itertools.chain(Les, Lis):
             L.R = None
 
+
         print_step = max(1, int(n / 10))
         to_percent = 100.0 / n
         utils.tic("Craig-Sneyd 2:\t")
@@ -576,7 +611,7 @@ class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
             if not k % print_step:
                 if np.isnan(V).any():
                     print "Craig-Sneyd 2 fail @ t = %f (%i steps)" % (dt * k, k)
-                    return crumbs
+                    return V
                 print int(k * to_percent),
             if callback is not None:
                 callback(V, ((n - k) * dt))
@@ -600,21 +635,20 @@ class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
                 Y = Li.solve(Y)
             V = Y
 
-            crumbs.append(V.copy())
+            self.grid.domain.append(V.copy())
         utils.toc(':  \t')
-        return crumbs
+        return V
 
 
-    def solve_craigsneyd(self, n, dt, crumbs=[], theta=0.5, callback=None,
+    def solve_craigsneyd(self, n, dt, initial=None, theta=0.5, callback=None,
             numpy=False):
 
         n = int(n)
-        if crumbs:
-            V = crumbs[-1]
+        if initial is not None:
+            V = initial.copy()
         else:
-            V = self.grid.domain.copy()
-            crumbs.append(V)
-        crumbs.append(V)
+            V = self.grid.domain[0].copy()
+            self.grid.domain.append(V)
 
         Firsts = [(o * dt) for o in self.operators.values()]
 
@@ -635,7 +669,7 @@ class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
             if not k % print_step:
                 if np.isnan(V).any():
                     print "Craig-Sneyd fail @ t = %f (%i steps)" % (dt * k, k)
-                    return crumbs
+                    return V
                 print int(k * to_percent),
             if callback is not None:
                 callback(V, ((n - k) * dt))
@@ -655,21 +689,20 @@ class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
                 Y = Li.solve(Y)
             V = Y
 
-            crumbs.append(V.copy())
+            self.grid.domain.append(V.copy())
         utils.toc(':  \t')
-        return crumbs
+        return V
 
 
-    def solve_douglas(self, n, dt, crumbs=[], theta=0.5, callback=None,
+    def solve_douglas(self, n, dt, initial=None, theta=0.5, callback=None,
             numpy=False):
 
         n = int(n)
-        if crumbs:
-            V = crumbs[-1]
+        if initial is not None:
+            V = initial.copy()
         else:
-            V = self.grid.domain.copy()
-            crumbs.append(V)
-        crumbs.append(V)
+            V = self.grid.domain[0].copy()
+            self.grid.domain.append(V)
 
         Firsts = [(o * dt) for o in self.operators.values()]
 
@@ -690,7 +723,7 @@ class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
             if not k % print_step:
                 if np.isnan(V).any():
                     print "Douglas fail @ t = %f (%i steps)" % (dt * k, k)
-                    return crumbs
+                    return V
                 print int(k * to_percent),
             if callback is not None:
                 callback(V, ((n - k) * dt))
@@ -704,21 +737,20 @@ class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
                 Y = Li.solve(Y)
             V = Y
 
-            crumbs.append(V.copy())
+            self.grid.domain.append(V.copy())
         utils.toc(':  \t')
-        return crumbs
+        return V
 
 
-    def solve_john_adi(self, n, dt, crumbs=[], callback=None, numpy=False):
+    def solve_john_adi(self, n, dt, initial=None, callback=None, numpy=False):
         #TODO: I don't think this satisfies... well.. anything.
         theta = 0.5
         n = int(n)
-        if crumbs:
-            V = crumbs[-1]
+        if initial is not None:
+            V = initial.copy()
         else:
-            V = self.grid.domain.copy()
-            crumbs.append(V)
-        crumbs.append(V)
+            V = self.grid.domain[0].copy()
+            self.grid.domain.append(V)
 
         Les = [(o * ((1-theta)*dt)).add(1, inplace=True)
                for d, o in sorted(self.operators.iteritems())
@@ -740,7 +772,7 @@ class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
             if not k % print_step:
                 if np.isnan(V).any():
                     print "solve_john_adi fail @ t = %f (%i steps)" % (dt * k, k)
-                    return crumbs
+                    return V
                 print int(k * to_percent),
             if callback is not None:
                 callback(V, ((n - k) * dt))
@@ -748,17 +780,17 @@ class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
                 V = Le.apply(V)
                 V += self.cross_term(V, numpy=numpy) * 0.5 * dt
                 V = Li.solve(V)
-            crumbs.append(V.copy())
+            self.grid.domain.append(V.copy())
         utils.toc(':  \t')
-        return crumbs
+        return V
 
 
-    def smooth(self, n, dt, crumbs=[], callback=None, smoothing_steps=2,
+    def smooth(self, n, dt, initial=None, callback=None, smoothing_steps=2,
             scheme=None):
         if scheme is None:
             scheme = self.solve_douglas
-        V = self.solve_implicit(smoothing_steps*2, dt*0.5, crumbs=crumbs)
-        return scheme(n-smoothing_steps, dt, crumbs=V)
+        V = self.solve_implicit(smoothing_steps*2, dt*0.5, initial=initial)
+        return scheme(n-smoothing_steps, dt, initial=V)
 
 
 def replicate(n, x):
@@ -915,7 +947,7 @@ class BandedOperator(object):
         return ret
 
 
-    def applyboundary(self, boundary):
+    def applyboundary(self, boundary, mesh):
         """
         @boundary@ is a tuple from FiniteDifferenceEngine.boundaries.
 
@@ -965,12 +997,21 @@ class BandedOperator(object):
             # B.data[m - 1, 1] = 1.0 / d[1]
             # print B.data
         elif lower_type is None and derivative == 2:
-            # Extrapolate second derivative by assuming the first stays
-            # constant.
-            assert m-1 >= 0
-            B.data[m-1, 1] =  2 / d[1]**2
-            B.data[m,   0] = -2 / d[1]**2
-            B.R[0]         =  2 / d[1]
+            # If we know the first derivative, Extrapolate second derivative by
+            # assuming the first stays constant.
+            if lower_val is not None:
+                fst_deriv = lower_val
+                assert m-1 >= 0
+                B.data[m-1, 1] =  2 / d[1]**2
+                B.data[m,   0] = -2 / d[1]**2
+                B.R[0]         =  -fst_deriv * 2 / d[1]
+            # Otherwise just compute it with forward differencing
+            else:
+                assert m-2 >= 0
+                denom = (0.5*(d[2]+d[1])*d[2]*d[1]);
+                B.data[m-2,2] = d[1]         / denom
+                B.data[m-1,1] = -(d[2]+d[1]) / denom
+                B.data[m,0]   = d[2]         / denom
         else:
             raise NotImplementedError("Can't handle derivatives higher than"
                                       " order 2 at boundaries. (%s)" % derivative)
@@ -996,12 +1037,21 @@ class BandedOperator(object):
         elif upper_type is None and derivative == 2:
             if B.R is None:
                 B.R = np.zeros(B.data.shape[1])
-            # Extrapolate second derivative by assuming the first stays
-            # constant.
-            assert m+1 < B.data.shape[0]
-            B.data[m+1, -2] =  2 / d[-1]**2
-            B.data[m,   -1] = -2 / d[-1]**2
-            B.R[-1]         =  2 / d[-1]
+            # If we know the first derivative, Extrapolate second derivative by
+            # assuming the first stays constant.
+            if upper_val is not None:
+                fst_deriv = upper_val
+                assert m+1 < B.data.shape[0]
+                B.data[m+1, -2] =  2 / d[-1]**2
+                B.data[m,   -1] = -2 / d[-1]**2
+                B.R[-1]         =  fst_deriv * 2 / d[-1]
+            # Otherwise just compute it with backward differencing
+            else:
+                assert m-2 >= 0
+                denom = (0.5*(d[-2]+d[-1])*d[-2]*d[-1]);
+                B.data[m+2,-3] = d[-1]         / denom
+                B.data[m+1,-2] = -(d[-2]+d[-1]) / denom
+                B.data[m,-1]   = d[-2]         / denom
         else:
             raise NotImplementedError("Can't handle derivatives higher than"
                                       " order 2 at boundaries. (%s)" % derivative)

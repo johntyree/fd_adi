@@ -5,13 +5,19 @@
 import os
 import itertools as it
 import time
+from bisect import bisect_left
 
 import scipy.stats
 import scipy.integrate
 import numpy as np
 import numexpr as ne
+import pylab
 
 from Option import Option
+
+from FiniteDifferenceEngine import FiniteDifferenceEngineADI
+from Grid import Grid
+import utils
 
 from visualize import fp
 prec = 3
@@ -30,7 +36,6 @@ class HestonOption(Option):
                 , interest_rate=0.06
                 , volatility=0.2
                 , tenor=1.0
-                , dt=None
                 , mean_reversion=1
                 , mean_variance=None
                 , vol_of_variance=0.4
@@ -41,45 +46,11 @@ class HestonOption(Option):
                 , interest_rate=interest_rate
                 , volatility=volatility
                 , tenor=tenor
-                , dt=dt)
+                )
         self.mean_reversion = mean_reversion
         self.mean_variance = mean_variance if mean_variance is not None else volatility**2
         self.vol_of_variance = vol_of_variance
         self.correlation = correlation
-
-        def mu_s(t, *dim): return self.interest_rate.value * dim[0]
-        def gamma2_s(t, *dim): return 0.5 * dim[1] * dim[0]**2
-
-        def mu_v(t, *dim): return self.mean_reversion * (self.mean_variance - dim[1])
-        def gamma2_v(t, *dim): return 0.5 * self.vol_of_variance**2 * dim[1]
-
-        coeffs = {()   : lambda t: -self.interest_rate.value,
-                  (0,) : mu_s,
-                  (0,0): gamma2_s,
-                  (1,) : mu_v,
-                  (1,1): gamma2_v,
-                  (0,1): lambda t, *dim: dim[0] * dim[1] * self.correlation * self.vol_of_variance
-                  }
-        bounds = {
-                        # D: U = 0              VN: dU/dS = 1
-                (0,)  : ((0, lambda *args: 0.0), (1, lambda *args: 1.0)),
-                        # D: U = 0              Free boundary
-                (0,0) : ((0, lambda *args: 0.0), (None, lambda *x: None)),
-                        # Free boundary at low variance
-                (1,)  : ((None, lambda *x: None),
-                        # # D intrinsic value at high variance
-                        (0, lambda t, *dim: np.maximum(0.0, dim[0]-self.strike))),
-                        # # Free boundary
-                (1,1) : ((None, lambda *x: None),
-                        # D intrinsic value at high variance
-                        (0, lambda t, *dim: np.maximum(0.0, dim[0]-self.strike)))
-                }
-
-        schemes = {
-            (1,): ({"scheme": "center"}, {"scheme": 'forward', "from" : 0})
-        }
-
-
 
     def __str__(self):
         s = Option.features(self)
@@ -104,6 +75,158 @@ class HestonOption(Option):
             self.mean_variance,
             self.vol_of_variance,
             self.correlation).solve()
+
+
+class HestonFiniteDifferenceEngine(FiniteDifferenceEngineADI):
+    """FDE specialized for Heston options."""
+    def __init__(self, option,
+            spot_max=1500.0,
+            var_max=10.0,
+            nspots=100,
+            nvols=100,
+            spotdensity=7.0,
+            varexp=4.0,
+            force_exact=True,
+            flip_idx_var=True,
+            flip_idx_spot=False,
+            schemes=None
+            ):
+        """@option@ is a HestonOption"""
+
+        H = option
+        self.option = H
+
+        spots = utils.sinh_space(H.strike, spot_max, spotdensity, nspots, force_exact=force_exact)
+        # spots = (2.0 * np.arange(nspots)) / nspots  * np.log(H.strike)
+        # vars = utils.exponential_space(0.00, H.variance.value, var_max, varexp, nvols)
+        # vars = [v0]
+        # spots = np.linspace(0.0, spot_max, nspots)
+        vars = np.linspace(0.0, var_max, nvols)
+        # plot(spots); title("Spots"); show()
+        # plot(vars); title("Vars"); show()
+        self.spots = spots
+        # self.spots = np.exp(spots)
+        print self.spots, spots
+        self.vars = vars
+
+        H.strike = spots[min(abs(self.spots - H.strike)) == abs(self.spots - H.strike)][0]
+        H.spot = spots[min(abs(self.spots - H.spot)) == abs(self.spots - H.spot)][0]
+
+        # def init(logspots, vars):
+            # return np.maximum(0, np.exp(logspots) - H.strike)
+        def init(spots, vars):
+            return np.maximum(0, spots - H.strike)
+        G = Grid(mesh=(spots, vars), initializer=init)
+
+        if flip_idx_var is True:
+            flip_idx_var = bisect_left(
+                    np.round(vars, decimals=5),
+                    np.round(H.mean_variance, decimals=5))
+        if flip_idx_spot is True:
+            flip_idx_spot = bisect_left(
+                    np.round(spots, decimals=5),
+                    np.round(H.strike, decimals=5))
+
+
+        def mu_s(t, *dim):
+            # return H.interest_rate.value - 0.5 * dim[1]
+            return H.interest_rate.value * dim[0]
+        def gamma2_s(t, *dim):
+            # return 0.5 * dim[1]
+            return 0.5 * dim[1] * dim[0]**2
+        def mu_v(t, *dim):
+            if dim[0] == 0:
+                ret = 0
+            else:
+                ret = H.mean_reversion * (H.mean_variance - dim[1])
+            return ret
+        def gamma2_v(t, *dim):
+            if dim[0] == 0:
+                ret = 0
+            else:
+                ret = 0.5 * H.vol_of_variance**2 * dim[1]
+            return ret
+        def cross(t, *dim):
+            # return H.correlation * H.vol_of_variance * dim[1]
+            return H.correlation * H.vol_of_variance * dim[0] * dim[1]
+
+        self.coefficients = {()   : lambda t: -H.interest_rate.value,
+                  (0,) : mu_s,
+                  (0,0): gamma2_s,
+                  (1,) : mu_v,
+                  (1,1): gamma2_v,
+                  (0,1): cross,
+                  }
+
+        self.boundaries = {
+                        # D: U = 0              VN: dU/dS = 1
+                # (0,)  : ((0, lambda t, *dim: 0.0), (1, lambda t, *dim: np.exp(dim[0]))),
+                (0,)  : ((0, lambda t, *dim: 0.0), (1, lambda t, *dim: 1.0)),
+                        # D: U = 0              Free boundary
+                # (0,0) : ((0, lambda t, *dim: 0.0), (None, lambda t, *dim:  np.exp(dim[0]))),
+                (0,0) : ((0, lambda t, *dim: 0.0), (None, lambda t, *dim: 1.0)),
+                        # Free boundary at low variance
+                (1,)  : ((None, lambda t, *dim: None),
+                        # # D intrinsic value at high variance
+                        # (0, lambda t, *dim: np.exp(-H.interest_rate.value * t) * np.maximum(0.0, np.exp(dim[0])-H.strike))),
+                        # (0, lambda t, *dim: np.maximum(0.0, dim[0]-H.strike))),
+                        (0, lambda t, *dim: 0)),
+                        # # Free boundary
+                (1,1) : ((None, lambda t, *dim: None),
+                        # D intrinsic value at high variance
+                        # (0, lambda t, *dim: np.exp(-H.interest_rate.value * t) * np.maximum(0.0, np.exp(dim[0])-H.strike))),
+                        # (0, lambda t, *dim: np.maximum(0.0, dim[0]-H.strike)))
+                        (0, lambda t, *dim: 0)),
+                }
+
+        if schemes is None:
+            schemes = {}
+        if (0,) not in schemes:
+            schemes[(0,)] = [{"scheme": "center"}]
+        print "(0,): Start with %s differencing." % (schemes[(0,)][0]['scheme'],)
+        if flip_idx_spot is not False:
+            schemes[(0,)].append({"scheme": 'forward', "from" : flip_idx_spot})
+        if len(schemes[(0,)]) > 1:
+            print "(0,): Switch to %s differencing at %i." % (schemes[(0,)][1]['scheme'], schemes[(0,)][1]['from'])
+
+        if (1,) not in schemes:
+            schemes[(1,)] = [{"scheme": "center"}]
+        print "(1,): Start with %s differencing." % (schemes[(1,)][0]['scheme'],)
+        if flip_idx_var is not False:
+            schemes[(1,)].append({"scheme": 'backward', "from" : flip_idx_var})
+        if len(schemes[(1,)]) > 1:
+            print "(1,): Switch to %s differencing at %i." % (schemes[(1,)][1]['scheme'], schemes[(1,)][1]['from'])
+        self.schemes = schemes
+
+        FiniteDifferenceEngineADI.__init__(self, G, coefficients=self.coefficients,
+                boundaries=self.boundaries, schemes=self.schemes, force_bandwidth=(-2,2))
+
+        ids = bisect_left(np.round(self.spots, decimals=4), np.round(self.option.spot, decimals=4))
+        idv = bisect_left(np.round(self.vars, decimals=4), np.round(self.option.variance.value, decimals=4))
+        self.idx = (ids, idv)
+
+    @property
+    def price(self):
+        return self.grid.domain[-1][self.idx]
+
+
+    @property
+    def grid_analytical(self):
+        H = self.option
+        hs = hs_call_vector(self.spots, H.strike,
+            H.interest_rate.value, np.sqrt(self.vars), H.tenor,
+            H.mean_reversion, H.mean_variance, H.vol_of_variance,
+            H.correlation)
+
+        if max(hs.flat) > self.spots[-1] * 2:
+            self.BADANALYTICAL = True
+            print "Warning: Analytical solution looks like trash."
+        else:
+            self.BADANALYTICAL = False
+        return hs
+
+
+
 
 
 
@@ -183,9 +306,10 @@ class HestonCos(object):
         # Value should be monotonic w.r.t. underlying and volatility. If not, we
         # assume the method is breaking down and correct for it.
         # print "Setting price to 0 for spot <", self.S[flattenbelow]
-        diffs = np.diff(ret, axis=0)
-        mask = np.vstack((diffs[0, :], diffs)) <= 0
-        ret = np.where(mask, 0, ret)
+        if ret.shape[0] != 1:
+            diffs = np.diff(ret, axis=0)
+            mask = np.vstack((diffs[0, :], diffs)) <= 0
+            ret = np.where(mask, 0, ret)
         # del diffs, mask
         # diffs2 = np.diff(ret, n=2, axis=1)
         # diffs2 = np.hstack((diffs2[:, :1], diffs2[:, :1], diffs2))
@@ -297,8 +421,6 @@ class HestonCos(object):
         ret = K * np.exp(-r*T) * ret.real.sum(axis=-1)
         ret[np.isnan(ret)] = 0
         return np.maximum(0, ret).T
-
-
 
 
 class HestonFundamental(object):

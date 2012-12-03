@@ -1,41 +1,41 @@
 #!/usr/bin/env python
 """Demonstration of 2D Heston using BTCS CTCS and Smoothed CTCS."""
 
+from bisect import bisect_left
 import sys
+
 import numpy as np
-# import scipy.stats
+from pylab import plot, title, xlabel, ylabel, legend, show, ion, ioff
 import scipy.linalg as spl
 import scipy.sparse as sps
-from pylab import plot, title, xlabel, ylabel, legend, show, ion, ioff
-import pylab
-from FiniteDifference import utils
-from FiniteDifference.visualize import surface
-from FiniteDifference.heston import HestonOption, hs_call_vector
 
-from FiniteDifference.Option import BlackScholesOption
+from FiniteDifference import FiniteDifferenceEngine as FDE
+from FiniteDifference import utils
 from FiniteDifference.Grid import Grid
-from FiniteDifference import FiniteDifferenceEngine as FD
+from FiniteDifference.Option import BlackScholesOption
+from FiniteDifference.heston import HestonFiniteDifferenceEngine
+from FiniteDifference.heston import HestonOption, hs_call_vector
+from FiniteDifference.visualize import surface
+
 
 # Debug imports
 # from FiniteDifference.visualize import fp, anim, wireframe
 
-
-# ion()
 
 H = HestonOption( spot=100
                  , strike=100
                  , interest_rate=0.03
                  , volatility = 0.2
                  , tenor=1.0
-                 , dt=1/100.0
                  , mean_reversion = 1
                  , mean_variance = 0.04
                  , vol_of_variance = 0.4
                  , correlation = 0.6
                  )
 
+dt=1/100.0
 spot_max = 1500.0
-var_max = 13.0
+var_max = 10.0
 
 nspots = 100
 nvols = 100
@@ -51,13 +51,13 @@ vars = utils.exponential_space(0.00, H.variance.value, var_max, varexp, nvols)
 # plot(spots); title("Spots"); show()
 # plot(vars); title("Vars"); show()
 
-H.strike = spots[min(abs(spots - H.strike)) == abs(spots - H.strike)][0]
-H.spot = spots[min(abs(spots - H.spot)) == abs(spots - H.spot)][0]
+# H.strike = spots[min(abs(spots - H.strike)) == abs(spots - H.strike)][0]
+# H.spot = spots[min(abs(spots - H.spot)) == abs(spots - H.spot)][0]
 def init(spots, vars):
     return np.maximum(0, spots - H.strike)
 Gi = Grid(mesh=(spots, vars), initializer=init)
 G = Gi.copy()
-V_init = G.domain.copy()
+V_init = G.domain[-1].copy()
 
 trims = (H.strike * .2 < spots) & (spots < H.strike * 2.0)
 trimv = (0.0 < vars) & (vars < 1)  # v0*2.0)
@@ -65,9 +65,9 @@ trimv = (0.0 < vars) & (vars < 1)  # v0*2.0)
 # trimv = slice(None)
 
 # Does better without upwinding here
-up_or_down_spot = ''
+up_or_down_spot = 'up'
 up_or_down_var = 'down'
-flip_idx_var = min(pylab.find(vars > H.mean_variance))
+flip_idx_var = bisect_left(vars, H.mean_variance)
 flip_idx_spot = 1
 
 tr = lambda x: x[trims, :][:, trimv]
@@ -132,12 +132,12 @@ bounds = {      # D: U = 0              VN: dU/dS = 1
                 # D intrinsic value at high variance
                 (0.0, lambda t, *dim: np.maximum(0.0, dim[0]-H.strike)))}
 
-# This is largely redundant. Center is the default.
-schemes = {(1,) : ({"scheme": "center"}, {"scheme": "backward", "from" : flip_idx_var})}
+# schemes = {(1,) : ({"scheme": "center"}, {"scheme": "backward", "from" : flip_idx_var})}
 
 
-utils.tic("Building FD Engine")
-F = FD.FiniteDifferenceEngineADI(G, coefficients=coeffs, boundaries=bounds, schemes=schemes, force_bandwidth=(-2, 2))
+utils.tic("Building FDE Engine")
+# F = FDE.FiniteDifferenceEngineADI(G, coefficients=coeffs, boundaries=bounds, schemes=schemes, force_bandwidth=(-2, 2))
+F = HestonFiniteDifferenceEngine(H, nspots=nspots, nvols=nvols, flip_idx_spot=flip_idx_spot, flip_idx_var=flip_idx_var)
 utils.toc()
 
 L1_ = []
@@ -272,7 +272,7 @@ def force_boundary(V, values=None, t=None):
     V[:, -1] = m1[:, -1]  # right
 
 
-def impl(V, L1, R1x, L2, R2x, dt, n, crumbs=[], callback=None):
+def impl(V, L1, R1x, L2, R2x, dt, n, initial=None, callback=None):
     V = V.copy()
 
     # L1i = flatten_tensor(L1)
@@ -332,7 +332,7 @@ def flatten_tensor(mats):
     return flatmat
 
 
-def douglas(V, L1, R1x, L2, R2x, dt, n, crumbs=[], callback=None):
+def douglas(V, L1, R1x, L2, R2x, dt, n, initial=None, callback=None):
     V = V.copy()
     theta = 0.5
     # dt *= 0.5
@@ -349,7 +349,7 @@ def douglas(V, L1, R1x, L2, R2x, dt, n, crumbs=[], callback=None):
 
     # print "L var"
     # fp(L2e.data, 2)
-    # print "FD op var"
+    # print "FDE op var"
     # fp(F.operators[1].data, 2)
 
     # print "diff"
@@ -496,40 +496,45 @@ assert (V_init == F.grid.domain).all()
 
 # sys.exit()
 # Vs = impl(V_init, L1, R1, L2, R2,
-          # H.dt, int(H.tenor / H.dt), crumbs=[V_init]
+          # dt, int(H.tenor / dt), crumbs=[V_init]
           # # , callback=lambda v, H.tenor: force_boundary(v, hs)
           # )
 # Vi = Vs[-1]
 # print tr(Vi)[ids, idv] - tr(hs)[ids, idv]
-# Vs = F.solve_implicit(H.tenor/H.dt, H.dt, crumbs=[], callback=None)
+# Vs = F.solve_implicit(H.tenor/dt, dt, initial=None, callback=None)
 # Vfi = Vs[-1]
 # print tr(Vfi)[ids, idv] - tr(hs)[ids, idv]
 
 # Vs = douglas(V_init, L1, R1, L2, R2,
-           # H.dt, int(H.tenor / H.dt), crumbs=[V_init]
+           # dt, int(H.tenor / dt), crumbs=[V_init]
            # # , callback=lambda v, H.tenor: force_boundary(v, hs)
            # )
 # Vd = Vs[-1]
 # print tr(Vd)[ids, idv] - tr(hs)[ids, idv]
-# Vs = F.solve_douglas(H.tenor/H.dt, H.dt, crumbs=[], callback=None)
-Vs = F.smooth(H.tenor/H.dt, H.dt, crumbs=[], callback=None, scheme=F.solve_douglas)
-Vfd = Vs[-1]
+# Vs = F.solve_douglas(H.tenor/dt, dt, initial=None, callback=None)
+Vfd = F.smooth(H.tenor/dt, dt, initial=None, callback=None, scheme=F.solve_douglas)
 print tr(Vfd)[ids, idv] - tr(hs)[ids, idv]
+print
+print tr(Vfd)[ids, idv], tr(hs)[ids, idv]
+print F.price, F.option.analytical
+print "Price difference:", F.price - tr(F.grid.domain[-1])[ids,idv]
+print
+F.grid.reset()
 
-# Vs = F.solve_craigsneyd(H.tenor/H.dt, H.dt, crumbs=[], callback=None)
+# Vs = F.solve_craigsneyd(H.tenor/dt, dt, initial=None, callback=None)
 # Vfcs = Vs[-1]
 # print tr(Vfcs)[ids, idv] - tr(hs)[ids, idv]
 
-# Vs = F.solve_craigsneyd2(H.tenor/H.dt, H.dt, crumbs=[], callback=None)
+# Vs = F.solve_craigsneyd2(H.tenor/dt, dt, initial=None, callback=None)
 # Vfcs2 = Vs[-1]
 # print tr(Vfcs2)[ids, idv] - tr(hs)[ids, idv]
 
-# Vs = F.solve_hundsdorferverwer(H.tenor/H.dt, H.dt, crumbs=[], callback=None)
-Vs = F.smooth(H.tenor/H.dt, H.dt, crumbs=[], scheme=F.solve_hundsdorferverwer, callback=None)
-Vfhv = Vs[-1]
+# Vs = F.solve_hundsdorferverwer(H.tenor/dt, dt, initial=None, callback=None)
+Vfhv = F.smooth(H.tenor/dt, dt, initial=None, scheme=F.solve_hundsdorferverwer, callback=None)
+F.grid.reset()
 print tr(Vfhv)[ids, idv] - tr(hs)[ids, idv]
 
-# Vs = F.solve_john_adi(H.tenor/H.dt, H.dt, crumbs=[], callback=None)
+# Vs = F.solve_john_adi(H.tenor/dt, dt, initial=None, callback=None)
 # Vfc = Vs[-1]
 # print tr(Vfc)[ids, idv] - tr(hs)[ids, idv]
 
@@ -537,32 +542,32 @@ print tr(Vfhv)[ids, idv] - tr(hs)[ids, idv]
 # Rannacher smoothing to damp oscilations at the discontinuity
 # smoothing_steps = 2
 # Vs = impl(V_init, L1, R1, L2, R2,
-          # H.dt/2, 2*smoothing_steps, crumbs=[V_init]
+          # dt/2, 2*smoothing_steps, crumbs=[V_init]
           # # , callback=lambda v, H.tenor: force_boundary(v, hs)
           # )
 # Vs = douglas(Vs[-1], L1, R1, L2, R2,
-          # H.dt, int(H.tenor / H.dt) - smoothing_steps, crumbs=Vs
+          # dt, int(H.tenor / dt) - smoothing_steps, crumbs=Vs
           # # , callback=lambda v, H.tenor: force_boundary(v, hs)
           # )
 # Vr = Vs[-1]
 # print tr(Vr)[ids, idv] - tr(hs)[ids, idv]
-# Vs = F.smooth(H.tenor/H.dt, H.dt, crumbs=[], callback=None,
+# Vs = F.smooth(H.tenor/dt, dt, initial=None, callback=None,
               # smoothing_steps=smoothing_steps)
 # Vfr = Vs[-1]
 # print tr(Vfr)[ids, idv] - tr(hs)[ids, idv]
 
 ion()
 # p(tr(Vi), tr(hs), spots[trims], vars[trimv], 1, "impl")
-# p(tr(Vfi), tr(hs), spots[trims], vars[trimv], 1, "FD impl")
+# p(tr(Vfi), tr(hs), spots[trims], vars[trimv], 1, "FDE impl")
 # p(tr(Vc), tr(hs), spots[trims], vars[trimv], 2, "crank")
-# p(tr(Vfc), tr(hs), spots[trims], vars[trimv], 2, "FD crank")
+# p(tr(Vfc), tr(hs), spots[trims], vars[trimv], 2, "FDE crank")
 # p(tr(Vr), tr(hs), spots[trims], vars[trimv], 3, "smooth")
-# p(tr(Vfr), tr(hs), spots[trims], vars[trimv], 3, "FD smooth")
+# p(tr(Vfr), tr(hs), spots[trims], vars[trimv], 3, "FDE smooth")
 # p(tr(Vd), tr(hs), spots[trims], vars[trimv], 3, "douglas")
-# p(tr(Vfd), tr(hs), spots[trims], vars[trimv], 3, "FD douglas")
-# p(tr(Vfcs), tr(hs), spots[trims], vars[trimv], 3, "FD craigsneyd")
-# p(tr(Vfcs2), tr(hs), spots[trims], vars[trimv], 3, "FD craigsneyd2")
-# p(tr(Vfhv), tr(hs), spots[trims], vars[trimv], 3, "FD hundsdorferverwer")
+# p(tr(Vfd), tr(hs), spots[trims], vars[trimv], 3, "FDE douglas")
+# p(tr(Vfcs), tr(hs), spots[trims], vars[trimv], 3, "FDE craigsneyd")
+# p(tr(Vfcs2), tr(hs), spots[trims], vars[trimv], 3, "FDE craigsneyd2")
+# p(tr(Vfhv), tr(hs), spots[trims], vars[trimv], 3, "FDE hundsdorferverwer")
 ioff()
 show()
 # p(V_init, hs, spots, vars, 1, "impl")

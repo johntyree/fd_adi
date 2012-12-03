@@ -6,14 +6,18 @@
 # import os
 # import itertools as it
 
+import numpy as np
+
 import utils
 from utils import sinh_space, exponential_space
-import numpy as np
+
+import visualize
+
 
 class Grid(object):
     """#:class documentation"""
     def __init__(self
-            , mesh=(np.linspace(0, 1, 5), np.linspace(0, 2, 5))
+            , mesh=(np.linspace(0, 1, 5), np.linspace(0, 1, 5))
             , initializer=lambda x, y: x*0
         ):
         """Create an n-dimensional grid from an iterable of monotonic spaces."""
@@ -22,12 +26,13 @@ class Grid(object):
         for m in mesh:
             if len(m) > 1:
                 s = np.sign(np.diff(m))
-                assert(all(s == s[0]))
+                assert(all(s == s[0])), s
         self._mesh = mesh
+        self.domain = []
         if len(mesh) == 1:
-            self.domain = initializer(*mesh)
+            self.domain.append(initializer(*mesh))
         else:
-            self.domain = initializer(*(x.T for x in np.meshgrid(*mesh)))
+            self.domain.append(initializer(*(x.T for x in np.meshgrid(*mesh))))
         self._shape = tuple(map(len, mesh))
         self.dx = [np.hstack((np.nan, np.diff(m))) for m in mesh]
 
@@ -37,7 +42,10 @@ class Grid(object):
         self.__init__(mesh=self.mesh, initializer=self.initializer)
 
     def copy(self):
-        return Grid(mesh=self._mesh, initializer=self.initializer)
+        G = Grid(mesh=self._mesh, initializer=self.initializer)
+        G.domain = [d.copy() for d in self.domain]
+        return G
+
 
     def __str__(self):
         keys = utils.attr_dict(self)
@@ -66,10 +74,21 @@ Grid object <%(hexid)s>
         return self._shape
 
     def __getattr__(self, name):
-        return self.domain.__getattribute__(name)
+        return self.domain[-1].__getattribute__(name)
 
-    def __getitem__(self, indices):
-        return self.domain[indices]
+    def __getitem__(self, idx):
+        return self.domain[-1][idx]
+
+    def __setitem__(self, idx, val):
+        self.domain[-1][idx] = val
+
+    def plot(self, style=None):
+        if self.ndim == 1:
+            style = visualize.lineplot
+        elif self.ndim == 2:
+            style = visualize.surface
+        style(self.domain[-1], *self.mesh)
+
 
 
 

@@ -99,11 +99,15 @@ def center_diff(domain, n=1, axis=-1):
     return xs
 
 
-def sinh_space(exact, high, density, size):
+def sinh_space(exact, high, density, size, force_exact=True):
     """
     Sigmoidal space with high density around 'exact'.
 
     Play with the density value because it's really dependent on exact and high.
+
+    This function will shift 'high' around a little to make sure that @exact@
+    is matched closely. If @force@ is True, it then shifts that value up to
+    match @exact@ exactly.
     """
     # def g(x, K, c, p): return K + c/p * np.sinh(p*x + np.arcsinh(-p*K/c))
     # c = float(density)
@@ -134,11 +138,12 @@ def sinh_space(exact, high, density, size):
         print newspace(newmax)
         raise ValueError("Unable to create a suitable space. %s\n%s" % ((exact, high, density, size), newmax))
     space = newspace(newmax)
-    idx = bisect_left(space, exact)
-    try:
-        space[idx] = exact
-    except IndexError:
-        print "Boy, this is terrible."
+    if force_exact:
+        idx = bisect_left(space, exact)
+        try:
+            space[idx] = exact
+        except IndexError:
+            print "Boy, this is terrible."
     return space
 
 
@@ -148,7 +153,7 @@ def exponential_space(low, exact, high, ex, size):
     adjust the high value upwards as necessary.
     """
     if size == 1:
-        return array([exact])
+        return np.array([exact])
     v = np.zeros(size)
     l = pow(low,1./ex)
     h = pow(high,1./ex)
@@ -164,8 +169,7 @@ def exponential_space(low, exact, high, ex, size):
             j = i-1
             break
     if (j == 0):
-        print "Did not find suitable value."
-        assert(j != 0)
+        assert(j != 0), "Did not find suitable value."
     dx = x - (l + j*dv)
     h += (size-1) * dx/j
     dv = (h - l) / (size-1)

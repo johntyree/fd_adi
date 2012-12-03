@@ -89,7 +89,7 @@ class BlackScholesOption_test(unittest.TestCase):
 
     def test_implicit(self):
         t, dt = self.BS.tenor, self.dt
-        V = self.F.solve_implicit(t/dt, dt)[-1][self.spot_idx]
+        V = self.F.solve_implicit(t/dt, dt)[self.spot_idx]
         ans = self.BS.analytical
         print "Spot:", self.BS.spot
         print "Price:", V, ans, V - ans
@@ -97,7 +97,7 @@ class BlackScholesOption_test(unittest.TestCase):
 
     def test_john_adi(self):
         t, dt = self.BS.tenor, self.dt
-        V = self.F.solve_john_adi(t/dt, dt)[-1][self.spot_idx]
+        V = self.F.solve_john_adi(t/dt, dt)[self.spot_idx]
         ans = self.BS.analytical
         print "Spot:", self.BS.spot
         print "Price:", V, ans, V - ans
@@ -105,7 +105,7 @@ class BlackScholesOption_test(unittest.TestCase):
 
     # def test_douglas(self):
         # t, dt = self.BS.tenor, self.dt
-        # V = self.F.solve_john_adi(t/dt, dt)[-1][self.spot_idx]
+        # V = self.F.solve_john_adi(t/dt, dt)[self.spot_idx]
         # ans = self.BS.analytical
         # print "Spot:", self.BS.spot
         # print "Price:", V, ans, V - ans
@@ -113,7 +113,7 @@ class BlackScholesOption_test(unittest.TestCase):
 
     def test_smooth(self):
         t, dt = self.BS.tenor, self.dt
-        V = self.F.smooth(t/dt, dt)[-1][self.spot_idx]
+        V = self.F.smooth(t/dt, dt)[self.spot_idx]
         ans = self.BS.analytical
         print "Spot:", self.BS.spot
         print "Price:", V, ans, V - ans
@@ -427,7 +427,7 @@ class FiniteDifferenceEngineADI_test(unittest.TestCase):
         F = self.F
 
         cb = utils.clear_boundary
-        g = F.grid.domain
+        g = F.grid.domain[-1]
 
         op_ = {'delta': {}, 'grid_delta': {}, 'derivative': {}}
         np_ = {'delta': {}, 'grid_delta': {}, 'derivative': {}}
@@ -487,7 +487,7 @@ class FiniteDifferenceEngineADI_test(unittest.TestCase):
 
     def test_cross_derivative(self):
         crossOp = self.F.operators[(0,1)]
-        g = self.F.grid.domain
+        g = self.F.grid.domain[-1]
         x = self.F.grid.mesh[0]
         y = self.F.grid.mesh[1]
 
