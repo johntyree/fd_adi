@@ -89,24 +89,26 @@ class HestonFiniteDifferenceEngine(FiniteDifferenceEngineADI):
             force_exact=True,
             flip_idx_var=True,
             flip_idx_spot=False,
-            schemes=None
+            schemes=None,
+            cache=True
             ):
         """@option@ is a HestonOption"""
+        self.cache = cache
 
         H = option
         self.option = H
 
         spots = utils.sinh_space(H.strike, spot_max, spotdensity, nspots, force_exact=force_exact)
         # spots = (2.0 * np.arange(nspots)) / nspots  * np.log(H.strike)
-        # vars = utils.exponential_space(0.00, H.variance.value, var_max, varexp, nvols)
+        vars = utils.exponential_space(0.00, H.variance.value, var_max, varexp, nvols)
         # vars = [v0]
         # spots = np.linspace(0.0, spot_max, nspots)
-        vars = np.linspace(0.0, var_max, nvols)
+        # vars = np.linspace(0.0, var_max, nvols)
         # plot(spots); title("Spots"); show()
         # plot(vars); title("Vars"); show()
         self.spots = spots
         # self.spots = np.exp(spots)
-        print self.spots, spots
+        # print self.spots, spots
         self.vars = vars
 
         H.strike = spots[min(abs(self.spots - H.strike)) == abs(self.spots - H.strike)][0]
@@ -168,15 +170,18 @@ class HestonFiniteDifferenceEngine(FiniteDifferenceEngineADI):
                         # Free boundary at low variance
                 (1,)  : ((None, lambda t, *dim: None),
                         # # D intrinsic value at high variance
-                        # (0, lambda t, *dim: np.exp(-H.interest_rate.value * t) * np.maximum(0.0, np.exp(dim[0])-H.strike))),
-                        # (0, lambda t, *dim: np.maximum(0.0, dim[0]-H.strike))),
-                        (0, lambda t, *dim: 0)),
+                        # (0, lambda t, *dim: np.exp(-H.interest_rate.value * t) * dim[0])
+                        (None, lambda t, *dim: None)
+                        # (0, lambda t, *dim: dim[0])
+                        ),
                         # # Free boundary
                 (1,1) : ((None, lambda t, *dim: None),
                         # D intrinsic value at high variance
                         # (0, lambda t, *dim: np.exp(-H.interest_rate.value * t) * np.maximum(0.0, np.exp(dim[0])-H.strike))),
-                        # (0, lambda t, *dim: np.maximum(0.0, dim[0]-H.strike)))
-                        (0, lambda t, *dim: 0)),
+                        (None, lambda t, *dim: None)
+                        # (0, lambda t, *dim: dim[0])
+                        # (0, lambda t, *dim: 0)
+                        )
                 }
 
         if schemes is None:
@@ -216,7 +221,7 @@ class HestonFiniteDifferenceEngine(FiniteDifferenceEngineADI):
         hs = hs_call_vector(self.spots, H.strike,
             H.interest_rate.value, np.sqrt(self.vars), H.tenor,
             H.mean_reversion, H.mean_variance, H.vol_of_variance,
-            H.correlation)
+            H.correlation, HFUNC=HestonFundamental, cache=self.cache)
 
         if max(hs.flat) > self.spots[-1] * 2:
             self.BADANALYTICAL = True
@@ -424,6 +429,7 @@ class HestonCos(object):
 
 
 class HestonFundamental(object):
+
     def __init__(self, s, k, r, v, t, kappa, theta, sigma, rho):
         self.spot = s
         self.logspot = np.log(s)
@@ -493,26 +499,62 @@ class HestonFundamental(object):
         res = self.ugly_integrate(self.integrand, 5e-2, 100, 1000)
         return res * 1./np.pi + 0.5
 
-    def solve(self):
-        # ok = np.exp(np.log(self.spot)) * 5*np.sqrt(np.sqrt(self.var)) > self.strike
-        self.u = 0.5
-        self.b = self.mean_reversion + self.lam - self.rho * self.sig
-        P1 = self.P()
+    def __str__(self):
+        return '\n'.join([
+        "Heston Fundamental object: %s" % id(self), self.param_str()])
 
-        self.u = -0.5
-        self.b = self.mean_reversion + self.lam
-        P2 = self.P()
+    def param_str(self):
+        return '\n'.join([
+         "s    : %s" % self.spot
+        ,"k    : %s" % self.strike
+        ,"r    : %s" % self.r
+        ,"vol  : %s" % np.sqrt(self.var)
+        ,"t    : %s" % self.tenor
+        ,"kappa: %s" % self.mean_reversion
+        ,"theta: %s" % self.mean_variance
+        ,"sigma: %s" % self.sig
+        ,"rho  : %s" % self.rho
+        ])
 
-        discount = np.exp(-self.r * self.tenor)
 
-        return np.maximum(0, self.spot * P1 - self.strike * P2 * discount)
+    def solve(self, cache=True):
+        cache_dir = 'heston_cache'
+        fname = os.path.join(cache_dir, "FUNDAMENTAL_"+str(hash(self.param_str()))+".npy")
+        if cache:
+            # print "Seeking:", fname
+            if os.path.isfile(fname):
+                print "Loading:", fname
+                return np.load(fname)
+        cols = []
+        vars = np.atleast_1d(self.var)
+        for v in vars:
+            self.var = v
+            self.u = 0.5
+            self.b = self.mean_reversion + self.lam - self.rho * self.sig
+            P1 = self.P()
 
-def hs_call_vector(s, k, r, vols, t, kappa, theta, sigma, rho, HFUNC=HestonCos):
+            self.u = -0.5
+            self.b = self.mean_reversion + self.lam
+            P2 = self.P()
+
+            discount = np.exp(-self.r * self.tenor)
+
+            cols.append(np.maximum(0, self.spot * P1 - self.strike * P2 * discount))
+        self.var = vars
+        ret = np.array(cols).T
+        if cache:
+            if not os.path.isdir(cache_dir):
+                os.mkdir(cache_dir)
+            np.save(fname, ret)
+        return ret
+
+
+def hs_call_vector(s, k, r, vols, t, kappa, theta, sigma, rho, HFUNC=HestonCos, cache=True):
     if s[0] == 0:
-        ret = HFUNC(s[1:], k, r, vols, t, kappa, theta, sigma, rho).solve()
+        ret = HFUNC(s[1:], k, r, vols, t, kappa, theta, sigma, rho).solve(cache=cache)
         ret = np.vstack((np.zeros((1, len(vols))), ret))
     else:
-        ret = HFUNC(s, k, r, vols, t, kappa, theta, sigma, rho).solve()
+        ret = HFUNC(s, k, r, vols, t, kappa, theta, sigma, rho).solve(cache=cache)
     return ret
 
 def hs_stream(s, k, r, v, dt, kappa, theta, sigma, rho, HFUNC=HestonCos):

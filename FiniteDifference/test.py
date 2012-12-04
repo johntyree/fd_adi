@@ -32,10 +32,10 @@ def test_numpy_transpose_vs_rollaxis():
         t = range(len(a.shape))
         utils.rolllist(t, axis, 0)
         ta = np.transpose(a, axes=t)
-        assert np.rollaxis(a, axis).shape == ta.shape
+        npt.assert_(np.rollaxis(a, axis).shape == ta.shape)
         utils.rolllist(t, 0, axis)
         ta = np.transpose(a, axes=t)
-        assert a.shape == np.transpose(ta, axes=t).shape
+        npt.assert_(a.shape == np.transpose(ta, axes=t).shape)
 
 
 class BlackScholesOption_test(unittest.TestCase):
@@ -48,8 +48,8 @@ class BlackScholesOption_test(unittest.TestCase):
         k = 99.0
         spot = 100.0
         t = 1.0
-        dt = 1.0/100.0
-        nspots = 400
+        dt = 1.0/150.0
+        nspots = 150
         # spots = np.linspace(0, np.log(spot)*2, nspots+1)
         spots = utils.sinh_space(spot, spot_max, spotdensity, nspots)
 
@@ -91,33 +91,33 @@ class BlackScholesOption_test(unittest.TestCase):
         t, dt = self.BS.tenor, self.dt
         V = self.F.solve_implicit(t/dt, dt)[self.spot_idx]
         ans = self.BS.analytical
-        print "Spot:", self.BS.spot
-        print "Price:", V, ans, V - ans
-        assert np.isclose(V, ans, rtol=0.001)
+        # print "Spot:", self.BS.spot
+        # print "Price:", V, ans, V - ans
+        npt.assert_allclose(V, ans, rtol=0.001)
 
     def test_john_adi(self):
         t, dt = self.BS.tenor, self.dt
         V = self.F.solve_john_adi(t/dt, dt)[self.spot_idx]
         ans = self.BS.analytical
-        print "Spot:", self.BS.spot
-        print "Price:", V, ans, V - ans
-        assert np.isclose(V, ans, rtol=0.001)
+        # print "Spot:", self.BS.spot
+        # print "Price:", V, ans, V - ans
+        npt.assert_allclose(V, ans, rtol=0.001)
 
     def test_douglas(self):
         t, dt = self.BS.tenor, self.dt
         V = self.F.solve_douglas(t/dt, dt)[self.spot_idx]
         ans = self.BS.analytical
-        print "Spot:", self.BS.spot
-        print "Price:", V, ans, V - ans
-        assert np.isclose(V, ans, rtol=0.001)
+        # print "Spot:", self.BS.spot
+        # print "Price:", V, ans, V - ans
+        npt.assert_allclose(V, ans, rtol=0.001)
 
     def test_smooth(self):
         t, dt = self.BS.tenor, self.dt
         V = self.F.smooth(t/dt, dt)[self.spot_idx]
         ans = self.BS.analytical
-        print "Spot:", self.BS.spot
-        print "Price:", V, ans, V - ans
-        assert np.isclose(V, ans, rtol=0.001)
+        # print "Spot:", self.BS.spot
+        # print "Price:", V, ans, V - ans
+        npt.assert_allclose(V, ans, rtol=0.001)
 
 
 class FiniteDifferenceEngineADI_test(unittest.TestCase):
@@ -516,20 +516,38 @@ class FiniteDifferenceEngineADI_test(unittest.TestCase):
                   # (0,1): lambda t, *dim: 0
                   }
         bounds = {
-                  (0,) : ((None, lambda t, *x: 1), (None, lambda t, *x: 1)),
+                  (0,) : ((0, lambda t, *x: 1), (0, lambda t, *x: 1)),
                   # (0,0): ((None, lambda *x: 1), (0, lambda *x: 1)),
-                  (1,) : ((None, lambda *x: 1), (None, lambda *x: 1)),
+                  (1,) : ((0, lambda *x: 1), (0, lambda *x: 1)),
                   # (1,1): ((0, lambda *x: 1), (0, lambda *x: 1)),
                   }
         F = FD.FiniteDifferenceEngineADI(G, coefficients=coeffs, boundaries=bounds, force_bandwidth=None)
 
+        for d, o in F.simple_operators.items():
+            l = [[1] * F.grid.shape[(o.axis + 1) % 2]] * 2
+            npt.assert_array_equal(o.dirichlet, l, err_msg="Dim: %s, dirichlet: %s, expected: %s" % (d, o.dirichlet, l))
+        for d, o in F.simple_operators.items():
+            l = [[1] * F.grid.shape[(o.axis + 1) % 2]] * 2
+            npt.assert_array_equal(o.dirichlet, l, err_msg="Dim: %s, dirichlet: %s, expected: %s" % (d, o.dirichlet, l))
+
+
+        for d in bounds.keys():
+            B = F.simple_operators[d]
+            print "Derivative", d, "Dirichlets", B.dirichlet
+            g = (B+1).solve(F.grid.domain[-1])
+            if B.axis == 1:
+                g = g.T
+            if B.dirichlet[0] is not None:
+                npt.assert_array_equal(g[0,:], 1)
+            if B.dirichlet[1] is not None:
+                npt.assert_array_equal(g[-1,:], 1)
+
         print
         for d in bounds.keys():
             B = F.simple_operators[d]
+            print "Derivative", d, "Dirichlets", B.dirichlet
             print B.dirichlet
             g = B.apply(F.grid.domain[-1])
-            fp(B)
-            fp(g)
             if B.axis == 1:
                 g = g.T
             if B.dirichlet[0] is not None:
@@ -537,11 +555,12 @@ class FiniteDifferenceEngineADI_test(unittest.TestCase):
             if B.dirichlet[1] is not None:
                 npt.assert_array_equal(g[-1,:], 1)
 
+        print
         for d in bounds.keys():
             B = F.simple_operators[d]
-            print B.dirichlet
-            g = (B+1).solve(F.grid.domain[-1])
+            print "Derivative", d, "Dirichlets", B.dirichlet
             fp(B)
+            g = (B+1).solve(F.grid.domain[-1])
             fp(g)
             if B.axis == 1:
                 g = g.T
@@ -549,7 +568,6 @@ class FiniteDifferenceEngineADI_test(unittest.TestCase):
                 npt.assert_array_equal(g[0,:], 1)
             if B.dirichlet[1] is not None:
                 npt.assert_array_equal(g[-1,:], 1)
-
 
 
 
@@ -570,16 +588,20 @@ class FiniteDifferenceEngineADI_test(unittest.TestCase):
 
         d2gdxdy = crossOp.apply(g)
 
-        # fp(crossOp.todense())
+        print "Cross op"
+        fp(crossOp.todense())
+        print crossOp.dirichlet
+        print crossOp.axis
+        print
 
-        # print "manual"
-        # fp(manuald2gdxdy)
-        # print
-        # print "new"
-        # fp(d2gdxdy)
-        # print
-        # print "diff"
-        # fp((d2gdxdy - manuald2gdxdy) / manuald2gdxdy, fmt='e')
+        print "manual"
+        fp(manuald2gdxdy)
+        print
+        print "new"
+        fp(d2gdxdy)
+        print
+        print "diff"
+        fp(d2gdxdy - manuald2gdxdy, fmt='e')
         npt.assert_array_almost_equal(d2gdxdy, manuald2gdxdy)
         # npt.assert_array_equal(d2gdxdy, manuald2gdxdy)
 

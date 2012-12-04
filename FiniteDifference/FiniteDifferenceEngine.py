@@ -20,6 +20,7 @@ import scipy.linalg as spl
 
 from visualize import fp
 
+DEBUG = False
 
 
 class FiniteDifferenceEngine(object):
@@ -305,6 +306,9 @@ class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
                     lowfunc = wrapscalarfunc(b[0][1], a, dim)
                     highfunc = wrapscalarfunc(b[1][1], a, dim)
                     b = ((b[0][0], lowfunc(0)), (b[1][0], highfunc(-1)))
+                    # if DEBUG and B.axis == 1:
+                        # from IPython.core.debugger import Tracer; Tracer()() ### XXX BREAKPOINT
+
                     B.applyboundary(b, self.grid.mesh)
                     # If we have a dirichlet boundary, save our function
                     if b[0][0] == 0:
@@ -506,6 +510,11 @@ class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
         else:
             V = self.grid.domain[0].copy()
             self.grid.domain.append(V)
+
+        # for d, o in self.operators.items():
+            # print d
+            # fp(o)
+            # print
 
         Lis = [(o * -dt).add(1, inplace=True)
                for d, o in sorted(self.operators.iteritems())
@@ -863,6 +872,7 @@ class BandedOperator(object):
                 setattr(self, attr, getattr(other, attr))
             else:
                 setattr(self, attr, kwargs[attr])
+        self.dirichlet = list(other.dirichlet)
 
     def __eq__(self, other):
         no_nan = np.nan_to_num
@@ -930,13 +940,15 @@ class BandedOperator(object):
         t = range(V.ndim)
         utils.rolllist(t, self.axis, V.ndim-1)
         V = np.transpose(V, axes=t)
+        if self.axis == 1 and DEBUG:
+            from IPython.core.debugger import Tracer; Tracer()() ### XXX BREAKPOINT
 
         if self.dirichlet[0] is not None:
-            print "Setting V[0,:] to", self.dirichlet[0]
-            V[:,0] = self.dirichlet[0]
+            # print "Setting V[0,:] to", self.dirichlet[0]
+            V[...,0] = self.dirichlet[0]
         if self.dirichlet[1] is not None:
-            print "Setting V[-1,:] to", self.dirichlet[-1]
-            V[:,-1] = self.dirichlet[1]
+            # print "Setting V[-1,:] to", self.dirichlet[-1]
+            V[...,-1] = self.dirichlet[1]
 
 
         if self.R is not None:
@@ -959,10 +971,11 @@ class BandedOperator(object):
         utils.rolllist(t, self.axis, V.ndim-1)
         V = np.transpose(V, axes=t)
 
+        if DEBUG: from IPython.core.debugger import Tracer; Tracer()() ### XXX BREAKPOINT
         if self.dirichlet[0] is not None:
-            V[:,0] = self.dirichlet[0]
+            V[...,0] = self.dirichlet[0]
         if self.dirichlet[1] is not None:
-            V[:,-1] = self.dirichlet[1]
+            V[...,-1] = self.dirichlet[1]
 
         if self.R is not None:
             V0 = V.flat - self.R
@@ -1035,7 +1048,7 @@ class BandedOperator(object):
             # If we know the first derivative, Extrapolate second derivative by
             # assuming the first stays constant.
             if lower_val is not None:
-                print "%s %s Assuming first derivative is %s for second." % (B.axis, B.derivative, lower_val,)
+                # print "%s %s Assuming first derivative is %s for second." % (B.axis, B.derivative, lower_val,)
                 fst_deriv = lower_val
                 assert m-1 >= 0
                 B.data[m-1, 1] =  2 / d[1]**2
@@ -1043,7 +1056,7 @@ class BandedOperator(object):
                 B.R[0]         =  -fst_deriv * 2 / d[1]
             # Otherwise just compute it with forward differencing
             else:
-                print "%s %s Computing second derivative directly." % (B.axis, B.derivative,)
+                # print "%s %s Computing second derivative directly." % (B.axis, B.derivative,)
                 assert m-2 >= 0
                 denom = (0.5*(d[2]+d[1])*d[2]*d[1]);
                 B.data[m-2,2] = d[1]         / denom
@@ -1608,35 +1621,17 @@ class BandedOperator(object):
 
 
 
-    def compound_with(self, other):
-        """
-        It works the same was as scale and is used for making
-        mixed derivatives.
-        """
-        offsets = self.offsets
-
-        for row, o in enumerate(offsets):
-            if o >= 0:
-                for i in xrange(Bs.shape[0]-o):
-                    print "(%i, %i)" % (row, i+o), "Block", i, i+o, "*",
-                    Bs.data[row, i+o]
-                    print data[row][i+o].data
-                    data[row][i+o] *= Bs.data[row, i+o]
-                    # print data[row][i+o].data
-            else:
-                for i in xrange(abs(o), Bs.shape[0]):
-                    print "(%i, %i)" % (row, i-abs(o)), "Block", i, i-abs(o), "*", Bs.data[row, i-abs(o)]
-                    data[row][i-abs(o)] *= Bs.data[row, i-abs(o)]
-                    # print data[row][i-abs(o)].data
-            # print
-
 def flatten_tensor_aligned(mats, check=True):
     if check:
         assert len(set(tuple(m.offsets) for m in mats)) == 1
     residual = np.hstack([x.R for x in mats])
     diags = np.hstack([x.data for x in mats])
     B = BandedOperator((diags, mats[0].offsets), residual=residual)
-    B.copy_meta_data(mats[0], derivative=None)
+    B.copy_meta_data(mats[0], dirichlet=mats[0].dirichlet, derivative=None)
+    B.dirichlet = list(zip(*(m.dirichlet for m in mats)))
+    for i, bound in enumerate(mats[0].dirichlet):
+        if bound is None:
+            B.dirichlet[i] = None
     B.blocks = len(mats)
     return B
 
@@ -1657,7 +1652,13 @@ def flatten_tensor_misaligned(mats):
         bottom = top
     residual = np.hstack([x.R for x in mats])
     B = BandedOperator((newdata, offsets), residual=residual)
-    B.copy_meta_data(mats[0], dirichlet=B.dirichlet)
+    B.copy_meta_data(mats[0])
+    B.dirichlet = list(zip(*(m.dirichlet for m in mats)))
+    for i, bound in enumerate(mats[0].dirichlet):
+        if bound is None:
+            B.dirichlet[i] = None
+        else:
+            B.dirichlet[i] = np.array(B.dirichlet[i])
     B.blocks = len(mats)
     return B
 
