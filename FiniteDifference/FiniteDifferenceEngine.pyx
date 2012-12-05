@@ -1543,12 +1543,13 @@ class BandedOperator(object):
             vector = np.tile(vector, self.blocks)
         assert len(vector) == self.shape[0]
         for row, o in enumerate(self.offsets):
+            o = int(o)
             vec = np.roll(vector, o) if o != 0 else vector
             # print "offset %s, %i to %i" % (o, begin, end)
             # self.data[row, begin:end] *= np.roll(vec, o)[begin:end]
             for i in range(self.blocks):
-                begin = i*block_len
-                end = i*block_len + block_len
+                begin = int(i*block_len)
+                end = int(i*block_len + block_len)
                 # if o == 0:
                 if o >= 0 and self.dirichlet[0] is not None:
                     begin += 1
@@ -1559,17 +1560,18 @@ class BandedOperator(object):
                 if o < 0:
                     end += o
                 # print "offset %s, %i to %i" % (o, begin, end)
-                self.data[row, begin:end] *= vec[begin:end]
-                begin = i*block_len
-                end = i*block_len + block_len
+                self.data[int(row), int(begin):int(end)] *= vec[int(begin):int(end)]
         for i in range(self.blocks):
-            begin = i*block_len
-            end = i*block_len + block_len
+            begin = int(i*block_len)
+            end = int(i*block_len + block_len)
             if self.dirichlet[0] is not None:
                 begin += 1
             if self.dirichlet[1] is not None:
                 end -= 1
-            self.R[begin:end] *= vector[begin:end]
+            # self.R[begin:end] *= vector[begin:end]
+            res = self.R[begin:end]
+            v = vector[begin:end]
+            res *= v
                 # self.data[row,top_us:begin_us] *= np.roll(vec, o)[top_them:begin_them]
                 # self.data[row, begin:end] *= vec[begin:end]
             # elif o < 0:

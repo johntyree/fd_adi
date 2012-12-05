@@ -15,12 +15,14 @@ import pylab
 
 from Option import Option
 
-from FiniteDifferenceEngine import FiniteDifferenceEngineADI
 from Grid import Grid
 import utils
 
 from visualize import fp
 prec = 3
+
+import pyximport; pyximport.install()
+from FiniteDifferenceEngine import FiniteDifferenceEngineADI
 
 
 I = 1j

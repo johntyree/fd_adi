@@ -15,10 +15,12 @@ import utils
 from visualize import fp
 # def fp(*x, **y):
     # pass
-import FiniteDifferenceEngine as FD
 import Grid
 from heston import HestonOption
 from Option import BlackScholesOption
+
+import pyximport; pyximport.install()
+import FiniteDifferenceEngine as FD
 
 
 
