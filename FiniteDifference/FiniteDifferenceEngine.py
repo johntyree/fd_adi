@@ -111,7 +111,7 @@ class FiniteDifferenceEngine(object):
         self.ndim = self.grid.ndim
         self.coefficients = coefficients
         self.boundaries = boundaries
-        self.schemes = schemes
+        self.schemes = dict(schemes)
         self.force_bandwidth = force_bandwidth
         self.t = 0
         self.default_scheme = 'center'
@@ -1320,12 +1320,12 @@ class BandedOperator(object):
         return (data, offsets)
 
 
-    def splice_with(self, bottom, at, inplace=False):
+    def splice_with(self, begin, at, inplace=False):
         """
         Splice a second operator into this one by replacing rows after @at@.
         If inplace is True, splice it directly into this object.
         """
-        newoffsets = sorted(set(self.offsets).union(set(bottom.offsets)), reverse=True)
+        newoffsets = sorted(set(self.offsets).union(set(begin.offsets)), reverse=True)
 
         if inplace:
             if tuple(newoffsets) != tuple(self.offsets):
@@ -1344,11 +1344,11 @@ class BandedOperator(object):
         elif at == 0:
             if inplace:
                 B = self
-                B.D = bottom.D.copy()
-                B.R = bottom.R.copy()
-                B.copy_meta_data(bottom)
+                B.D = begin.D.copy()
+                B.R = begin.R.copy()
+                B.copy_meta_data(begin)
             else:
-                B = bottom.copy()
+                B = begin.copy()
 
         # If it's not extreme, it must be a normal splice
         else:
@@ -1367,23 +1367,23 @@ class BandedOperator(object):
                 else:
                     dat = 0
                 B.data[torow, :splitidx] = dat
-                if o in bottom.offsets:
-                    fromrow = list(bottom.offsets).index(o)
-                    dat = bottom.data[fromrow, splitidx:last]
+                if o in begin.offsets:
+                    fromrow = list(begin.offsets).index(o)
+                    dat = begin.data[fromrow, splitidx:last]
                 else:
                     dat = 0
                 B.data[torow, splitidx:last] = dat
 
             # handle the residual vector
             if B.R is not None:
-                B.R[splitidx:last] = bottom.R[splitidx:last]
+                B.R[splitidx:last] = begin.R[splitidx:last]
             else:
-                B.R = bottom.R.copy()
+                B.R = begin.R.copy()
                 B.R[:splitidx] = 0
 
             B.copy_meta_data(self)
             B.dirichlet[0] = self.dirichlet[0]
-            B.dirichlet[1] = bottom.dirichlet[1]
+            B.dirichlet[1] = begin.dirichlet[1]
         return B
 
 
@@ -1402,14 +1402,14 @@ class BandedOperator(object):
         # block_len = B.shape[0] / float(B.blocks)
         # assert block_len == int(block_len)
         # for i in range(B.blocks):
-            # top = i*block_len
+            # end = i*block_len
             # if B.dirichlet[0] is not None:
-                # top += 1
-            # bottom = i*block_len + block_len
+                # end += 1
+            # begin = i*block_len + block_len
             # if B.dirichlet[1] is not None:
-                # bottom -= 1
-            # B.data[m,top:bottom] *= val
-            # B.R[top:bottom] *= val
+                # begin -= 1
+            # B.data[m,end:begin] *= val
+            # B.R[end:begin] *= val
 
         # if B.dirichlet[0] is None:
             # B.data[0] *= val
@@ -1480,17 +1480,17 @@ class BandedOperator(object):
                     block_len = B.shape[0] / float(B.blocks)
                     assert block_len == int(block_len)
                     for i in range(B.blocks):
-                        top = i*block_len
+                        end = i*block_len
                         if B.dirichlet[0] is not None:
-                            top += 1
-                        bottom = i*block_len + block_len
+                            end += 1
+                        begin = i*block_len + block_len
                         if B.dirichlet[1] is not None:
-                            bottom -= 1
-                        B.data[to,top:bottom] += other.data[fro,top:bottom]
+                            begin -= 1
+                        B.data[to,end:begin] += other.data[fro,end:begin]
                 else:
-                    top = 0
-                    bottom = B.data.shape[1]
-                    B.data[to,top:bottom] += other.data[fro,top:bottom]
+                    end = 0
+                    begin = B.data.shape[1]
+                    B.data[to,end:begin] += other.data[fro,end:begin]
             # Now the residual vector from the other one
             if other.R is not None:
                 if B.R is None:
@@ -1511,26 +1511,26 @@ class BandedOperator(object):
             block_len = B.shape[0] / float(B.blocks)
             assert block_len == int(block_len)
             for i in range(B.blocks):
-                top = i*block_len
+                end = i*block_len
                 if B.dirichlet[0] is not None:
-                    top += 1
-                bottom = i*block_len + block_len
+                    end += 1
+                begin = i*block_len + block_len
                 if B.dirichlet[1] is not None:
-                    bottom -= 1
-                B.data[m,top:bottom] += other
-            # top = 0
+                    begin -= 1
+                B.data[m,end:begin] += other
+            # end = 0
             # if B.dirichlet[0] is not None:
-                # top += 1
-            # bottom = B.data.shape[1]
+                # end += 1
+            # begin = B.data.shape[1]
             # if B.dirichlet[1] is not None:
-                # bottom -= 1
-            # B.data[m,top:bottom] += other
+                # begin -= 1
+            # B.data[m,end:begin] += other
             # Don't touch the residual.
         return B
 
-    def vectorized_scale(self, vec):
+    def vectorized_scale(self, vector):
         """
-        @vec@ is the correpsonding mesh vector of the current dimension.
+        @vector@ is the correpsonding mesh vector of the current dimension.
 
         Also applies to the residual vector self.R.
 
@@ -1539,35 +1539,41 @@ class BandedOperator(object):
         #TODO: THIS SHOULD NOT TOUCH THE DIRICHLET BOUNDARIES!
         block_len = self.shape[0] / float(self.blocks)
         assert block_len == int(block_len)
-        if len(vec) == block_len:
-            vec = np.tile(vec, self.blocks)
-        assert len(vec) == self.shape[0]
-        for i in range(self.blocks):
-            for row, o in enumerate(self.offsets):
-                bottom = i*block_len
-                top = i*block_len + block_len
+        if len(vector) == block_len:
+            vector = np.tile(vector, self.blocks)
+        assert len(vector) == self.shape[0]
+        for row, o in enumerate(self.offsets):
+            vec = np.roll(vector, o) if o != 0 else vector
+            # print "offset %s, %i to %i" % (o, begin, end)
+            # self.data[row, begin:end] *= np.roll(vec, o)[begin:end]
+            for i in range(self.blocks):
+                begin = i*block_len
+                end = i*block_len + block_len
                 # if o == 0:
                 if o >= 0 and self.dirichlet[0] is not None:
-                    bottom += 1
+                    begin += 1
                 if o <= 0 and self.dirichlet[1] is not None:
-                    top -= 1
+                    end -= 1
                 if o > 0:
-                    bottom += o
+                    begin += o
                 if o < 0:
-                    top += o
-                # print "offset %s, %i to %i" % (o, bottom, top)
-                self.data[row, bottom:top] *= np.roll(vec, o)[bottom:top]
-            bottom = i*block_len
-            top = i*block_len + block_len
+                    end += o
+                # print "offset %s, %i to %i" % (o, begin, end)
+                self.data[row, begin:end] *= vec[begin:end]
+                begin = i*block_len
+                end = i*block_len + block_len
+        for i in range(self.blocks):
+            begin = i*block_len
+            end = i*block_len + block_len
             if self.dirichlet[0] is not None:
-                bottom += 1
+                begin += 1
             if self.dirichlet[1] is not None:
-                top -= 1
-            self.R[bottom:top] *= vec[bottom:top]
-                # self.data[row,top_us:bottom_us] *= np.roll(vec, o)[top_them:bottom_them]
-                # self.data[row, bottom:top] *= vec[bottom:top]
+                end -= 1
+            self.R[begin:end] *= vector[begin:end]
+                # self.data[row,top_us:begin_us] *= np.roll(vec, o)[top_them:begin_them]
+                # self.data[row, begin:end] *= vec[begin:end]
             # elif o < 0:
-                # # self.data[row, :top+o] *= vec[-o:top]
+                # # self.data[row, :end+o] *= vec[-o:end]
                 # self.data[row, :] *= np.tile(np.roll(vec, o), self.blocks)
 
 
@@ -1586,37 +1592,37 @@ class BandedOperator(object):
         block_len = int(block_len)
         for i in range(self.blocks):
             for row, o in enumerate(self.offsets):
-                bottom = i*block_len
-                top = i*block_len + block_len
+                begin = i*block_len
+                end = i*block_len + block_len
                 # if o == 0:
                 if o >= 0 and self.dirichlet[0] is not None:
-                    bottom += 1
+                    begin += 1
                 if o <= 0 and self.dirichlet[1] is not None:
-                    top -= 1
+                    end -= 1
                 if o > 0:
-                    bottom += o
+                    begin += o
                 elif o < 0:
-                    top += o
-                # print "offset %s, %s to %s" % (o, bottom, top)
-                for k in xrange(bottom, top):
-                    # print "i =", k-bottom
+                    end += o
+                # print "offset %s, %s to %s" % (o, begin, end)
+                for k in xrange(begin, end):
+                    # print "i =", k-begin
                     self.data[row, k] *= func(k-o)
-            bottom = i*block_len
-            top = i*block_len + block_len
+            begin = i*block_len
+            end = i*block_len + block_len
             if self.dirichlet[0] is not None:
-                bottom += 1
+                begin += 1
             if self.dirichlet[1] is not None:
-                top -= 1
-            for k in xrange(bottom,top):
+                end -= 1
+            for k in xrange(begin,end):
                 self.R[k] *= func(k)
             # if o > 0:
-                # for i in xrange(bottom, self.shape[0]-o):
+                # for i in xrange(begin, self.shape[0]-o):
                     # self.data[row,i+o] *= func(i)
             # elif o == 0:
-                # for i in xrange(bottom, top):
+                # for i in xrange(begin, end):
                     # self.data[row,i] *= func(i)
             # elif o < 0:
-                # for i in xrange(top):
+                # for i in xrange(end):
                     # self.data[row, i-abs(o)] *= func(i)
 
 
@@ -1642,14 +1648,14 @@ def flatten_tensor_misaligned(mats):
     offsets = sorted(offsets, reverse=True)
     newlen = sum(len(m.data[0]) for m in mats)
     newdata = np.zeros((len(offsets), newlen))
-    bottom = top = 0
+    begin = end = 0
     #TODO: Search sorted magic?
     for m in mats:
-        top += len(m.data[0])
+        end += len(m.data[0])
         for fro, o in enumerate(m.offsets):
             to = offsets.index(o)
-            newdata[to, bottom:top] += m.data[fro]
-        bottom = top
+            newdata[to, begin:end] += m.data[fro]
+        begin = end
     residual = np.hstack([x.R for x in mats])
     B = BandedOperator((newdata, offsets), residual=residual)
     B.copy_meta_data(mats[0])

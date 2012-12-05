@@ -90,7 +90,8 @@ class HestonFiniteDifferenceEngine(FiniteDifferenceEngineADI):
             flip_idx_var=True,
             flip_idx_spot=False,
             schemes=None,
-            cache=True
+            cache=True,
+            verbose=True
             ):
         """@option@ is a HestonOption"""
         self.cache = cache
@@ -100,7 +101,7 @@ class HestonFiniteDifferenceEngine(FiniteDifferenceEngineADI):
 
         spots = utils.sinh_space(H.strike, spot_max, spotdensity, nspots, force_exact=force_exact)
         # spots = (2.0 * np.arange(nspots)) / nspots  * np.log(H.strike)
-        vars = utils.exponential_space(0.00, H.variance.value, var_max, varexp, nvols)
+        vars = utils.exponential_space(0.00, H.variance.value, var_max, varexp, nvols, force_exact=force_exact)
         # vars = [v0]
         # spots = np.linspace(0.0, spot_max, nspots)
         # vars = np.linspace(0.0, var_max, nvols)
@@ -186,21 +187,28 @@ class HestonFiniteDifferenceEngine(FiniteDifferenceEngineADI):
 
         if schemes is None:
             schemes = {}
+        else:
+            schemes = {k : list(v) for k, v in schemes.items()}
+            # for k,v in new.items():
+                # assert schemes[k] is not v
+            # schemes = new
         if (0,) not in schemes:
             schemes[(0,)] = [{"scheme": "center"}]
-        print "(0,): Start with %s differencing." % (schemes[(0,)][0]['scheme'],)
         if flip_idx_spot is not False:
             schemes[(0,)].append({"scheme": 'forward', "from" : flip_idx_spot})
-        if len(schemes[(0,)]) > 1:
-            print "(0,): Switch to %s differencing at %i." % (schemes[(0,)][1]['scheme'], schemes[(0,)][1]['from'])
 
         if (1,) not in schemes:
             schemes[(1,)] = [{"scheme": "center"}]
-        print "(1,): Start with %s differencing." % (schemes[(1,)][0]['scheme'],)
         if flip_idx_var is not False:
             schemes[(1,)].append({"scheme": 'backward', "from" : flip_idx_var})
-        if len(schemes[(1,)]) > 1:
-            print "(1,): Switch to %s differencing at %i." % (schemes[(1,)][1]['scheme'], schemes[(1,)][1]['from'])
+
+        if verbose:
+            print "(0,): Start with %s differencing." % (schemes[(0,)][0]['scheme'],)
+            if len(schemes[(0,)]) > 1:
+                print "(0,): Switch to %s differencing at %i." % (schemes[(0,)][1]['scheme'], schemes[(0,)][1]['from'])
+            print "(1,): Start with %s differencing." % (schemes[(1,)][0]['scheme'],)
+            if len(schemes[(1,)]) > 1:
+                print "(1,): Switch to %s differencing at %i." % (schemes[(1,)][1]['scheme'], schemes[(1,)][1]['from'])
         self.schemes = schemes
 
         FiniteDifferenceEngineADI.__init__(self, G, coefficients=self.coefficients,
@@ -221,7 +229,7 @@ class HestonFiniteDifferenceEngine(FiniteDifferenceEngineADI):
         hs = hs_call_vector(self.spots, H.strike,
             H.interest_rate.value, np.sqrt(self.vars), H.tenor,
             H.mean_reversion, H.mean_variance, H.vol_of_variance,
-            H.correlation, HFUNC=HestonFundamental, cache=self.cache)
+            H.correlation, HFUNC=HestonCos, cache=self.cache)
 
         if max(hs.flat) > self.spots[-1] * 2:
             self.BADANALYTICAL = True
@@ -291,7 +299,7 @@ class HestonCos(object):
         if cache:
             # print "Seeking:", fname
             if os.path.isfile(fname):
-                print "Loading:", fname
+                # print "Loading:", fname
                 return np.load(fname)
 
         ret = np.zeros_like(self.S)
@@ -523,7 +531,7 @@ class HestonFundamental(object):
         if cache:
             # print "Seeking:", fname
             if os.path.isfile(fname):
-                print "Loading:", fname
+                # print "Loading:", fname
                 return np.load(fname)
         cols = []
         vars = np.atleast_1d(self.var)

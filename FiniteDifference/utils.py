@@ -147,7 +147,7 @@ def sinh_space(exact, high, density, size, force_exact=True):
     return space
 
 
-def exponential_space(low, exact, high, ex, size):
+def exponential_space(low, exact, high, ex, size, force_exact=True):
     """
     Exponential space like y = x**ex. The exact value will be satisfied by
     adjust the high value upwards as necessary.
@@ -160,18 +160,19 @@ def exponential_space(low, exact, high, ex, size):
     x = pow(exact,1./ex)
     dv = (h - l) / (size-1)
 
-    j = 0
-    d = 1e100
-    for i in range(size):
-        if (l + i*dv > x):
-        # if abs(i*dv - x) < d:
-            # d = abs(i*dv - x)
-            j = i-1
-            break
-    if (j == 0):
-        assert(j != 0), "Did not find suitable value."
-    dx = x - (l + j*dv)
-    h += (size-1) * dx/j
+    if force_exact:
+        j = 0
+        d = 1e100
+        for i in range(size):
+            if (l + i*dv > x):
+            # if abs(i*dv - x) < d:
+                # d = abs(i*dv - x)
+                j = i-1
+                break
+        if (j == 0):
+            assert(j != 0), "Did not find suitable value."
+        dx = x - (l + j*dv)
+        h += (size-1) * dx/j
     dv = (h - l) / (size-1)
     for i in range(size):
         v[i] = l + pow(i*dv, ex)
