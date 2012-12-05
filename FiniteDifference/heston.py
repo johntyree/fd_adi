@@ -21,7 +21,6 @@ import utils
 from visualize import fp
 prec = 3
 
-import pyximport; pyximport.install()
 from FiniteDifferenceEngine import FiniteDifferenceEngineADI
 
 

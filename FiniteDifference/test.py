@@ -19,7 +19,7 @@ import Grid
 from heston import HestonOption
 from Option import BlackScholesOption
 
-import pyximport; pyximport.install()
+import pyximport ; pyximport.install()
 import FiniteDifferenceEngine as FD
 
 
@@ -359,26 +359,26 @@ class FiniteDifferenceEngineADI_test(unittest.TestCase):
         # oldL2.offsets = oldL2.offsets[1:]
 
         # print "offsets"
-        # print oldL1.offsets, L1.offsets
+        # print oldL1.offsets, L1.D.offsets
         # print "old"
         # fp(oldL1.data)
         # print
         # print "new"
-        # fp(L1.data)
+        # fp(L1.D.data)
         # print
         # print "diff"
-        # fp(L1.data - oldL1.data)
+        # fp(L1.D.data - oldL1.data)
         # print
         print "old"
         fp(oldL1.todense())
         print
         print "new"
-        fp(L1.todense())
+        fp(L1.D.todense())
         # print
         # print "diff"
-        # fp(oldL1.todense() - L1.todense())
-        assert np.allclose(L1.todense(), oldL1.todense())
-        assert np.allclose(L1.data, oldL1.data)
+        # fp(oldL1.todense() - L1.D.todense())
+        assert np.allclose(L1.D.todense(), oldL1.todense())
+        assert np.allclose(L1.D.data, oldL1.data)
         # print "old"
         # print oldR1
         # print
@@ -392,16 +392,16 @@ class FiniteDifferenceEngineADI_test(unittest.TestCase):
         # fp(oldL2.data)
         # print
         # print "new"
-        # fp(L2.data)
+        # fp(L2.D.data)
         # print "old"
         # fp(oldL2.todense())
         # print
         # print "new"
-        # fp(L2.todense())
+        # fp(L2.D.todense())
         # print
         # print "diff"
-        # fp(oldL2.todense() - L2.todense())
-        assert np.allclose(L2.data, oldL2.data)
+        # fp(oldL2.todense() - L2.D.todense())
+        assert np.allclose(L2.D.data, oldL2.data)
         # print "old"
         # print oldR2
         # print
@@ -535,7 +535,7 @@ class FiniteDifferenceEngineADI_test(unittest.TestCase):
 
         for d in bounds.keys():
             B = F.simple_operators[d]
-            print "Derivative", d, "Dirichlets", B.dirichlet
+            # print "Derivative", d, "Dirichlets", B.dirichlet
             g = (B+1).solve(F.grid.domain[-1])
             if B.axis == 1:
                 g = g.T
@@ -547,8 +547,8 @@ class FiniteDifferenceEngineADI_test(unittest.TestCase):
         print
         for d in bounds.keys():
             B = F.simple_operators[d]
-            print "Derivative", d, "Dirichlets", B.dirichlet
-            print B.dirichlet
+            # print "Derivative", d, "Dirichlets", B.dirichlet
+            # print B.dirichlet
             g = B.apply(F.grid.domain[-1])
             if B.axis == 1:
                 g = g.T
@@ -560,10 +560,10 @@ class FiniteDifferenceEngineADI_test(unittest.TestCase):
         print
         for d in bounds.keys():
             B = F.simple_operators[d]
-            print "Derivative", d, "Dirichlets", B.dirichlet
-            fp(B)
+            # print "Derivative", d, "Dirichlets", B.dirichlet
+            # fp(B.data)
             g = (B+1).solve(F.grid.domain[-1])
-            fp(g)
+            # fp(g)
             if B.axis == 1:
                 g = g.T
             if B.dirichlet[0] is not None:
@@ -591,7 +591,7 @@ class FiniteDifferenceEngineADI_test(unittest.TestCase):
         d2gdxdy = crossOp.apply(g)
 
         print "Cross op"
-        fp(crossOp.todense())
+        fp(crossOp.D.todense())
         print crossOp.dirichlet
         print crossOp.axis
         print
@@ -657,10 +657,10 @@ class BandedOperator_test(unittest.TestCase):
             C1 = FD.BandedOperator.for_vector(vec, scheme=scheme, derivative=1, order=2)
             C2 = C1.add(C1)
             assert C2 is not C1
-            assert C2.data is not C1.data
-            assert (C2.offsets == C1.offsets).all()
-            assert (C2.data == C1.data+C1.data).all()
-            assert (C2.data == C1.data*2).all()
+            assert C2.D.data is not C1.D.data
+            assert (C2.D.offsets == C1.D.offsets).all()
+            assert (C2.D.data == C1.D.data+C1.D.data).all()
+            assert (C2.D.data == C1.D.data*2).all()
             assert (C2.R == C1.R*2).all()
             assert (C2.R == C1.R*+C1.R).all()
 
@@ -671,19 +671,19 @@ class BandedOperator_test(unittest.TestCase):
         d = np.hstack((np.nan, np.diff(vec)))
         C1 = FD.BandedOperator.for_vector(vec, scheme='center', derivative=1, order=2)
         F1 = FD.BandedOperator.for_vector(vec, scheme='forward', derivative=1, order=2)
-        oldCF1 = np.zeros((len(set(F1.offsets) | set(C1.offsets)), C1.shape[1]))
+        oldCF1 = np.zeros((len(set(F1.D.offsets) | set(C1.D.offsets)), C1.D.shape[1]))
         oldCF1R = np.zeros_like(F1.R)
 
         # print "F1"
-        # fp(F1.data)
+        # fp(F1.D.data)
         # print "C1"
-        # fp(C1.data)
+        # fp(C1.D.data)
 
         CF1 = C1.add(F1)
-        oldCF1[:4,:] += F1.data[:4, :]
-        oldCF1[1:4,:] += C1.data
+        oldCF1[:4,:] += F1.D.data[:4, :]
+        oldCF1[1:4,:] += C1.D.data
         oldCF1R = F1.R + C1.R
-        assert (CF1.data == oldCF1).all()
+        assert (CF1.D.data == oldCF1).all()
         assert (CF1.R == oldCF1R+oldCF1R).all()
         assert (CF1.R == oldCF1R*2).all()
 
@@ -694,13 +694,13 @@ class BandedOperator_test(unittest.TestCase):
         d = np.hstack((np.nan, np.diff(vec)))
         B2 = FD.BandedOperator.for_vector(vec, scheme='backward', derivative=2, order=2, force_bandwidth=(-2,2))
         C2 = FD.BandedOperator.for_vector(vec, scheme='center', derivative=2, order=2, force_bandwidth=(-2,2))
-        oldCB2 = np.zeros((len(set(B2.offsets) | set(C2.offsets)), C2.shape[1]))
-        oldCB2[1:,:] += B2.data[1:, :]
-        oldCB2[1:4,:] += C2.data[1:4, :]
+        oldCB2 = np.zeros((len(set(B2.D.offsets) | set(C2.D.offsets)), C2.D.shape[1]))
+        oldCB2[1:,:] += B2.D.data[1:, :]
+        oldCB2[1:4,:] += C2.D.data[1:4, :]
         oldCB2R = np.zeros_like(B2.R)
         oldCB2R = B2.R + C2.R
         B2.add(C2, inplace=True)
-        assert (oldCB2 == B2.data).all()
+        assert (oldCB2 == B2.D.data).all()
         assert (oldCB2R == B2.R).all()
 
         B2 = FD.BandedOperator.for_vector(vec, scheme='backward', derivative=2, order=2)
@@ -753,6 +753,9 @@ class BandedOperator_test(unittest.TestCase):
         B2 = FD.BandedOperator.for_vector(vec, scheme='backward', derivative=2, order=2, force_bandwidth=(-2,2))
         assert B2 == B2
         C2 = FD.BandedOperator.for_vector(vec, scheme='center', derivative=2, order=2, force_bandwidth=(-2,2))
+        # print C2, B2
+        # fp(C2.D)
+        # fp(B2.D)
         assert C2 != B2
 
 
@@ -765,12 +768,12 @@ class BandedOperator_test(unittest.TestCase):
         oldB2 = B2.copy()
 
         newB2 = B2.add(1.0)
-        oldB2.data[tuple(oldB2.offsets).index(0)] += 1.0  # Manually add 1 to main diag
+        oldB2.D.data[tuple(oldB2.D.offsets).index(0)] += 1.0  # Manually add 1 to main diag
 
         assert newB2 is not B2 # Created a new operator
-        assert newB2.data is not B2.data # With new underlying data
-        assert (newB2.data == oldB2.data).all() # Operations were the same
-        assert (newB2.data != origB2.data).any() # Operations changed our operator
+        assert newB2.D.data is not B2.D.data # With new underlying data
+        assert (newB2.D.data == oldB2.D.data).all() # Operations were the same
+        assert (newB2.D.data != origB2.D.data).any() # Operations changed our operator
 
 
     def test_addscalar_inplace(self):
@@ -782,11 +785,11 @@ class BandedOperator_test(unittest.TestCase):
         oldB2 = B2.copy()
 
         B2.add(1.0, inplace=True) # Add to main diag in place
-        oldB2.data[tuple(oldB2.offsets).index(0)] += 1.0  # Manually add 1 to main diag in place
+        oldB2.D.data[tuple(oldB2.D.offsets).index(0)] += 1.0  # Manually add 1 to main diag in place
 
-        assert (B2.data == oldB2.data).all() # Operations were the same
-        assert (B2.data is not origB2.data)
-        assert (B2.data != origB2.data).any() # Operations changed our operator
+        assert (B2.D.data == oldB2.D.data).all() # Operations were the same
+        assert (B2.D.data is not origB2.D.data)
+        assert (B2.D.data != origB2.D.data).any() # Operations changed our operator
 
 
     def test_copy(self):
@@ -798,16 +801,16 @@ class BandedOperator_test(unittest.TestCase):
         CCC1 = CC1.copy()
 
         assert C1 is not CC1
-        assert np.all(C1.data == CC1.data)
-        assert np.all(C1.offsets == CC1.offsets)
+        assert np.all(C1.D.data == CC1.D.data)
+        assert np.all(C1.D.offsets == CC1.D.offsets)
 
         assert C1 is not CCC1
-        assert np.all(C1.data == CCC1.data)
-        assert np.all(C1.offsets == CCC1.offsets)
+        assert np.all(C1.D.data == CCC1.D.data)
+        assert np.all(C1.D.offsets == CCC1.D.offsets)
 
         assert CC1 is not CCC1
-        assert np.all(CC1.data == CCC1.data)
-        assert np.all(CC1.offsets == CCC1.offsets)
+        assert np.all(CC1.D.data == CCC1.D.data)
+        assert np.all(CC1.D.offsets == CCC1.D.offsets)
 
 
     def test_create(self):
@@ -832,18 +835,18 @@ class BandedOperator_test(unittest.TestCase):
                 oldX1.data = oldX1.data[m-high:m-low+1]
                 oldX1.offsets = oldX1.offsets[m-high:m-low+1]
 
-                # print "old todense()"
-                # fp(oldX1.todense())
-                # print "new todense()"
-                # fp(X1.todense())
+                # print "old D.todense()"
+                # fp(oldX1.D.todense())
+                # print "new D.todense()"
+                # fp(X1.D.todense())
                 # print
                 # print X1.shape, oldX1.shape
-                # print (X1.offsets, oldX1.offsets),  "%s+%s (dv %i) idx %i" % (sch0, sch1, dv, idx)
+                # print (X1.D.offsets, oldX1.offsets),  "%s+%s (dv %i) idx %i" % (sch0, sch1, dv, idx)
                 assert X1.axis == axis
-                assert (X1.todense() == oldX1.todense()).all(),  "%s+%s (dv %i) idx %i" % (sch0, sch1, dv, idx)
-                assert (X1.offsets == oldX1.offsets).all(),  "%s+%s (dv %i) idx %i" % (sch0, sch1, dv, idx)
-                assert (X1.data.shape == oldX1.data.shape),  "%s+%s (dv %i) idx %i" % (sch0, sch1, dv, idx)
-                assert (X1.data == oldX1.data).all(),  "%s+%s (dv %i) idx %i" % (sch0, sch1, dv, idx)
+                assert (X1.D.todense() == oldX1.todense()).all(),  "%s+%s (dv %i) idx %i" % (sch0, sch1, dv, idx)
+                assert (X1.D.offsets == oldX1.offsets).all(),  "%s+%s (dv %i) idx %i" % (sch0, sch1, dv, idx)
+                assert (X1.D.data.shape == oldX1.data.shape),  "%s+%s (dv %i) idx %i" % (sch0, sch1, dv, idx)
+                assert (X1.D.data == oldX1.data).all(),  "%s+%s (dv %i) idx %i" % (sch0, sch1, dv, idx)
 
 
     def test_splice_same(self):
@@ -859,7 +862,7 @@ class BandedOperator_test(unittest.TestCase):
                     X1 = FD.BandedOperator.for_vector(vec, scheme=sch0, derivative=dv, order=2, force_bandwidth=(-2,2))+1
                     X2 = FD.BandedOperator.for_vector(vec, scheme=sch1, derivative=dv, order=2, force_bandwidth=(-2,2))+1
                     X12 = X1.splice_with(X2, idx)
-                    manualX12 = np.vstack((X1.todense()[:idx, :], X2.todense()[idx:,:]))
+                    manualX12 = np.vstack((X1.D.todense()[:idx, :], X2.D.todense()[idx:,:]))
                     manualX12 = scipy.sparse.dia_matrix(manualX12)
                     X12i = X1.splice_with(X2, idx, inplace=True)
                     assert X12i is X1
@@ -869,26 +872,26 @@ class BandedOperator_test(unittest.TestCase):
                         high = 2
                     if (sch0 == 'down' and idx > 2) or (sch1 == 'down' and idx < last):
                         low = -2
-                    m = tuple(X12.offsets).index(0)
-                    X12.data = X12.data[m-high:m-low+1]
-                    X12.offsets = X12.offsets[m-high:m-low+1]
+                    m = tuple(X12.D.offsets).index(0)
+                    X12.D.data = X12.D.data[m-high:m-low+1]
+                    X12.D.offsets = X12.D.offsets[m-high:m-low+1]
 
                     # print
                     # print "manual"
                     # fp(manualX12.data[::-1], 3)
                     # print
                     # print "new"
-                    # # fp(X12.todense(), 3)
+                    # # fp(X12.D.todense(), 3)
                     # # print
-                    # fp(X12.data, 3)
+                    # fp(X12.D.data, 3)
 
                     # print
                     # print X12.shape, manualX12.shape
-                    # print (X12.offsets, manualX12.offsets[::-1]),  "%s+%s (dv %i) idx %i" % (sch0, sch1, dv, idx)
-                    assert (X12.todense() == manualX12.todense()).all(),  "%s+%s (dv %i) idx %i" % (sch0, sch1, dv, idx)
-                    assert (X12.offsets == manualX12.offsets[::-1]).all(),  "%s+%s (dv %i) idx %i" % (sch0, sch1, dv, idx)
-                    assert (X12.data.shape == manualX12.data.shape),  "%s+%s (dv %i) idx %i" % (sch0, sch1, dv, idx)
-                    assert (X12.data == manualX12.data[::-1]).all(),  "%s+%s (dv %i) idx %i" % (sch0, sch1, dv, idx)
+                    # print (X12.D.offsets, manualX12.offsets[::-1]),  "%s+%s (dv %i) idx %i" % (sch0, sch1, dv, idx)
+                    assert (X12.D.todense() == manualX12.todense()).all(),  "%s+%s (dv %i) idx %i" % (sch0, sch1, dv, idx)
+                    assert (X12.D.offsets == manualX12.offsets[::-1]).all(),  "%s+%s (dv %i) idx %i" % (sch0, sch1, dv, idx)
+                    assert (X12.D.data.shape == manualX12.data.shape),  "%s+%s (dv %i) idx %i" % (sch0, sch1, dv, idx)
+                    assert (X12.D.data == manualX12.data[::-1]).all(),  "%s+%s (dv %i) idx %i" % (sch0, sch1, dv, idx)
 
 
     def test_splice_different(self):
@@ -905,7 +908,7 @@ class BandedOperator_test(unittest.TestCase):
                     X1 = FD.BandedOperator.for_vector(vec, scheme=sch0, derivative=dv, order=2)+1
                     X2 = FD.BandedOperator.for_vector(vec, scheme=sch1, derivative=dv, order=2)+1
                     X12 = X1.splice_with(X2, idx)
-                    manualX12 = np.vstack((X1.todense()[:idx, :], X2.todense()[idx:,:]))
+                    manualX12 = np.vstack((X1.D.todense()[:idx, :], X2.D.todense()[idx:,:]))
                     manualX12 = scipy.sparse.dia_matrix(manualX12)
 
                     high, low = 1,-1
@@ -913,26 +916,26 @@ class BandedOperator_test(unittest.TestCase):
                         high = 2
                     if (sch0 == 'down' and idx > 2) or (sch1 == 'down' and idx < last):
                         low = -2
-                    m = tuple(X12.offsets).index(0)
-                    X12.data = X12.data[m-high:m-low+1]
-                    X12.offsets = X12.offsets[m-high:m-low+1]
+                    m = tuple(X12.D.offsets).index(0)
+                    X12.D.data = X12.D.data[m-high:m-low+1]
+                    X12.D.offsets = X12.D.offsets[m-high:m-low+1]
 
                     # print
                     # print "manual"
                     # fp(manualX12.data[::-1], 3)
                     # print
                     # print "new"
-                    # # fp(X12.todense(), 3)
+                    # # fp(X12.D.todense(), 3)
                     # # print
-                    # fp(X12.data, 3)
+                    # fp(X12.D.data, 3)
 
                     # print
                     # print X12.shape, manualX12.shape
-                    # print (X12.offsets, manualX12.offsets[::-1]),  "%s+%s (dv %i) idx %i" % (sch0, sch1, dv, idx)
-                    assert (X12.todense() == manualX12.todense()).all(),  "%s+%s (dv %i) idx %i" % (sch0, sch1, dv, idx)
-                    assert (X12.offsets == manualX12.offsets[::-1]).all(),  "%s+%s (dv %i) idx %i" % (sch0, sch1, dv, idx)
-                    assert (X12.data.shape == manualX12.data.shape),  "%s+%s (dv %i) idx %i" % (sch0, sch1, dv, idx)
-                    assert (X12.data == manualX12.data[::-1]).all(),  "%s+%s (dv %i) idx %i" % (sch0, sch1, dv, idx)
+                    # print (X12.D.offsets, manualX12.offsets[::-1]),  "%s+%s (dv %i) idx %i" % (sch0, sch1, dv, idx)
+                    assert (X12.D.todense() == manualX12.todense()).all(),  "%s+%s (dv %i) idx %i" % (sch0, sch1, dv, idx)
+                    assert (X12.D.offsets == manualX12.offsets[::-1]).all(),  "%s+%s (dv %i) idx %i" % (sch0, sch1, dv, idx)
+                    assert (X12.D.data.shape == manualX12.data.shape),  "%s+%s (dv %i) idx %i" % (sch0, sch1, dv, idx)
+                    assert (X12.D.data == manualX12.data[::-1]).all(),  "%s+%s (dv %i) idx %i" % (sch0, sch1, dv, idx)
 
 
 class ScalingFuncs(unittest.TestCase):
@@ -966,11 +969,11 @@ class ScalingFuncs(unittest.TestCase):
         manualB = oldB.copy()
         newB = oldB.copy()
         vecB = oldB.copy()
-        manualB.data[0][2:] *= coeff(len(vec)-2)
-        manualB.data[1][1:] *= coeff(len(vec)-1)
-        manualB.data[2] *= coeff(len(vec))
-        manualB.data[3][:-1] *= coeff(1, len(vec))
-        manualB.data[4][:-2] *= coeff(2, len(vec))
+        manualB.D.data[0][2:] *= coeff(len(vec)-2)
+        manualB.D.data[1][1:] *= coeff(len(vec)-1)
+        manualB.D.data[2] *= coeff(len(vec))
+        manualB.D.data[3][:-1] *= coeff(1, len(vec))
+        manualB.D.data[4][:-2] *= coeff(2, len(vec))
         manualB.R *= coeff(len(vec))
 
         self.manualB = manualB
@@ -1001,8 +1004,8 @@ class ScalingFuncs(unittest.TestCase):
         vecB.vectorized_scale(self.f0(vec))
 
 
-        npt.assert_array_equal(no_nan(newB.data), 0)
-        npt.assert_array_equal(no_nan(vecB.data), 0)
+        npt.assert_array_equal(no_nan(newB.D.data), 0)
+        npt.assert_array_equal(no_nan(vecB.D.data), 0)
 
         for dchlet in itertools.product([1, None], repeat=2):
             oldB = FD.BandedOperator((data.copy(), offsets), res.copy())
@@ -1010,7 +1013,7 @@ class ScalingFuncs(unittest.TestCase):
             veczeroB = oldB.copy()
             veczeroB.vectorized_scale(self.f0(vec))
 
-            manualzeroB = np.zeros_like(veczeroB.data)
+            manualzeroB = np.zeros_like(veczeroB.D.data)
             if veczeroB.dirichlet[0] is not None:
                 manualzeroB[0, 2] = flag
                 manualzeroB[1, 1] = flag
@@ -1038,41 +1041,41 @@ class ScalingFuncs(unittest.TestCase):
                 bottom += 1
             if dchlet[1]:
                 top -= 1
-            manualB.data[0][bottom+2:]  *= vec[bottom : last-2]+2
-            manualB.data[1][bottom+1:]  *= vec[bottom : last-1]+2
-            manualB.data[2][bottom:top] *= vec[bottom : top]+2
-            manualB.data[3][:top-1]     *= vec[1      : top]+2
-            manualB.data[4][:top-2]     *= vec[2      : top]+2
+            manualB.D.data[0][bottom+2:]  *= vec[bottom : last-2]+2
+            manualB.D.data[1][bottom+1:]  *= vec[bottom : last-1]+2
+            manualB.D.data[2][bottom:top] *= vec[bottom : top]+2
+            manualB.D.data[3][:top-1]     *= vec[1      : top]+2
+            manualB.D.data[4][:top-2]     *= vec[2      : top]+2
             manualB.R[bottom:top]       *= vec[bottom:top]+2
             vecB.vectorized_scale(self.fx(vec))
             newB.scale(lambda i: vec[i]+2)
-            print "vec"
-            fp(vec)
-            print
-            print "manual"
-            fp(manualB.data)
-            print
-            print "newB"
-            fp(newB.data)
-            print
-            print "vecB"
-            fp(vecB.data)
-            print
-            print "manualR"
-            print manualB.R
-            print
-            print "vecR"
-            print vecB.R
-            print
-            print "newR"
-            print newB.R
-            print
-            print "manual"
-            fp(manualB)
-            print
-            print "newB"
-            fp(newB)
-            npt.assert_array_equal(veczeroB.data, manualzeroB)
+            # print "vec"
+            # fp(vec)
+            # print
+            # print "manual"
+            # fp(manualB.D.data)
+            # print
+            # print "newB"
+            # fp(newB.D.data)
+            # print
+            # print "vecB"
+            # fp(vecB.D.data)
+            # print
+            # print "manualR"
+            # print manualB.R
+            # print
+            # print "vecR"
+            # print vecB.R
+            # print
+            # print "newR"
+            # print newB.R
+            # print
+            # print "manual"
+            # fp(manualB.D)
+            # print
+            # print "newB"
+            # fp(newB.D)
+            npt.assert_array_equal(veczeroB.D.data, manualzeroB)
             npt.assert_(newB == vecB)
             npt.assert_array_equal(manualB, newB)
             npt.assert_array_equal(manualB, vecB)
@@ -1110,7 +1113,7 @@ class ScalingFuncs(unittest.TestCase):
             zeroB = oldB.copy()
             zeroB.scale(self.f0)
 
-            manualzeroB = np.zeros_like(zeroB.data)
+            manualzeroB = np.zeros_like(zeroB.D.data)
             if zeroB.dirichlet[0] is not None:
                 manualzeroB[0, 2] = flag
                 manualzeroB[1, 1] = flag
@@ -1123,7 +1126,7 @@ class ScalingFuncs(unittest.TestCase):
             print "Dirichlet", dchlet
             # print
             # print "zeroB"
-            # fp(zeroB.data)
+            # fp(zeroB.D.data)
             # fp(zeroB.R)
             # print
             # print "manualzeroB"
@@ -1139,25 +1142,25 @@ class ScalingFuncs(unittest.TestCase):
                 bottom += 1
             if dchlet[1]:
                 top -= 1
-            manualB.data[0][bottom+2:] *= np.arange(bottom, manualB.shape[0]-2)+2
-            manualB.data[1][bottom+1:] *= np.arange(bottom, manualB.shape[0]-1)+2
-            manualB.data[2][bottom:top] *= np.arange(bottom, top)+2
-            manualB.data[3][:top-1] *= np.arange(1, top)+2
-            manualB.data[4][:top-2] *= np.arange(2, top)+2
+            manualB.D.data[0][bottom+2:] *= np.arange(bottom, manualB.shape[0]-2)+2
+            manualB.D.data[1][bottom+1:] *= np.arange(bottom, manualB.shape[0]-1)+2
+            manualB.D.data[2][bottom:top] *= np.arange(bottom, top)+2
+            manualB.D.data[3][:top-1] *= np.arange(1, top)+2
+            manualB.D.data[4][:top-2] *= np.arange(2, top)+2
             manualB.R[bottom:top] *= np.arange(bottom, top)+2
             newB.scale(self.fx)
-            print "manual"
-            fp(manualB.data)
-            print
-            print "new"
-            fp(newB.data)
-            print
-            print "manualR"
-            print manualB.R
-            print
-            print "newR"
-            print newB.R
-            assert (zeroB.data == manualzeroB).all()
+            # print "manual"
+            # fp(manualB.D.data)
+            # print
+            # print "new"
+            # fp(newB.D.data)
+            # print
+            # print "manualR"
+            # print manualB.R
+            # print
+            # print "newR"
+            # print newB.R
+            assert (zeroB.D.data == manualzeroB).all()
             assert manualB == newB
 
 
@@ -1177,16 +1180,16 @@ class ScalingFuncs(unittest.TestCase):
 
         newB = oldB.copy()
         newB.scale(f0)
-        fp(newB.data)
-        npt.assert_array_equal(no_nan(newB.data), 0)
+        fp(newB.D.data)
+        npt.assert_array_equal(no_nan(newB.D.data), 0)
 
         manualB = oldB.copy()
         newB = oldB.copy()
-        manualB.data[0][2:] *= np.arange(len(vec)-2)
-        manualB.data[1][1:] *= np.arange(len(vec)-1)
-        manualB.data[2] *= np.arange(len(vec))
-        manualB.data[3][:-1] *= np.arange(1, len(vec))
-        manualB.data[4][:-2] *= np.arange(2, len(vec))
+        manualB.D.data[0][2:] *= np.arange(len(vec)-2)
+        manualB.D.data[1][1:] *= np.arange(len(vec)-1)
+        manualB.D.data[2] *= np.arange(len(vec))
+        manualB.D.data[3][:-1] *= np.arange(1, len(vec))
+        manualB.D.data[4][:-2] *= np.arange(2, len(vec))
         manualB.R *= np.arange(len(vec))
         newB.scale(fx)
         # print "manual"
