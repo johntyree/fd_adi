@@ -16,16 +16,22 @@ import itertools
 import utils
 import scipy.linalg as spl
 
+from cpython cimport bool
+from libcpp cimport bool as cbool
+
+REAL = np.float64
+ctypedef np.float64_t REAL_t
+
 cdef class BandedOperator(object):
 
     attrs = ('derivative', 'order', 'axis', 'deltas', 'dirichlet', 'blocks')
 
-    cdef public int blocks, order, axis
+    cdef public unsigned int blocks, order, axis
     cdef public D, R, deltas, dirichlet, solve_banded_offsets, derivative
     cdef public shape
 
-    def __init__(self, data_offsets, residual=None, inplace=True,
-            derivative=1, order=2, deltas=None, axis=0):
+    def __init__(self, data_offsets, residual=None, int inplace=True,
+            int derivative=1, int order=2, deltas=None, int axis=0):
         """
         A linear operator for discrete derivatives.
         Consist of a banded matrix (B.D) and a residual vector (B.R) for things
@@ -622,110 +628,126 @@ cdef class BandedOperator(object):
     def __iadd__(self, other):
         return self.add(other, inplace=True)
 
+    def add(self, other, cbool inplace=False):
+        if isinstance(other, BandedOperator):
+            return self.add_operator(other, inplace)
+        else:
+            return self.add_scalar(other, inplace)
 
-    def add(self, other, inplace=False):
+
+    def add_operator(self, BandedOperator other, cbool inplace=False):
         """
-        Add a scalar to the main diagonal or a second BandedOperator to this one.
+        Add a second BandedOperator to this one.
         Does not alter self.R, the residual vector.
         """
-        selfoffsets = tuple(self.D.offsets)
+        cdef np.ndarray[int, ndim=1] selfoffsets = np.array(self.D.offsets)
+        cdef np.ndarray[int, ndim=1] otheroffsets = np.array(other.D.offsets)
+        cdef int num_otheroffsets = len(otheroffsets)
+        cdef np.ndarray[int, ndim=1] Boffsets
+        cdef int o
 
-        # If we're adding two operators together
-        if isinstance(other, BandedOperator):
-
-            if self.axis != other.axis:
-                raise ValueError("Both operators must operate on the same axis."
-                        " (%s != %s)" % (self.axis, other.axis))
-            otheroffsets = tuple(other.D.offsets)
-            # Verify that they are compatible
-            if self.shape[1] != other.shape[1]:
-                raise ValueError("Both operators must have the same length")
-            # If we're adding it directly to this one
-            if inplace:
-                # The diagonals have to line up.
-                if otheroffsets != selfoffsets:
-                    raise ValueError("Both operators must have (exactly) the"
-                                     " same offsets to add in-place.")
-                B = self
-                Boffsets = selfoffsets
-            # Otherwise we are adding directly to this one.
-            else:
-                # Calculate the offsets that the new one will have.
-                Boffsets = sorted(set(selfoffsets).union(set(otheroffsets)),
-                                    reverse=True)
-                newdata = np.zeros((len(Boffsets), self.shape[1]))
-                # And make a new operator with the appropriate shape
-                # Remember to carry the residual with us.
-                B = BandedOperator((newdata, Boffsets), self.R)
-                # Copy our data into the new operator since carefully, since we
-                # may have resized.
-                for o in selfoffsets:
-                    fro = selfoffsets.index(o)
-                    to = Boffsets.index(o)
-                    # print "fro(%i) -> to(%i)" % (fro, to)
-                    B.D.data[to] += self.D.data[fro]
-                B.copy_meta_data(self)
-            # Copy the data from the other operator over
-            # Don't double the dirichlet boundaries!
-            for o in otheroffsets:
-                fro = otheroffsets.index(o)
-                to = Boffsets.index(o)
-                if o == 0:
-                    # We have to do the main diagonal block_wise becaues of the
-                    # dirichlet boundary
-                    block_len = B.shape[0] / float(B.blocks)
-                    assert block_len == int(block_len)
-                    for i in range(B.blocks):
-                        end = i*block_len
-                        if B.dirichlet[0] is not None:
-                            end += 1
-                        begin = i*block_len + block_len
-                        if B.dirichlet[1] is not None:
-                            begin -= 1
-                        B.D.data[to,end:begin] += other.D.data[fro,end:begin]
-                else:
-                    end = 0
-                    begin = B.D.data.shape[1]
-                    B.D.data[to,end:begin] += other.D.data[fro,end:begin]
-            # Now the residual vector from the other one
-            if other.R is not None:
-                if B.R is None:
-                    B.R = other.R.copy()
-                else:
-                    B.R += other.R
-        # If we aren't adding an operator, we are adding a scalar
+        if self.axis != other.axis:
+            raise ValueError("Both operators must operate on the same axis."
+                    " (%s != %s)" % (self.axis, other.axis))
+        otheroffsets = other.D.offsets
+        # Verify that they are compatible
+        if self.shape[1] != other.shape[1]:
+            raise ValueError("Both operators must have the same length")
+        # If we're adding it directly to this one
+        if inplace:
+            # The diagonals have to line up.
+            if not np.array_equal(otheroffsets, selfoffsets):
+                print "Self offsets:", selfoffsets
+                print "Them offsets:", otheroffsets
+                raise ValueError("Both operators must have (exactly) the"
+                                    " same offsets to add in-place.")
+            B = self
+            Boffsets = selfoffsets
+        # Otherwise we are adding directly to this one.
         else:
-            # We add it to the main diagonal.
-            m = selfoffsets.index(0)
-            if m > len(selfoffsets)-1:
-                raise NotImplementedError("Cannot (yet) add scalar to operator"
-                                          " without main diagonal.")
-            if inplace:
-                B = self
+            # Calculate the offsets that the new one will have.
+            Boffsets = np.array(sorted(set(selfoffsets).union(set(otheroffsets)),
+                                reverse=True))
+            newdata = np.zeros((len(Boffsets), self.shape[1]))
+            # And make a new operator with the appropriate shape
+            # Remember to carry the residual with us.
+            B = BandedOperator((newdata, Boffsets), self.R)
+            # Copy our data into the new operator since carefully, since we
+            # may have resized.
+            for o in selfoffsets:
+                fro = get_int_index(selfoffsets, o)
+                to = get_int_index(Boffsets, o)
+                # print "fro(%i) -> to(%i)" % (fro, to)
+                B.D.data[to] += self.D.data[fro]
+            B.copy_meta_data(self)
+        # Copy the data from the other operator over
+        # Don't double the dirichlet boundaries!
+        for i in range(num_otheroffsets):
+            fro = i
+            o = otheroffsets[i]
+            to = get_int_index(Boffsets, o)
+            if o == 0:
+                # We have to do the main diagonal block_wise becaues of the
+                # dirichlet boundary
+                block_len = B.shape[0] / float(B.blocks)
+                assert block_len == int(block_len)
+                for i in range(B.blocks):
+                    end = i*block_len
+                    if B.dirichlet[0] is not None:
+                        end += 1
+                    begin = i*block_len + block_len
+                    if B.dirichlet[1] is not None:
+                        begin -= 1
+                    B.D.data[to,end:begin] += other.D.data[fro,end:begin]
             else:
-                B = self.copy()
-            block_len = B.shape[0] / float(B.blocks)
-            assert block_len == int(block_len)
-            for i in range(B.blocks):
-                end = i*block_len
-                if B.dirichlet[0] is not None:
-                    end += 1
-                begin = i*block_len + block_len
-                if B.dirichlet[1] is not None:
-                    begin -= 1
-                B.D.data[m,end:begin] += other
-            # end = 0
-            # if B.dirichlet[0] is not None:
-                # end += 1
-            # begin = B.D.data.shape[1]
-            # if B.dirichlet[1] is not None:
-                # begin -= 1
-            # B.D.data[m,end:begin] += other
-            # Don't touch the residual.
+                end = 0
+                begin = B.D.data.shape[1]
+                B.D.data[to,end:begin] += other.D.data[fro,end:begin]
+        # Now the residual vector from the other one
+        if other.R is not None:
+            if B.R is None:
+                B.R = other.R.copy()
+            else:
+                B.R += other.R
+
         return B
 
 
-    def vectorized_scale(self, vector):
+    def add_scalar(self, float other, cbool inplace=False):
+        """
+        Add a scalar to the main diagonal or
+        Does not alter self.R, the residual vector.
+        """
+        if inplace:
+            B = self
+        else:
+            B = self.copy()
+        # We add it to the main diagonal.
+        cdef np.ndarray[int, ndim=1] selfoffsets = np.array(self.D.offsets)
+        cdef unsigned int m = get_int_index(selfoffsets, 0)
+        cdef unsigned int blocks = B.blocks
+        cdef unsigned int block_len
+
+        if m > len(selfoffsets)-1:
+            raise NotImplementedError("Cannot (yet) add scalar to operator"
+                                        " without main diagonal.")
+        block_len = B.shape[0] / blocks
+        # assert block_len == int(block_len)
+        data = B.D.data
+        for i in range(blocks):
+            end = i*block_len
+            if B.dirichlet[0] is not None:
+                end += 1
+            begin = i*block_len + block_len
+            if B.dirichlet[1] is not None:
+                begin -= 1
+            data[m,end:begin] += other
+
+        # Don't touch the residual.
+        return B
+
+
+    def vectorized_scale(self, np.ndarray[REAL_t, ndim=1] vector):
         """
         @vector@ is the correpsonding mesh vector of the current dimension.
 
@@ -733,47 +755,49 @@ cdef class BandedOperator(object):
 
         See FiniteDifferenceEngine.coefficients.
         """
-        #TODO: THIS SHOULD NOT TOUCH THE DIRICHLET BOUNDARIES!
-        block_len = self.shape[0] / float(self.blocks)
-        assert block_len == int(block_len)
-        if len(vector) == block_len:
-            vector = np.tile(vector, self.blocks)
-        assert len(vector) == self.shape[0]
-        for row, o in enumerate(self.D.offsets):
-            o = int(o)
-            vec = np.roll(vector, o) if o != 0 else vector
-            # print "offset %s, %i to %i" % (o, begin, end)
-            # self.D.data[row, begin:end] *= np.roll(vec, o)[begin:end]
-            for i in range(self.blocks):
-                begin = int(i*block_len)
-                end = int(i*block_len + block_len)
-                # if o == 0:
-                if o >= 0 and self.dirichlet[0] is not None:
-                    begin += 1
-                if o <= 0 and self.dirichlet[1] is not None:
-                    end -= 1
-                if o > 0:
-                    begin += o
-                if o < 0:
-                    end += o
-                # print "offset %s, %i to %i" % (o, begin, end)
-                self.D.data[int(row), int(begin):int(end)] *= vec[int(begin):int(end)]
-        for i in range(self.blocks):
-            begin = int(i*block_len)
-            end = int(i*block_len + block_len)
-            if self.dirichlet[0] is not None:
-                begin += 1
-            if self.dirichlet[1] is not None:
-                end -= 1
-            # self.R[begin:end] *= vector[begin:end]
-            res = self.R[begin:end]
-            v = vector[begin:end]
-            res *= v
-                # self.D.data[row,top_us:begin_us] *= np.roll(vec, o)[top_them:begin_them]
-                # self.D.data[row, begin:end] *= vec[begin:end]
-            # elif o < 0:
-                # # self.D.data[row, :end+o] *= vec[-o:end]
-                # self.D.data[row, :] *= np.tile(np.roll(vec, o), self.blocks)
+        cdef unsigned int operator_rows = self.shape[0]
+        cdef unsigned int blocks = self.blocks
+        cdef unsigned int block_len = operator_rows / blocks
+        # cdef np.ndarray[REAL_t, ndim=1] vec
+        cdef np.ndarray[REAL_t, ndim=1] R = self.R
+        cdef np.ndarray[int, ndim=1] offsets = np.array(self.D.offsets)
+        cdef np.ndarray[REAL_t, ndim=2] data = self.D.data
+        cdef unsigned int noffsets = len(self.D.offsets)
+        cdef signed int o
+        cdef unsigned int begin, end
+        if blocks > 1 and len(vector) == block_len:
+            vector = np.tile(vector, blocks)
+        assert len(vector) == operator_rows
+        cdef cbool low_dirichlet = self.dirichlet[0] is not None
+        cdef cbool high_dirichlet = self.dirichlet[1] is not None
+        for row in range(noffsets):
+            o = offsets[row]
+            o = abs(o) % block_len * sign(o)
+            vbegin = begin = 0
+            vend = end = block_len
+            if o >= 0:
+                begin = o + low_dirichlet
+                vbegin = low_dirichlet
+                vend -= o
+            if o <= 0:
+                end += o - high_dirichlet
+                vbegin -= o
+                vend -= high_dirichlet
+            # if blocks == 500:
+                # print "Operator_rows %s, blocks %s, block_len %s" % (operator_rows, blocks, block_len)
+                # print "begin(%s, %s) end(%s, %s)" % (begin, vbegin, end, vend)
+                # print "row %s, dirichlet(%s, %s)" % (o, low_dirichlet, high_dirichlet)
+            data[row].reshape(blocks, block_len)[:, begin:end] *= vector.reshape(blocks,block_len)[:, vbegin:vend]
+
+        if self.dirichlet[0] is not None:
+            begin = 1
+        else:
+            begin = 0
+        if self.dirichlet[1] is not None:
+            end = block_len - 1
+        else:
+            end = block_len
+        self.R.reshape(blocks, block_len)[:,begin:end] *= vector.reshape(blocks, block_len)[:, begin:end]
 
 
     def scale(self, func):
@@ -824,3 +848,25 @@ cdef class BandedOperator(object):
                 # for i in range(end):
                     # self.D.data[row, i-abs(o)] *= func(i)
 
+
+cdef inline int sign(int i):
+    if i < 0:
+        return -1
+    else:
+        return 1
+
+cdef unsigned int get_real_index(np.ndarray[REAL_t, ndim=1] haystack, REAL_t needle):
+    cdef unsigned int length = len(haystack)
+    for i in range(length):
+        if needle == haystack[i]:
+            return i
+    raise ValueError("Value not in array: %s" % needle)
+
+
+cdef unsigned int get_int_index(np.ndarray[int, ndim=1] haystack, int needle):
+    cdef unsigned int length = len(haystack)
+
+    for i in range(length):
+        if needle == haystack[i]:
+            return i
+    raise ValueError("Value not in array: %s" % needle)

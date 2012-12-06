@@ -29,20 +29,20 @@ DefaultHeston = HestonOption( spot=100
                  , mean_reversion = 1
                  , mean_variance = 0.12
                  , vol_of_variance = 0.041
-                 , correlation = 0.0
+                 , correlation = 0.5
                  )
 
 H = DefaultHeston
 
 # H = HestonOption( spot=100
-                 # , strike=100
-                 # , interest_rate=0.03
-                 # , volatility = 0.2
-                 # , tenor=1.0
-                 # , mean_reversion = 1
-                 # , mean_variance = 0.04
-                 # , vol_of_variance = 0.4
-                 # , correlation = 0.6
+                 # , strike=110
+                 # , interest_rate=0.40
+                 # , volatility = 0.5
+                 # , tenor=3.0
+                 # , mean_reversion = 3
+                 # , mean_variance = 0.25
+                 # , vol_of_variance = 0.5
+                 # , correlation = 0.8
                  # )
 
 # trims = (H.strike * .2 < spots) & (spots < H.strike * 2.0)

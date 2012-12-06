@@ -1026,7 +1026,7 @@ class ScalingFuncs(unittest.TestCase):
             # print dchlet
             # print
             # print "veczeroB"
-            # fp(veczeroB.data)
+            # fp(veczeroB.D.data)
             # print
             # print "manualzeroB"
             # fp(manualzeroB)
@@ -1049,32 +1049,32 @@ class ScalingFuncs(unittest.TestCase):
             manualB.R[bottom:top]       *= vec[bottom:top]+2
             vecB.vectorized_scale(self.fx(vec))
             newB.scale(lambda i: vec[i]+2)
-            # print "vec"
-            # fp(vec)
-            # print
-            # print "manual"
-            # fp(manualB.D.data)
-            # print
-            # print "newB"
-            # fp(newB.D.data)
-            # print
-            # print "vecB"
-            # fp(vecB.D.data)
-            # print
-            # print "manualR"
-            # print manualB.R
-            # print
-            # print "vecR"
-            # print vecB.R
-            # print
-            # print "newR"
-            # print newB.R
-            # print
-            # print "manual"
-            # fp(manualB.D)
-            # print
-            # print "newB"
-            # fp(newB.D)
+            print "vec"
+            fp(vec)
+            print
+            print "manual"
+            fp(manualB.D.data)
+            print
+            print "newB"
+            fp(newB.D.data)
+            print
+            print "vecB"
+            fp(vecB.D.data)
+            print
+            print "manualR"
+            print manualB.R
+            print
+            print "vecR"
+            print vecB.R
+            print
+            print "newR"
+            print newB.R
+            print
+            print "manual"
+            fp(manualB.D)
+            print
+            print "newB"
+            fp(newB.D)
             npt.assert_array_equal(veczeroB.D.data, manualzeroB)
             npt.assert_(newB == vecB)
             npt.assert_array_equal(manualB, newB)

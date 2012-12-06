@@ -15,6 +15,7 @@
 from bisect import bisect_left
 
 import numpy as np
+cimport numpy as np
 import scipy.sparse
 import itertools
 import utils
