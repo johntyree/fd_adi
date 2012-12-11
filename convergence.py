@@ -182,6 +182,7 @@ class ConvergenceTester(object):
         kwargs.setdefault('error_func', noop)
         kwargs.setdefault('update_kwargs', noop)
         kwargs.setdefault('func', 'hv')
+        kwargs.setdefault('label', '')
         kwargs.update(self.labels)
         self.kwargs = kwargs
 
@@ -189,31 +190,40 @@ class ConvergenceTester(object):
         return self.engine(self.option, force_exact=False, verbose=False, **self.engine_kwargs)
 
     def dt(self):
-        F = self.new()
+        self.F = self.new()
         d = dict(self.kwargs)
-        d['dim'] = F.grid.shape
-        msg = ("Running convergence test in dt using %(func)s scheme. "
+        d['func_label'] = self.labels[d['func']]
+        d['dim'] = self.F.grid.shape
+        msg = ("Running convergence test in dt using %(func_label)s scheme. "
                "dim = %(dim)s." % d)
         print msg
         self.mode = 'dt'
         self.errors = []
-        for i in range(1,11):
-            dt = 1.0 / 2.0**i
+        min_i, max_i = d.get('min_i', 1), d.get('max_i', 11)
+        for i in range(min_i,max_i):
+            dt = self.kwargs['update_kwargs'](self, i)
             F = self.new()
             V = self.funcs[self.kwargs['func']](F, dt)
             self.errors.append((dt, self.kwargs["error_func"](V, F)))
-            self.kwargs['display'](V, F, self.errors)
+            self.kwargs['display'](V, F, self.errors, label=self.kwargs["label"])
         return self.errors
 
     def dx(self):
+        self.F = self.new()
         self.mode = 'dx'
         self.errors = []
-        for i in range(1,11):
-            self.kwargs['update_kwargs'](i)
+        d = dict(self.kwargs)
+        d['func_label'] = self.labels[d['func']]
+        msg = ("Running convergence test in dx using %(func_label)s scheme. "
+               "dt = %(dt)s." % d)
+        print msg
+        for i in range(3,10):
+            dx = self.kwargs['update_kwargs'](self, i)
             F = self.new()
+            dx = self.kwargs['update_kwargs'](self, i)
             V = self.funcs[self.kwargs['func']](F, self.kwargs["dt"])
             self.errors.append((dx, self.kwargs["error_func"](V, F)))
-            self.kwargs['display'](V, F, self.errors)
+            self.kwargs['display'](V, F, self.errors, label=self.kwargs["label"])
         return self.errors
 
     def show_convergence(self):
