@@ -16,6 +16,8 @@ import itertools
 import utils
 import scipy.linalg as spl
 
+cimport cython
+
 from cpython cimport bool
 from libcpp cimport bool as cbool
 
@@ -50,9 +52,9 @@ cdef class BandedOperator(object):
                 residual = residual.copy()
         size = data.shape[1]
         self.shape = (size, size)
-        self.D = scipy.sparse.dia_matrix((data, offsets), shape=self.shape, dtype=float)
+        self.D = scipy.sparse.dia_matrix((data, offsets), shape=self.shape)
         if residual is None:
-            self.R = np.zeros(self.shape[0], dtype=float)
+            self.R = np.zeros(self.shape[0])
         elif residual.shape[0] == self.shape[0] and residual.ndim == 1:
             self.R = residual
         else:
@@ -194,6 +196,7 @@ cdef class BandedOperator(object):
         return ret
 
 
+    @cython.boundscheck(False)
     def applyboundary(self, boundary, mesh):
         """
         @boundary@ is a tuple from FiniteDifferenceEngine.boundaries.
@@ -201,9 +204,18 @@ cdef class BandedOperator(object):
         data are the packed diagonals and residual is the residual vector.
         """
         B = self
-        m = tuple(B.D.offsets).index(0)
-        d = B.deltas
-        B.R = np.zeros(B.D.data.shape[1])
+        cdef REAL_t[:,:] Bdata = B.D.data
+        cdef REAL_t[:] R
+        if B.R is None:
+            R = np.zeros(B.shape[0])
+        else:
+            R = B.R
+        # cdef int lower_type, upper_type
+        # cdef REAL_t lower_val, upper_val
+        cdef int m = get_int_index(B.D.offsets, 0)
+        cdef REAL_t [:] d = B.deltas
+        cdef double recip_denom
+        cdef double fst_deriv
         derivative = B.derivative
 
         if boundary is None:
@@ -222,12 +234,12 @@ cdef class BandedOperator(object):
         if lower_type == 0:
             # Dirichlet boundary. No derivatives, but we need to preserve the
             # value we get, because we will have already forced it.
-            B.D.data[m, 0] = 1
+            Bdata[m, 0] = 1
             B.dirichlet[0] = lower_val
             pass
         elif lower_type == 1:
             # Von Neumann boundary, we specify it directly.
-            B.R[0] = lower_val
+            R[0] = lower_val
         elif lower_type is None and derivative == 1:
             # Free boundary
             # Second order forward approximation
@@ -239,12 +251,12 @@ cdef class BandedOperator(object):
                     "\nm = %s"
                     "\nboundary = %s"
                     ) % (B.D.data.shape, B.derivative, B.D.offsets, m, boundary)
-            B.D.data[m - 2, 2] = -d[1] / (d[2] * (d[1] + d[2]))
-            B.D.data[m - 1, 1] = (d[1] + d[2]) / (d[1] * d[2])
-            B.D.data[m,     0] = (-2 * d[1] - d[2]) / (d[1] * (d[1] + d[2]))
-            # B.D.data[m, 0] = -1.0 / d[1]
-            # B.D.data[m - 1, 1] = 1.0 / d[1]
-            # print B.D.data
+            Bdata[m - 2, 2] = -d[1] / (d[2] * (d[1] + d[2]))
+            Bdata[m - 1, 1] = (d[1] + d[2]) / (d[1] * d[2])
+            Bdata[m,     0] = (-2 * d[1] - d[2]) / (d[1] * (d[1] + d[2]))
+            # Bdata[m, 0] = -1.0 / d[1]
+            # Bdata[m - 1, 1] = 1.0 / d[1]
+            # print Bdata
         elif lower_type is None and derivative == 2:
             # If we know the first derivative, Extrapolate second derivative by
             # assuming the first stays constant.
@@ -252,17 +264,17 @@ cdef class BandedOperator(object):
                 # print "%s %s Assuming first derivative is %s for second." % (B.axis, B.derivative, lower_val,)
                 fst_deriv = lower_val
                 assert m-1 >= 0
-                B.D.data[m-1, 1] =  2 / d[1]**2
-                B.D.data[m,   0] = -2 / d[1]**2
-                B.R[0]         =  -fst_deriv * 2 / d[1]
+                Bdata[m-1, 1] =  2 / d[1]**2
+                Bdata[m,   0] = -2 / d[1]**2
+                R[0]         =  -fst_deriv * 2 / d[1]
             # Otherwise just compute it with forward differencing
             else:
                 # print "%s %s Computing second derivative directly." % (B.axis, B.derivative,)
                 assert m-2 >= 0
-                denom = (0.5*(d[2]+d[1])*d[2]*d[1]);
-                B.D.data[m-2,2] = d[1]         / denom
-                B.D.data[m-1,1] = -(d[2]+d[1]) / denom
-                B.D.data[m,0]   = d[2]         / denom
+                recip_denom = 1.0 / (0.5*(d[2]+d[1])*d[2]*d[1]);
+                Bdata[m-2,2] = d[1]         * recip_denom
+                Bdata[m-1,1] = -(d[2]+d[1]) * recip_denom
+                Bdata[m,0]   = d[2]         * recip_denom
         else:
             raise NotImplementedError("Can't handle derivatives higher than"
                                       " order 2 at boundaries. (%s)" % derivative)
@@ -271,43 +283,44 @@ cdef class BandedOperator(object):
         if upper_type == 0:
             # Dirichlet boundary. No derivatives, but we need to preserve the
             # value we get, because we will have already forced it.
-            B.D.data[m, -1] = 1
+            Bdata[m, -1] = 1
             B.dirichlet[1] = upper_val
             pass
         elif upper_type == 1:
             # Von Neumann boundary, we specify it directly.
-            B.R[-1] = upper_val
+            R[-1] = upper_val
         elif upper_type is None and derivative == 1:
             # Second order backward approximation
             assert m+2 < B.D.data.shape[0]
             # XXX: This is dangerous! We can't do it if data is not wide enough
-            B.D.data[m  , -1] = (d[-2]+2*d[-1])  / (d[-1]*(d[-2]+d[-1]))
-            B.D.data[m+1, -2] = (-d[-2] - d[-1]) / (d[-2]*d[-1])
-            B.D.data[m+2, -3] = d[-1]             / (d[-2]*(d[-2]+d[-1]))
+            Bdata[m  , -1] = (d[-2]+2*d[-1])  / (d[-1]*(d[-2]+d[-1]))
+            Bdata[m+1, -2] = (-d[-2] - d[-1]) / (d[-2]*d[-1])
+            Bdata[m+2, -3] = d[-1]             / (d[-2]*(d[-2]+d[-1]))
             # First order backward
-            # B.D.data[m, -1] = 1.0 / d[-1]
-            # B.D.data[m + 1, -2] = -1.0 / d[-1]
+            # Bdata[m, -1] = 1.0 / d[-1]
+            # Bdata[m + 1, -2] = -1.0 / d[-1]
         elif upper_type is None and derivative == 2:
-            if B.R is None:
-                B.R = np.zeros(B.D.data.shape[1])
+            # if B.R is None:
+                # R = np.zeros(B.D.data.shape[1])
             # If we know the first derivative, Extrapolate second derivative by
             # assuming the first stays constant.
             if upper_val is not None:
                 fst_deriv = upper_val
                 assert m+1 < B.D.data.shape[0]
-                B.D.data[m+1, -2] =  2 / d[-1]**2
-                B.D.data[m,   -1] = -2 / d[-1]**2
-                B.R[-1]         =  fst_deriv * 2 / d[-1]
+                Bdata[m+1, -2] =  2 / d[-1]**2
+                Bdata[m,   -1] = -2 / d[-1]**2
+                R[-1]          =  fst_deriv * 2 / d[-1]
             # Otherwise just compute it with backward differencing
             else:
                 assert m-2 >= 0
-                denom = (0.5*(d[-2]+d[-1])*d[-2]*d[-1]);
-                B.D.data[m+2,-3] = d[-1]         / denom
-                B.D.data[m+1,-2] = -(d[-2]+d[-1]) / denom
-                B.D.data[m,-1]   = d[-2]         / denom
+                recip_denom = 1.0 / (0.5*(d[-2]+d[-1])*d[-2]*d[-1]);
+                Bdata[m+2,-3] = d[-1]         * recip_denom
+                Bdata[m+1,-2] = -(d[-2]+d[-1]) * recip_denom
+                Bdata[m,-1]   = d[-2]         * recip_denom
         else:
             raise NotImplementedError("Can't handle derivatives higher than"
                                       " order 2 at boundaries. (%s)" % derivative)
+        B.R = np.asarray(R)
 
         # if upper_type == 1 or upper_type is None:
             # print "Derivative:", derivative
@@ -635,30 +648,41 @@ cdef class BandedOperator(object):
             return self.add_scalar(other, inplace)
 
 
-    def add_operator(self, BandedOperator other, cbool inplace=False):
+    # TODO: This needs to be faster
+    def add_operator(BandedOperator self, BandedOperator other, cbool inplace=False):
         """
         Add a second BandedOperator to this one.
         Does not alter self.R, the residual vector.
         """
-        cdef np.ndarray[int, ndim=1] selfoffsets = np.array(self.D.offsets)
-        cdef np.ndarray[int, ndim=1] otheroffsets = np.array(other.D.offsets)
-        cdef int num_otheroffsets = len(otheroffsets)
-        cdef np.ndarray[int, ndim=1] Boffsets
+        cdef REAL_t[:,:] data = self.D.data
+        cdef int[:] selfoffsets = np.array(self.D.offsets)
+        cdef int[:] otheroffsets = np.array(other.D.offsets)
+        cdef unsigned int num_otheroffsets = otheroffsets.shape[0]
+        cdef np.ndarray[REAL_t, ndim=2] newdata
+        cdef int[:] Boffsets
         cdef int o
+        cdef unsigned int i
+        cdef BandedOperator B
+        cdef cbool fail
 
         if self.axis != other.axis:
             raise ValueError("Both operators must operate on the same axis."
                     " (%s != %s)" % (self.axis, other.axis))
-        otheroffsets = other.D.offsets
         # Verify that they are compatible
         if self.shape[1] != other.shape[1]:
             raise ValueError("Both operators must have the same length")
         # If we're adding it directly to this one
         if inplace:
             # The diagonals have to line up.
-            if not np.array_equal(otheroffsets, selfoffsets):
-                print "Self offsets:", selfoffsets
-                print "Them offsets:", otheroffsets
+            fail = False
+            if selfoffsets.shape[0] != otheroffsets.shape[0]:
+                fail = True
+            for i in range(num_otheroffsets):
+                if otheroffsets[i] != selfoffsets[i]:
+                    fail = True
+            if fail:
+                print "Self offsets:", self.D.offsets
+                print "Them offsets:", other.D.offsets
                 raise ValueError("Both operators must have (exactly) the"
                                     " same offsets to add in-place.")
             B = self
@@ -667,18 +691,19 @@ cdef class BandedOperator(object):
         else:
             # Calculate the offsets that the new one will have.
             Boffsets = np.array(sorted(set(selfoffsets).union(set(otheroffsets)),
-                                reverse=True))
-            newdata = np.zeros((len(Boffsets), self.shape[1]))
+                                reverse=True), dtype=np.int32)
+            newdata = np.zeros((Boffsets.shape[0], self.shape[1]))
             # And make a new operator with the appropriate shape
             # Remember to carry the residual with us.
             B = BandedOperator((newdata, Boffsets), self.R)
             # Copy our data into the new operator since carefully, since we
             # may have resized.
-            for o in selfoffsets:
+            for i in range(selfoffsets.shape[0]):
+                o = selfoffsets[i]
                 fro = get_int_index(selfoffsets, o)
                 to = get_int_index(Boffsets, o)
                 # print "fro(%i) -> to(%i)" % (fro, to)
-                B.D.data[to] += self.D.data[fro]
+                B.D.data[to] += data[fro]
             B.copy_meta_data(self)
         # Copy the data from the other operator over
         # Don't double the dirichlet boundaries!
@@ -747,7 +772,8 @@ cdef class BandedOperator(object):
         return B
 
 
-    def vectorized_scale(self, np.ndarray[REAL_t, ndim=1] vector):
+    @cython.boundscheck(False)
+    def vectorized_scale(self, REAL_t[:] vector):
         """
         @vector@ is the correpsonding mesh vector of the current dimension.
 
@@ -759,20 +785,23 @@ cdef class BandedOperator(object):
         cdef unsigned int blocks = self.blocks
         cdef unsigned int block_len = operator_rows / blocks
         # cdef np.ndarray[REAL_t, ndim=1] vec
-        cdef np.ndarray[REAL_t, ndim=1] R = self.R
-        cdef np.ndarray[int, ndim=1] offsets = np.array(self.D.offsets)
-        cdef np.ndarray[REAL_t, ndim=2] data = self.D.data
+        cdef int [:] offsets = np.array(self.D.offsets)
+        cdef REAL_t [:] R = self.R
+        cdef REAL_t[:,:] data = self.D.data
         cdef unsigned int noffsets = len(self.D.offsets)
         cdef signed int o
-        cdef unsigned int begin, end
-        if blocks > 1 and len(vector) == block_len:
-            vector = np.tile(vector, blocks)
-        assert len(vector) == operator_rows
+        cdef unsigned int i, j, begin, end, vbegin
+        if blocks > 1 and vector.shape[0] == block_len:
+            vector = np.tile(vector, self.blocks)
+        assert vector.shape[0] == operator_rows
         cdef cbool low_dirichlet = self.dirichlet[0] is not None
         cdef cbool high_dirichlet = self.dirichlet[1] is not None
         for row in range(noffsets):
             o = offsets[row]
-            o = abs(o) % block_len * sign(o)
+            while block_len / 2 < o:
+                o -= block_len
+            while o < block_len / -2:
+                o += block_len
             vbegin = begin = 0
             vend = end = block_len
             if o >= 0:
@@ -783,21 +812,32 @@ cdef class BandedOperator(object):
                 end += o - high_dirichlet
                 vbegin -= o
                 vend -= high_dirichlet
-            # if blocks == 500:
-                # print "Operator_rows %s, blocks %s, block_len %s" % (operator_rows, blocks, block_len)
-                # print "begin(%s, %s) end(%s, %s)" % (begin, vbegin, end, vend)
-                # print "row %s, dirichlet(%s, %s)" % (o, low_dirichlet, high_dirichlet)
-            data[row].reshape(blocks, block_len)[:, begin:end] *= vector.reshape(blocks,block_len)[:, vbegin:vend]
+            # data[row].reshape(blocks, block_len).T[begin:end, :] *= vector.reshape(blocks,block_len).T[vbegin:vend, :]
+            vbegin = vbegin - begin
+            for i in range(blocks):
+                for j in range(begin, end):
+                    data[row, j] *= vector[j+vbegin]
+                # data[row, begin: end] *= vector[vbegin:vend]
+                begin += block_len
+                end += block_len
+                # vbegin += block_len
+                # vend += block_len
 
-        if self.dirichlet[0] is not None:
+        if low_dirichlet:
             begin = 1
         else:
             begin = 0
-        if self.dirichlet[1] is not None:
+        if high_dirichlet:
             end = block_len - 1
         else:
             end = block_len
-        self.R.reshape(blocks, block_len)[:,begin:end] *= vector.reshape(blocks, block_len)[:, begin:end]
+        for i in range(blocks):
+            for j in range(begin, end):
+                R[j] *= vector[j]
+            begin += block_len
+            end += block_len
+        # self.R.reshape(blocks, block_len)[:,begin:end] *= vector.reshape(blocks, block_len)[:, begin:end]
+        return
 
 
     def scale(self, func):
@@ -855,17 +895,18 @@ cdef inline int sign(int i):
     else:
         return 1
 
-cdef unsigned int get_real_index(np.ndarray[REAL_t, ndim=1] haystack, REAL_t needle):
-    cdef unsigned int length = len(haystack)
+@cython.boundscheck(False)
+cdef inline unsigned int get_real_index(REAL_t[:] haystack, REAL_t needle):
+    cdef unsigned int length = haystack.shape[0]
     for i in range(length):
         if needle == haystack[i]:
             return i
     raise ValueError("Value not in array: %s" % needle)
 
 
-cdef unsigned int get_int_index(np.ndarray[int, ndim=1] haystack, int needle):
-    cdef unsigned int length = len(haystack)
-
+@cython.boundscheck(False)
+cdef inline unsigned int get_int_index(int[:] haystack, int needle):
+    cdef unsigned int length = haystack.shape[0]
     for i in range(length):
         if needle == haystack[i]:
             return i

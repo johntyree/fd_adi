@@ -733,7 +733,7 @@ class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
             V = self.grid.domain[0].copy()
             self.grid.domain.append(V)
 
-        Firsts = [(o * dt) for o in self.operators.values()]
+        Firsts = [(o * dt) for d, o in self.operators.items()]
 
         Les = [(o * theta * dt)
                for d, o in sorted(self.operators.iteritems())
