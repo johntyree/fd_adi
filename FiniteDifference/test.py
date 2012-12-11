@@ -10,21 +10,21 @@ import unittest
 import numpy as np
 import numpy.testing as npt
 import scipy.sparse
+import scipy.linalg as spl
 
 import utils
 from visualize import fp
 # def fp(*x, **y):
     # pass
 import Grid
-from heston import HestonOption
-from Option import BlackScholesOption
 
-import pyximport ; pyximport.install()
 import FiniteDifferenceEngine as FD
 
+from blackscholes import BlackScholesFiniteDifferenceEngine, BlackScholesOption
+from heston import HestonOption
 
 
-#TODO: Switch to numpy.testing asserts
+#TODO: npt.asserts for array tests
 
 
 def test_numpy_transpose_vs_rollaxis():
@@ -43,83 +43,434 @@ def test_numpy_transpose_vs_rollaxis():
 class BlackScholesOption_test(unittest.TestCase):
 
     def setUp(self):
-        spot_max = 5000.0
-        spotdensity = 1.0  # infinity is linear?
+        # # raise unittest.SkipTest
         v = 0.04
         r = 0.06
         k = 99.0
         spot = 100.0
         t = 1.0
-        dt = 1.0/150.0
-        nspots = 150
-        # spots = np.linspace(0, np.log(spot)*2, nspots+1)
-        spots = utils.sinh_space(spot, spot_max, spotdensity, nspots)
+        self.dt = 1.0/150.0
+        BS = BlackScholesOption(spot=spot, strike=k, interest_rate=r, variance=v, tenor=t)
 
-        # self.spot_idx = np.argmin(np.abs(spots - np.log(spot)))
-        # self.spot = np.exp(spots[self.spot_idx])
-        self.spot_idx = np.argmin(np.abs(spots - spot))
-        spot = spots[self.spot_idx]
-
-        # self.BS = BlackScholesOption(spot=np.exp(spot), strike=k, interest_rate=r,
-                                     # variance=v, tenor=t)
-        self.BS = BlackScholesOption(spot=spot, strike=k, interest_rate=r,
-                                     variance=v, tenor=t)
-
-        # G = Grid.Grid([spots], initializer=lambda *x: np.maximum(np.exp(x[0])-k,0))
-        G = Grid.Grid([spots], initializer=lambda *x: np.maximum(x[0]-k,0))
-
-        def mu_s(t, *dim):
-            # return np.zeros_like(dim[0], dtype=float) + (r - 0.5 * v)
-            return r * dim[0]
-
-        def gamma2_s(t, *dim):
-            # return 0.5 * v + np.zeros_like(dim[0], dtype=float)
-            return 0.5 * v * dim[0]**2
-
-        coeffs = {()   : lambda t: -r,
-                  (0,) : mu_s,
-                  (0,0): gamma2_s}
-
-        bounds = {          # D: U = 0              VN: dU/dS = 1
-                (0,)  : ((0, lambda *args: 0.0), (1, lambda t, x: 1.0)),
-                # (0,)  : ((0, lambda *args: 0.0), (1, lambda t, *x: np.exp(x[0]))),
-                        # D: U = 0              Free boundary
-                (0,0) : ((0, lambda *args: 0.0), (None, lambda *x: 1.0))}
-
-        self.dt = dt
-        self.F = FD.FiniteDifferenceEngineADI(G, coefficients=coeffs, boundaries=bounds)
+        self.F = BlackScholesFiniteDifferenceEngine( BS
+                                                   , spot_max=5000.0
+                                                   , nspots=150
+                                                   , spotdensity=1.0
+                                                   , force_exact=True
+                                                   , flip_idx_spot=False
+                                                     )
 
     def test_implicit(self):
-        t, dt = self.BS.tenor, self.dt
-        V = self.F.solve_implicit(t/dt, dt)[self.spot_idx]
-        ans = self.BS.analytical
-        # print "Spot:", self.BS.spot
+        t, dt = self.F.option.tenor, self.dt
+        V = self.F.solve_implicit(t/dt, dt)[self.F.idx]
+        ans = self.F.option.analytical
+        # print "Spot:", self.F.option.spot
         # print "Price:", V, ans, V - ans
         npt.assert_allclose(V, ans, rtol=0.001)
 
     def test_john_adi(self):
-        t, dt = self.BS.tenor, self.dt
-        V = self.F.solve_john_adi(t/dt, dt)[self.spot_idx]
-        ans = self.BS.analytical
-        # print "Spot:", self.BS.spot
+        t, dt = self.F.option.tenor, self.dt
+        V = self.F.solve_john_adi(t/dt, dt)[self.F.idx]
+        ans = self.F.option.analytical
+        # print "Spot:", self.F.option.spot
         # print "Price:", V, ans, V - ans
         npt.assert_allclose(V, ans, rtol=0.001)
 
     def test_douglas(self):
-        t, dt = self.BS.tenor, self.dt
-        V = self.F.solve_douglas(t/dt, dt)[self.spot_idx]
-        ans = self.BS.analytical
-        # print "Spot:", self.BS.spot
+        t, dt = self.F.option.tenor, self.dt
+        V = self.F.solve_douglas(t/dt, dt)[self.F.idx]
+        ans = self.F.option.analytical
+        # print "Spot:", self.F.option.spot
         # print "Price:", V, ans, V - ans
         npt.assert_allclose(V, ans, rtol=0.001)
 
     def test_smooth(self):
-        t, dt = self.BS.tenor, self.dt
-        V = self.F.smooth(t/dt, dt)[self.spot_idx]
-        ans = self.BS.analytical
-        # print "Spot:", self.BS.spot
+        t, dt = self.F.option.tenor, self.dt
+        V = self.F.smooth(t/dt, dt)[self.F.idx]
+        ans = self.F.option.analytical
+        # print "Spot:", self.F.option.spot
         # print "Price:", V, ans, V - ans
         npt.assert_allclose(V, ans, rtol=0.001)
+
+
+def implicit_manual(V, L1, R1x, L2, R2x, dt, n, spots, vars, coeffs, crumbs=[], callback=None):
+    V = V.copy()
+
+    # L1i = flatten_tensor(L1)
+    L1i = L1.copy()
+    R1 = np.array(R1x)
+
+    # L2i = flatten_tensor(L2)
+    L2i = L2.copy()
+    R2 = np.array(R2x)
+
+    m = 2
+
+    # L  = (As + Ass - H.interest_rate*np.eye(nspots))*-dt + np.eye(nspots)
+    L1i.data *= -dt
+    L1i.data[m, :] += 1
+    R1 *= dt
+
+    L2i.data *= -dt
+    L2i.data[m, :] += 1
+    R2 *= dt
+
+    offsets1 = (abs(min(L1i.offsets)), abs(max(L1i.offsets)))
+    offsets2 = (abs(min(L2i.offsets)), abs(max(L2i.offsets)))
+
+    dx = np.gradient(spots)[:,np.newaxis]
+    dy = np.gradient(vars)
+    X, Y = [dim.T for dim in np.meshgrid(spots, vars)]
+    gradgrid = dt * coeffs[(0,1)](0, X, Y) / (dx * dy)
+    gradgrid[:,0] = 0; gradgrid[:,-1] = 0
+    gradgrid[0,:] = 0; gradgrid[-1,:] = 0
+
+    print_step = max(1, int(n / 10))
+    to_percent = 100.0 / n
+    utils.tic("Impl:")
+    for k in xrange(n):
+        if not k % print_step:
+            if np.isnan(V).any():
+                print "Impl fail @ t = %f (%i steps)" % (dt * k, k)
+                return crumbs
+            print int(k * to_percent),
+        if callback is not None:
+            callback(V, ((n - k) * dt))
+        Vsv = np.gradient(np.gradient(V)[0])[1] * gradgrid
+        V = spl.solve_banded(offsets2, L2i.data,
+                             (V + Vsv + R2).flat, overwrite_b=True).reshape(V.shape)
+        V = spl.solve_banded(offsets1, L1i.data,
+                             (V + R1).T.flat, overwrite_b=True).reshape(V.shape[::-1]).T
+    crumbs.append(V.copy())
+    utils.toc()
+    return crumbs
+
+
+
+class FiniteDifferenceEngineADI_single_operator_test(unittest.TestCase):
+
+    def setUp(self):
+        raise unittest.SkipTest
+        self.enable = {}
+        self.enable["s1"] = 1
+        self.enable["s2"] = 1
+        self.enable["v1"] = 1
+        self.enable["v2"] = 1
+        self.enable["r"] = 1
+        self.enable["dirichlet_s"] = 1
+        self.enable["dirichlet_v"] = 1
+        kappa = 1
+        r = 0.06
+        theta = 0.04
+        sigma = 0.4
+        rho = 0.2
+        spot_max = 1500.0
+        var_max = 13.0
+        nspots = 5
+        nvols = 5
+        spotdensity = 7.0  # infinity is linear?
+        varexp = 4
+
+        up_or_down_spot = 'up'
+        up_or_down_var = 'down'
+        flip_idx_spot = nspots//2
+        flip_idx_var = nvols//2
+        k = spot_max / 4.0
+        spots = np.linspace(0, spot_max, nspots)
+        vars = np.linspace(0, var_max, nvols)
+        # spots = utils.sinh_space(k, spot_max, spotdensity, nspots)
+        # vars = utils.exponential_space(0.00, 0.04, var_max, varexp, nvols)
+        def mu_s(t, *dim): return r * dim[0] * self.enable["s1"]
+        def mu_s(t, *dim): return 0 * dim[0] + 1
+        # def gamma2_s(t, *dim): return 0.5 * dim[1] * dim[0]**2 * self.enable["s2"]
+        def gamma2_s(t, *dim): return 0 * dim[0] + 1
+
+        def mu_v(t, *dim): return kappa * (theta - dim[1]) * self.enable["v1"]
+        def gamma2_v(t, *dim): return 0.5 * sigma**2 * dim[1] * self.enable["v2"]
+
+        coeffs = {()   : lambda t: -r * self.enable["r"],
+                  (0,) : mu_s,
+                  (0,0): gamma2_s,
+                  (1,) : mu_v,
+                  (1,1): gamma2_v,
+                  (0,1): lambda t, *dim: dim[0] * dim[1] * rho * sigma
+                  }
+
+        bounds = {       # D: U = 0              VN: dU/dS = 1
+                (0,)  : ((0 if self.enable["dirichlet_s"] else 1, lambda *args: 0.0), (1, lambda *args: 1.0)),
+                        # D: U = 0              Free boundary
+                (0,0) : ((0 if self.enable["dirichlet_s"] else 1, lambda *args: 0.0), (None, lambda *x: 1.0)),
+                        # Free boundary at low variance
+                (1,)  : ((None, lambda *x: None),
+                        # (0.0, lambda t, *dim: 0),
+                        # D intrinsic value at high variance
+                        # (None, lambda *x: None)
+                        (0 if self.enable["dirichlet_v"] else 1, lambda t, *dim: np.maximum(0.0, dim[0]-k))
+                        ),
+                        # # Free boundary
+                (1,1) : ((None, lambda *x: None),
+                        # D intrinsic value at high variance
+                        # (None, lambda *x: None)
+                        (0 if self.enable["dirichlet_v"] else 1, lambda t, *dim: np.maximum(0.0, dim[0]-k))
+                        )
+                }
+
+        schemes = {}
+        schemes[(0,)] = ({"scheme": "center"}, {"scheme": up_or_down_spot, "from" : flip_idx_spot})
+        schemes[(1,)] = ({"scheme": "center"}, {"scheme": up_or_down_var, "from" : flip_idx_var})
+
+        dss = np.hstack((np.nan, np.diff(spots)))
+        dvs = np.hstack((np.nan, np.diff(vars)))
+        self.dss = dss
+        self.dvs = dvs
+        As_temp = utils.nonuniform_complete_coefficients(dss, up_or_down=up_or_down_spot,
+                                                    flip_idx=flip_idx_spot)[0]
+        Ass_temp = utils.nonuniform_complete_coefficients(dss)[1]
+        As_ = []
+        Rs_ = []
+        Ass_ = []
+        Rss_ = []
+        # As_, Ass_ = utils.nonuniform_forward_coefficients(dss)
+        assert(not np.isnan(As_temp.data).any())
+        assert(not np.isnan(Ass_temp.data).any())
+        for j, v in enumerate(vars):
+            # Be careful not to overwrite operators
+            As, Ass = As_temp.copy(), Ass_temp.copy()
+            m = 2
+
+            mu_s = coeffs[0,](0, spots)
+            gamma2_s = coeffs[0,0](0, spots, v)
+            for i, z in enumerate(mu_s):
+                # print z, coeffs[0,](0, spots[i])
+                assert z == coeffs[0,](0, spots[i])
+            for i, z in enumerate(gamma2_s):
+                # print z, coeffs[0,0](0, spots[i], v)
+                assert z == coeffs[0,0](0, spots[i], v)
+
+            Rs = np.zeros(nspots)
+            Rs[-1] = 1
+
+            As.data[m - 2, 2:] *= mu_s[:-2]
+            As.data[m - 1, 1:] *= mu_s[:-1]
+            As.data[m, :] *= mu_s
+            As.data[m + 1, :-1] *= mu_s[1:]
+            As.data[m + 2, :-2] *= mu_s[2:]
+
+            Rs *= mu_s
+
+            Rss = np.zeros(nspots)
+            Rss[-1] = 2 * dss[-1] / dss[-1] ** 2
+
+            Ass.data[m + 1, -2] = 2 / dss[-1] ** 2
+            Ass.data[m    , -1] = -2 / dss[-1] ** 2
+
+            Ass.data[m - 2, 2:] *= gamma2_s[:-2]
+            Ass.data[m - 1, 1:] *= gamma2_s[:-1]
+            Ass.data[m, :] *= gamma2_s
+            Ass.data[m + 1, :-1] *= gamma2_s[1:]
+            Ass.data[m + 2, :-2] *= gamma2_s[2:]
+
+            Rss *= gamma2_s
+
+            As.data[m, :] -= 0.5 * r * self.enable["r"]
+            As.data[m, 0] = -1 * self.enable["dirichlet_s"]
+            Ass.data[m, :] -= 0.5 * r * self.enable["r"]
+            Ass.data[m, 0] = -1 * self.enable["dirichlet_s"]
+
+            Rs[0] = 0
+            Rss[0] = 0
+
+            As_.append(As.copy())
+            Rs_.append(Rs.copy())
+            Ass_.append(Ass.copy())
+            Rss_.append(Rss.copy())
+
+
+        Av_ = []
+        Rv_ = []
+        Avv_ = []
+        Rvv_ = []
+        Av_temp = utils.nonuniform_complete_coefficients(dvs, up_or_down=up_or_down_var,
+                                                    flip_idx=flip_idx_var)[0]
+        Avv_temp = utils.nonuniform_complete_coefficients(dvs)[1]
+        assert(not np.isnan(Av_temp.data).any())
+        assert(not np.isnan(Avv_temp.data).any())
+        for i, s in enumerate(spots):
+            mu_v = kappa * (theta - vars) * self.enable["v1"]
+            gamma2_v = 0.5 * sigma ** 2 * vars * self.enable["v2"]
+            # for j, z in enumerate(mu_v):
+                # assert z == coeffs[1,](0, 0, vars[j])
+            # for j, z in enumerate(gamma2_v):
+                # assert z == coeffs[1,1](0, 0, vars[j])
+
+            # Be careful not to overwrite our operators
+            Av, Avv = Av_temp.copy(), Avv_temp.copy()
+
+            m = 2
+
+            Av.data[m - 2, 2] = -dvs[1] / (dvs[2] * (dvs[1] + dvs[2]))
+            Av.data[m - 1, 1] = (dvs[1] + dvs[2]) / (dvs[1] * dvs[2])
+            Av.data[m    , 0] = (-2 * dvs[1] - dvs[2]) / (dvs[1] * (dvs[1] + dvs[2]))
+
+            Av.data[m - 2, 2:] *= mu_v[:-2]
+            Av.data[m - 1, 1:] *= mu_v[:-1]
+            Av.data[m, :] *= mu_v
+            Av.data[m + 1, :-1] *= mu_v[1:]
+            Av.data[m + 2, :-2] *= mu_v[2:]
+
+            Rv = np.zeros(nvols)
+            Rv *= mu_v
+
+            Avv.data[m - 1, 1] = 2 / dvs[1] ** 2
+            Avv.data[m, 0] = -2 / dvs[1] ** 2
+
+            Avv.data[m - 2, 2:] *= gamma2_v[:-2]
+            Avv.data[m - 1, 1:] *= gamma2_v[:-1]
+            Avv.data[m, :] *= gamma2_v
+            Avv.data[m + 1, :-1] *= gamma2_v[1:]
+            Avv.data[m + 2, :-2] *= gamma2_v[2:]
+
+            Rvv = np.zeros(nvols)
+            Rvv[0] = 2 * dvs[1] / dvs[1] ** 2
+            Rvv *= gamma2_v
+
+            Av_.append(Av.copy())
+            Avv_.append(Avv.copy())
+
+            Av_[i].data[m, :] -= 0.5 * r * self.enable["r"]
+            Av_[i].data[m, -1] = 1 * self.enable["dirichlet_v"]  # This is to cancel out the previous value so we can
+
+            Avv_[i].data[m, :] -= 0.5 * r * self.enable["r"]
+            Avv_[i].data[m, -1] = -1 * self.enable["dirichlet_v"]  # This is to cancel out the previous value so we can
+                                # set the dirichlet boundary condition using R.
+                                # Then we have U_i + -U_i + R
+
+            Rv_.append(Rv)
+            Rvv_.append(Rvv)
+            Rv_[i][-1] = 0# np.maximum(0, s - k)
+            Rvv_[i][-1] = 0# np.maximum(0, s - k)
+
+        def flatten_tensor(mats):
+            diags = np.hstack([x.data for x in mats])
+            flatmat = scipy.sparse.dia_matrix((diags, mats[0].offsets), shape=(diags.shape[1], diags.shape[1]))
+            return flatmat
+
+        As = flatten_tensor(As_)
+        Ass = flatten_tensor(Ass_)
+        Av = flatten_tensor(Av_)
+        Avv = flatten_tensor(Avv_)
+
+        Rs = np.array(Rs_).T
+        Rss = np.array(Rss_).T
+        Rv = np.array(Rv_)
+        Rvv = np.array(Rvv_)
+
+        self.r = r
+
+        self.As = As
+        self.Ass = Ass
+        self.Av = Av
+        self.Avv = Avv
+        self.Rs = Rs
+        self.Rss = Rss
+        self.Rv = Rv
+        self.Rvv = Rvv
+
+        # G = Grid.Grid((spots, vars), initializer=lambda x0,x1: np.maximum(x0-k,0))
+        self.G = Grid.Grid((spots, vars), initializer=lambda x0,x1: x0*x1)
+        # print G
+
+        self.F = FD.FiniteDifferenceEngineADI(self.G, coefficients=coeffs,
+                boundaries=bounds, schemes=schemes, force_bandwidth=None)
+
+    def test_As(self):
+        V = self.F.grid.domain[-1].copy()
+        Fop = self.F.simple_operators[(0,)]
+        print "Mesh", self.F.grid.mesh
+        print "V shape", V.shape
+        print "As shape", self.As.shape
+        print "F[(0,)] shape", Fop.shape
+        Vold = (self.As.dot(V.T.flat)).reshape(V.T.shape).T + self.Rs
+        Vfde = (Fop + -0.5 * self.r).apply(V.copy())
+        # fp(self.As)
+        # fp(self.Rs)
+        # fp(Vold)
+        # print
+        # fp(self.F.simple_operators[(0,)].D)
+        npt.assert_allclose(Vold, Vfde)
+
+        # o = self.As.offsets
+        # offsets = (abs(min(o)), abs(max(o)))
+        # self.As.data[2, :] += 1
+        # Vold = spl.solve_banded(offsets, self.As.data, (V - self.Rs).T.flat).reshape(V.T.shape).T
+        # Fop += 1
+        # fp(self.F.simple_operators[(0,)].D)
+        # Vfde = Fop.solve(V)
+        # print "Vold"
+        # fp(Vold)
+        # print "Vfde"
+        # fp(Vfde)
+        # npt.assert_allclose(Vold, Vfde)
+
+    def test_Ass(self):
+        V = self.F.grid.domain[-1].copy()
+        Fop = self.F.simple_operators[(0,0)]
+        print "Mesh", self.F.grid.mesh
+        print "V shape", V.shape
+        print "Ass shape", self.Ass.shape
+        print "F[(0,0)] shape", Fop.shape
+        print "deltas", self.dss
+        print "F.deltas", Fop.deltas
+        npt.assert_array_equal(self.dss, Fop.deltas)
+        d = Fop.D.copy()
+        Fop += -0.5 * self.r * self.enable["r"]
+
+        print "self.Ass"
+        fp(self.Ass)
+        print "Operator (0,0)"
+        fp(Fop.D)
+        print "diff"
+        fp(Fop.D - self.Ass, 'e')
+
+        Vold = (self.Ass.dot(V.T.flat)).reshape(V.T.shape).T + self.Rs
+        Vfde = Fop.apply(V.copy())
+        print "Vold"
+        fp(Vold)
+        print "Vfde"
+        fp(Vfde)
+        npt.assert_allclose(Vold, Vfde)
+
+    def test_Av(self):
+        V = self.F.grid.domain[-1].copy()
+        Fop = self.F.simple_operators[(1,)]
+        print "Mesh", self.F.grid.mesh
+        print "V shape", V.shape
+        print "Av shape", self.Av.shape
+        print "F[(1,)] shape", Fop.shape
+        print "self.Av"
+        npt.assert_array_equal(self.dvs, Fop.deltas)
+        Fop += -0.5 * self.r * self.enable["r"]
+
+        fp(self.Av)
+        print "Operator (1,)"
+        fp(Fop.D)
+        print "diff"
+        fp(Fop.D - self.Av, 'e')
+
+        Vold = (self.Av.dot(V.flat)).reshape(V.shape) + self.Rs
+        Vfde = Fop.apply(V.copy())
+        print "Vold"
+        fp(Vold)
+        print "Vfde"
+        fp(Vfde)
+        npt.assert_allclose(Vold, Vfde)
+        pass
+
+    def test_Avv(self):
+        pass
+
+    def test_Asv(self):
+        pass
 
 
 class FiniteDifferenceEngineADI_test(unittest.TestCase):
@@ -136,11 +487,11 @@ class FiniteDifferenceEngineADI_test(unittest.TestCase):
         r = 0.06
         theta = 0.04
         sigma = 0.4
-        rho = 0.2
+        rho = 0.6
         spot_max = 1500.0
         var_max = 13.0
-        nspots = 6
-        nvols = 5
+        nspots = 5
+        nvols = 6
         spotdensity = 7.0  # infinity is linear?
         varexp = 4
 
@@ -153,10 +504,10 @@ class FiniteDifferenceEngineADI_test(unittest.TestCase):
         flip_idx_spot = nspots//2
         flip_idx_var = nvols//2
         k = spot_max / 4.0
-        spots = np.linspace(0, spot_max, nspots)
-        vars = np.linspace(0, var_max, nvols)
-        # spots = utils.sinh_space(k, spot_max, spotdensity, nspots)
-        # vars = utils.exponential_space(0.00, 0.04, var_max, varexp, nvols)
+        # spots = np.linspace(0, spot_max, nspots)
+        # vars = np.linspace(0, var_max, nvols)
+        spots = utils.sinh_space(k, spot_max, spotdensity, nspots)
+        vars = utils.exponential_space(0.00, 0.04, var_max, varexp, nvols)
         def mu_s(t, *dim): return r * dim[0] * s1_enable
         def gamma2_s(t, *dim): return 0.5 * dim[1] * dim[0]**2 * s2_enable
 
@@ -178,12 +529,16 @@ class FiniteDifferenceEngineADI_test(unittest.TestCase):
                         # Free boundary at low variance
                 (1,)  : ((None, lambda *x: None),
                         # (0.0, lambda t, *dim: 0),
-                        # # D intrinsic value at high variance
-                        (0 if dirichlet_v else 1, lambda t, *dim: np.maximum(0.0, dim[0]-k))),
+                        # D intrinsic value at high variance
+                        # (None, lambda *x: None)
+                        (0 if dirichlet_v else 1, lambda t, *dim: np.maximum(0.0, dim[0]-k))
+                        ),
                         # # Free boundary
                 (1,1) : ((None, lambda *x: None),
                         # D intrinsic value at high variance
-                        (0 if dirichlet_v else 1, lambda t, *dim: np.maximum(0.0, dim[0]-k)))
+                        # (None, lambda *x: None)
+                        (0 if dirichlet_v else 1, lambda t, *dim: np.maximum(0.0, dim[0]-k))
+                        )
                 }
 
         schemes = {}
@@ -304,6 +659,7 @@ class FiniteDifferenceEngineADI_test(unittest.TestCase):
             R2_.append(Rv + Rvv)
             R2_[i][-1] = 0# np.maximum(0, s - k)
 
+
         def flatten_tensor(mats):
             diags = np.hstack([x.data for x in mats])
             flatmat = scipy.sparse.dia_matrix((diags, mats[0].offsets), shape=(diags.shape[1], diags.shape[1]))
@@ -329,7 +685,7 @@ class FiniteDifferenceEngineADI_test(unittest.TestCase):
 
 
     def test_combine_dimensional_operators(self):
-        # assert False
+        # raise unittest.case.SkipTest
         oldL1 = self.L1_.copy()
         oldL1 = scipy.sparse.dia_matrix(oldL1.todense())
         oldL1.data = oldL1.data[::-1]
@@ -369,39 +725,39 @@ class FiniteDifferenceEngineADI_test(unittest.TestCase):
         # print "diff"
         # fp(L1.D.data - oldL1.data)
         # print
-        print "old"
-        fp(oldL1.todense())
-        print
-        print "new"
-        fp(L1.D.todense())
+        # print "old"
+        # fp(oldL1.todense())
+        # print
+        # print "new"
+        # fp(L1.D.todense())
         # print
         # print "diff"
         # fp(oldL1.todense() - L1.D.todense())
-        assert np.allclose(L1.D.todense(), oldL1.todense())
-        assert np.allclose(L1.D.data, oldL1.data)
+        npt.assert_allclose(L1.D.todense(), oldL1.todense())
+        npt.assert_allclose(L1.D.data, oldL1.data)
         # print "old"
         # print oldR1
         # print
         # print "new"
         # print L1.R
-        assert np.allclose(L1.R, oldR1)
+        npt.assert_allclose(L1.R, oldR1)
 
         L2 = self.F.operators[1]
 
-        # print "old"
-        # fp(oldL2.data)
-        # print
-        # print "new"
-        # fp(L2.D.data)
-        # print "old"
-        # fp(oldL2.todense())
-        # print
-        # print "new"
-        # fp(L2.D.todense())
-        # print
-        # print "diff"
-        # fp(oldL2.todense() - L2.D.todense())
-        assert np.allclose(L2.D.data, oldL2.data)
+        print "old"
+        fp(oldL2.data)
+        print
+        print "new"
+        fp(L2.D.data)
+        print "old"
+        fp(oldL2.todense())
+        print
+        print "new"
+        fp(L2.D.todense())
+        print
+        print "diff"
+        fp(oldL2.todense() - L2.D.todense())
+        npt.assert_allclose(L2.D.data, oldL2.data)
         # print "old"
         # print oldR2
         # print
@@ -409,7 +765,7 @@ class FiniteDifferenceEngineADI_test(unittest.TestCase):
         # print L2.R
         # print "diff"
         # fp(L2.R - oldR2)
-        assert np.allclose(L2.R, oldR2)
+        npt.assert_allclose(L2.R, oldR2)
 
 
     def test_numpy_vs_operators(self):
@@ -572,7 +928,6 @@ class FiniteDifferenceEngineADI_test(unittest.TestCase):
                 npt.assert_array_equal(g[-1,:], 1)
 
 
-
     def test_cross_derivative(self):
         crossOp = self.F.operators[(0,1)]
         g = self.F.grid.domain[-1]
@@ -590,22 +945,52 @@ class FiniteDifferenceEngineADI_test(unittest.TestCase):
 
         d2gdxdy = crossOp.apply(g)
 
-        print "Cross op"
-        fp(crossOp.D.todense())
-        print crossOp.dirichlet
-        print crossOp.axis
-        print
+        # print "Cross op"
+        # fp(crossOp.D.todense())
+        # print crossOp.dirichlet
+        # print crossOp.axis
+        # print
 
-        print "manual"
-        fp(manuald2gdxdy)
-        print
-        print "new"
-        fp(d2gdxdy)
-        print
-        print "diff"
-        fp(d2gdxdy - manuald2gdxdy, fmt='e')
+        # print "manual"
+        # fp(manuald2gdxdy)
+        # print
+        # print "new"
+        # fp(d2gdxdy)
+        # print
+        # print "diff"
+        # fp(d2gdxdy - manuald2gdxdy, fmt='e')
         npt.assert_array_almost_equal(d2gdxdy, manuald2gdxdy)
-        # npt.assert_array_equal(d2gdxdy, manuald2gdxdy)
+
+        scale = np.random.random()
+
+        crossOp
+
+        print "Scaling CrossOp (%s)" % scale
+        crossOp *= scale
+
+        d2gdxdy_scaled = crossOp.apply(g)
+        manuald2gdxdy_scaled = manuald2gdxdy * scale
+
+        # print "Cross op"
+        # print crossOp.dirichlet
+        # print crossOp.axis
+        # fp(crossOp.D.todense())
+        # print
+
+        # print "manual"
+        # fp(manuald2gdxdy_scaled)
+        # print
+        # print "new"
+        # fp(d2gdxdy_scaled)
+        # print
+        # print "diff"
+        # fp(d2gdxdy_scaled - manuald2gdxdy, fmt='e')
+
+        npt.assert_array_almost_equal(d2gdxdy_scaled, manuald2gdxdy_scaled)
+
+
+
+
 
 class Grid_test(unittest.TestCase):
 
@@ -658,11 +1043,11 @@ class BandedOperator_test(unittest.TestCase):
             C2 = C1.add(C1)
             assert C2 is not C1
             assert C2.D.data is not C1.D.data
-            assert (C2.D.offsets == C1.D.offsets).all()
-            assert (C2.D.data == C1.D.data+C1.D.data).all()
-            assert (C2.D.data == C1.D.data*2).all()
-            assert (C2.R == C1.R*2).all()
-            assert (C2.R == C1.R*+C1.R).all()
+            npt.assert_array_equal(C2.D.offsets, C1.D.offsets)
+            npt.assert_array_equal(C2.D.data, C1.D.data+C1.D.data)
+            npt.assert_array_equal(C2.D.data, C1.D.data*2)
+            npt.assert_array_equal(C2.R, C1.R*2)
+            npt.assert_array_equal(C2.R, C1.R*+C1.R)
 
 
     def test_addoperator(self):
@@ -683,9 +1068,9 @@ class BandedOperator_test(unittest.TestCase):
         oldCF1[:4,:] += F1.D.data[:4, :]
         oldCF1[1:4,:] += C1.D.data
         oldCF1R = F1.R + C1.R
-        assert (CF1.D.data == oldCF1).all()
-        assert (CF1.R == oldCF1R+oldCF1R).all()
-        assert (CF1.R == oldCF1R*2).all()
+        npt.assert_array_equal(CF1.D.data, oldCF1)
+        npt.assert_array_equal(CF1.R, oldCF1R+oldCF1R)
+        npt.assert_array_equal(CF1.R, oldCF1R*2)
 
 
     def test_addoperator_inplace(self):
@@ -700,8 +1085,8 @@ class BandedOperator_test(unittest.TestCase):
         oldCB2R = np.zeros_like(B2.R)
         oldCB2R = B2.R + C2.R
         B2.add(C2, inplace=True)
-        assert (oldCB2 == B2.D.data).all()
-        assert (oldCB2R == B2.R).all()
+        npt.assert_array_equal(oldCB2, B2.D.data)
+        npt.assert_array_equal(oldCB2R, B2.R)
 
         B2 = FD.BandedOperator.for_vector(vec, scheme='backward', derivative=2, order=2)
         C2 = FD.BandedOperator.for_vector(vec, scheme='center', derivative=2, order=2)
@@ -772,7 +1157,8 @@ class BandedOperator_test(unittest.TestCase):
 
         assert newB2 is not B2 # Created a new operator
         assert newB2.D.data is not B2.D.data # With new underlying data
-        assert (newB2.D.data == oldB2.D.data).all() # Operations were the same
+        npt.assert_array_equal(newB2.D.data, oldB2.D.data) # Operations were the same
+        # NO numpy assert here. We need "not equal"
         assert (newB2.D.data != origB2.D.data).any() # Operations changed our operator
 
 
@@ -787,7 +1173,7 @@ class BandedOperator_test(unittest.TestCase):
         B2.add(1.0, inplace=True) # Add to main diag in place
         oldB2.D.data[tuple(oldB2.D.offsets).index(0)] += 1.0  # Manually add 1 to main diag in place
 
-        assert (B2.D.data == oldB2.D.data).all() # Operations were the same
+        npt.assert_array_equal(B2.D.data, oldB2.D.data) # Operations were the same
         assert (B2.D.data is not origB2.D.data)
         assert (B2.D.data != origB2.D.data).any() # Operations changed our operator
 
@@ -801,16 +1187,16 @@ class BandedOperator_test(unittest.TestCase):
         CCC1 = CC1.copy()
 
         assert C1 is not CC1
-        assert np.all(C1.D.data == CC1.D.data)
-        assert np.all(C1.D.offsets == CC1.D.offsets)
+        npt.assert_array_equal(C1.D.data, CC1.D.data)
+        npt.assert_array_equal(C1.D.offsets, CC1.D.offsets)
 
         assert C1 is not CCC1
-        assert np.all(C1.D.data == CCC1.D.data)
-        assert np.all(C1.D.offsets == CCC1.D.offsets)
+        npt.assert_array_equal(C1.D.data, CCC1.D.data)
+        npt.assert_array_equal(C1.D.offsets, CCC1.D.offsets)
 
         assert CC1 is not CCC1
-        assert np.all(CC1.D.data == CCC1.D.data)
-        assert np.all(CC1.D.offsets == CCC1.D.offsets)
+        npt.assert_array_equal(CC1.D.data, CCC1.D.data)
+        npt.assert_array_equal(CC1.D.offsets, CCC1.D.offsets)
 
 
     def test_create(self):
@@ -938,6 +1324,7 @@ class BandedOperator_test(unittest.TestCase):
                     assert (X12.D.data == manualX12.data[::-1]).all(),  "%s+%s (dv %i) idx %i" % (sch0, sch1, dv, idx)
 
 
+
 class ScalingFuncs(unittest.TestCase):
     def setUp(self):
         k = 3.0
@@ -990,7 +1377,7 @@ class ScalingFuncs(unittest.TestCase):
         oldB = self.oldB
         manualB = self.manualB
         flag = int(1)
-        data = np.ones((5,len(vec)), dtype=int)*flag
+        data = np.ones((5,len(vec)), dtype=float)*flag
         data[0][:2] = 0
         data[1][0] = 0
         data[3][-1] = 0
@@ -1169,7 +1556,7 @@ class ScalingFuncs(unittest.TestCase):
         vec = self.vec
         def f0(x): return 0
         def fx(x): return x
-        data = np.ones((5,len(vec)))
+        data = np.ones((5,len(vec)), dtype=float)
         data[0][:2] = 0
         data[1][0] = 0
         data[3][-1] = 0

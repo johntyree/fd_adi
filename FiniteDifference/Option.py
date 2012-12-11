@@ -12,15 +12,16 @@ import scipy.stats
 
 class Option(object):
     """Base class for vanilla option contracts."""
-    def __init__(self
-                 , spot=100
-                 , strike=99
-                 , interest_rate=0.06
-                 , volatility=0.2
-                 , variance=None
-                 , tenor=1.0
-                 , dt = None
-                 ):
+
+    def __init__( self
+                , spot=100
+                , strike=99
+                , interest_rate=0.06
+                , volatility=0.2
+                , variance=None
+                , tenor=1.0
+                , dt = None
+                ):
         self.spot = spot
         self.strike = strike
         # Constant rate
@@ -71,57 +72,6 @@ class Option(object):
             ]
 
 
-class BlackScholesOption(Option):
-    def __init__(self
-                 , spot=100
-                 , strike=99
-                 , interest_rate=0.06
-                 , volatility=0.2
-                 , variance=None
-                 , tenor=1.0
-                 ):
-        Option.__init__(self, spot, strike, interest_rate, volatility,
-                variance, tenor)
-
-        def mu_s(t, *dim):     return r * dim[0]
-        def gamma2_s(t, *dim): return 0.5 * v * dim[0]**2
-        self.coefficients = {()   : lambda t: -self.interest_rate.value,
-                             (0,) : mu_s,
-                             (0,0): gamma2_s}
-
-        self.boundaries = {
-                            # D: U = 0              Von Neumann: dU/dS = 1
-                (0,)  : ((0, lambda *args: 0.0), (1, lambda t, x: 1.0)),
-                            # D: U = 0              Free boundary
-                (0,0) : ((0, lambda *args: 0.0), (None, lambda *x: None))}
-
-        self.schemes = {}
-
-
-
-    def compute_analytical(self):
-        return self._call_delta()[0]
-
-    @property
-    def delta(self):
-        return self._call_delta()[1]
-
-    def _call_delta(self):
-        N = scipy.stats.distributions.norm.cdf
-        s = self.spot
-        k = self.strike
-        r = self.interest_rate.value
-        t = self.tenor
-        vol = np.maximum(1e-10, self.volatility)
-
-        if self.tenor == 0.0:
-            d1 = np.infty
-        else:
-            d1 = ((np.log(s/k) + (r+0.5*vol**2) * t)
-                / (vol * np.sqrt(t)))
-            d2 = d1 - vol*np.sqrt(t)
-        return (N(d1)*s - N(d2)*k*np.exp(-r * t), N(d1))
-
 class MeanRevertingProcess(object):
     def __init__(  self
             , mean=0
@@ -151,7 +101,6 @@ class MeanRevertingProcess(object):
         # MeanRevertingProcess(self.mean,
                              # self.volatility,
                              # self.value+other)
-
 
 
 # class AsianOption(Option):
