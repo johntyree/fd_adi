@@ -20,30 +20,30 @@ class Option(object):
                 , volatility=0.2
                 , variance=None
                 , tenor=1.0
-                , dt = None
                 ):
-        self.spot = spot
-        self.strike = strike
+        self.spot = float(spot)
+        self.strike = float(strike)
         # Constant rate
         self.interest_rate = MeanRevertingProcess(mean=interest_rate, volatility=0)
 
         if variance is not None:
             volatility = np.sqrt(variance)
         else:
-            variance = volatility**2
+            variance = volatility**2.0
             # Constant rate
         self._variance = MeanRevertingProcess(mean=variance, volatility=0)
 
-        self.tenor = tenor
+        self.tenor = float(tenor)
         self._analytical = None
 
     # We can fake const attributes by using properties wihtout setters.
 
     @property
     def analytical(self):
-        if self._analytical is None:
-            self._analytical = self.compute_analytical()
-        return self._analytical
+        return self.compute_analytical()
+        # if self._analytical is None:
+            # self._analytical = self.compute_analytical()
+        # return self._analytical
 
 
     @property
@@ -60,7 +60,7 @@ class Option(object):
         # return "\n\t".join(self.features())
 
 
-    def __str__(self):
+    def _desc(self):
         return [ "Option <%s>" % hex(id(self))
             , "Spot: %s" % self.spot
             , "Strike: %s" % self.strike
@@ -68,8 +68,10 @@ class Option(object):
             , "Volatility: %s" % self.volatility
             , "Variance: %s" % self.variance
             , "Tenor: %s" % self.tenor
-            , "dt: %s" % self.dt
             ]
+
+    def __str__(self):
+        return "\n".join(self._desc())
 
 
 class MeanRevertingProcess(object):
@@ -85,7 +87,7 @@ class MeanRevertingProcess(object):
     def __call__(self, t=None):
         return self.value
 
-    def __repr__(self):
+    def __str__(self):
         return "%s (%s, %s)" % (self.value, self.mean, self.volatility)
 
     # def __add__(self, val):
@@ -103,8 +105,35 @@ class MeanRevertingProcess(object):
                              # self.value+other)
 
 
-# class AsianOption(Option):
-    # """Asian style options."""
+class BarrierOption(Option):
+    """Base class for barrier option contracts."""
+
+    def __init__( self
+                , spot=100
+                , strike=99
+                , interest_rate=0.06
+                , volatility=0.2
+                , variance=None
+                , tenor=1.0
+                , top=None
+                , bottom=None
+                ):
+        Option.__init__(self, spot=spot, strike=strike,
+                        interest_rate=interest_rate,
+                        volatility=volatility,
+                        variance=variance,
+                        tenor=tenor)
+        self.top = top
+        self.bottom = bottom
+
+    def _desc(self):
+        d = Option._desc(self)
+        d[0] = "BarrierOption <%s>" % hex(id(self))
+        d.extend([ "Upper Barrier: %s" % (self.top,)
+                 , "Lower Barrier: %s" % (self.bottom,)])
+        return d
+
+
 
 def main():
     """Run main."""

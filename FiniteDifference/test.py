@@ -43,7 +43,6 @@ def test_numpy_transpose_vs_rollaxis():
 class BlackScholesOption_test(unittest.TestCase):
 
     def setUp(self):
-        # # raise unittest.SkipTest
         v = 0.04
         r = 0.06
         k = 99.0
@@ -59,6 +58,7 @@ class BlackScholesOption_test(unittest.TestCase):
                                                    , force_exact=True
                                                    , flip_idx_spot=False
                                                      )
+        self.F.init()
 
     def test_implicit(self):
         t, dt = self.F.option.tenor, self.dt
@@ -382,6 +382,7 @@ class FiniteDifferenceEngineADI_single_operator_test(unittest.TestCase):
 
         self.F = FD.FiniteDifferenceEngineADI(self.G, coefficients=coeffs,
                 boundaries=bounds, schemes=schemes, force_bandwidth=None)
+        self.F.init()
 
     def test_As(self):
         V = self.F.grid.domain[-1].copy()
@@ -682,6 +683,7 @@ class FiniteDifferenceEngineADI_test(unittest.TestCase):
 
         self.F = FD.FiniteDifferenceEngineADI(self.G, coefficients=coeffs,
                 boundaries=bounds, schemes=schemes, force_bandwidth=None)
+        self.F.init()
 
 
     def test_combine_dimensional_operators(self):
@@ -787,7 +789,7 @@ class FiniteDifferenceEngineADI_test(unittest.TestCase):
                   (1,1): ((None, lambda *x: None), (None, lambda *x: 1)),
                   }
         F = FD.FiniteDifferenceEngineADI(G, coefficients=coeffs, boundaries=bounds, force_bandwidth=None)
-        # F = self.F
+        F.init()
 
         cb = utils.clear_boundary
         g = F.grid.domain[-1]
@@ -880,6 +882,7 @@ class FiniteDifferenceEngineADI_test(unittest.TestCase):
                   # (1,1): ((0, lambda *x: 1), (0, lambda *x: 1)),
                   }
         F = FD.FiniteDifferenceEngineADI(G, coefficients=coeffs, boundaries=bounds, force_bandwidth=None)
+        F.init()
 
         for d, o in F.simple_operators.items():
             l = [[1] * F.grid.shape[(o.axis + 1) % 2]] * 2

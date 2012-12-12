@@ -6,9 +6,11 @@
 # import os
 # import itertools as it
 
+from __future__ import division
+
 import numpy as np
 
-from Option import Option
+from Option import Option, BarrierOption
 from Grid import Grid
 from FiniteDifferenceEngine import FiniteDifferenceEngineADI
 import utils
@@ -23,7 +25,6 @@ class BlackScholesOption(Option):
                 , volatility=0.2
                 , variance=None
                 , tenor=1.0
-                , dt = None
                 ):
         Option.__init__(self, spot, strike, interest_rate, volatility,
                 variance, tenor)
@@ -58,44 +59,117 @@ class BlackScholesOption(Option):
         k = self.strike
         r = self.interest_rate.value
         t = self.tenor
-        vol = np.maximum(1e-10, self.volatility)
+        vol = np.maximum(1e-10, np.sqrt(self.variance.value))
 
         if self.tenor == 0.0:
             d1 = np.infty
         else:
-            d1 = ((np.log(s/k) + (r+0.5*vol**2) * t)
+            d1 = ((np.log(s/float(k)) + (r + 0.5*vol**2) * t)
                 / (vol * np.sqrt(t)))
             d2 = d1 - vol*np.sqrt(t)
         return (N(d1)*s - N(d2)*k*np.exp(-r * t), N(d1))
+
+class BlackScholesBarrierOption(BarrierOption, BlackScholesOption):
+    def __init__(self
+                , spot=100
+                , strike=80
+                , interest_rate=0.06
+                , volatility=0.2
+                , variance=None
+                , tenor=1.0
+                , top=(False, 120.0)
+                , bottom=(True, 90.0)
+                ):
+        """Default is up and out."""
+        BarrierOption.__init__(self, spot=spot, strike=strike,
+                               interest_rate=interest_rate,
+                               volatility=volatility, variance=variance,
+                               tenor=tenor, top=top, bottom=bottom)
+
+    def compute_analytical(self):
+        exp = np.exp
+        log = np.log
+        sqrt = np.sqrt
+        N = scipy.stats.distributions.norm.cdf
+        s = self.spot
+        k = self.strike
+        r = self.interest_rate.value
+        t = self.tenor
+        # if not self.top:
+            # raise NotImplementedError("Only doing up and * options.")
+        c = BlackScholesOption.compute_analytical(self)
+        if self.top:
+            barrier = self.top
+        elif self.bottom:
+            barrier = self.bottom
+        else:
+            return c
+
+        knockin, h = barrier
+        sig = sqrt(self.variance.value)
+        lam = (r + sig*sig / 2) / (sig*sig)
+        x1 = log(s/h)/(sig*sqrt(t)) + lam*sig*sqrt(t)
+        y = log(h*h / (s*k)) / (sig*sqrt(t)) + lam*sig*sqrt(t)
+        y1 = log(h/s)/(sig*sqrt(t)) + lam*sig*sqrt(t)
+
+        if self.top:
+            ret = (s*N(x1) - k*exp(-r*t) * N(x1 - sig*sqrt(t))
+                - s*(h/s)**(2*lam)*(N(-y) - N(-y1))
+                + k*exp(-r*t)*(h/s)**(2*lam-2)*(N(-y + sig*sqrt(t)) - N(-y1 + sig*sqrt(t))))
+        elif self.bottom:
+            ret = s*(h/s)**(2*lam)*N(y) - k*exp(-r*t)*(h/s)**(2*lam-2)*N(y-sig*sqrt(t))
+
+        if not knockin:
+            ret = c - ret
+
+        return ret
+
+    def _desc(self):
+        d = BarrierOption._desc(self)
+        d[0] = "BlackScholesBarrierOption <%s>" % hex(id(self))
+        return d
+
+
+
 
 
 class BlackScholesFiniteDifferenceEngine(FiniteDifferenceEngineADI):
 
     def __init__(self, option,
+            grid=None,
             spot_max=1500.0,
             nspots=100,
             spotdensity=7.0,
             force_exact=True,
             flip_idx_spot=False,
-            schemes=None,
+            schemes={},
             cache=True,
+            coefficients=None,
+            boundaries=None,
+            force_bandwidth=False,
             verbose=True
             ):
         """@option@ is a BlackScholesOption"""
         self.cache = cache
+        assert isinstance(option, Option)
         self.option = option
 
-        spots = utils.sinh_space(option.spot, spot_max, spotdensity, nspots, force_exact=force_exact)
+        if grid:
+            self.grid = grid
+            spots = self.grid.mesh[0]
+        else:
+            spots = utils.sinh_space(option.spot, spot_max, spotdensity, nspots, force_exact=force_exact)
+            grid = Grid([spots], initializer=lambda *x: np.maximum(x[0]-option.strike,0))
 
         # self.spot_idx = np.argmin(np.abs(spots - np.log(spot)))
         # self.spot = np.exp(spots[self.spot_idx])
         self.idx = np.argmin(np.abs(spots - option.spot))
         spot = spots[self.idx]
+        self.spots = spots
 
         # self.option = BlackScholesOption(spot=np.exp(spot), strike=k, interest_rate=r,
                                      # variance=v, tenor=t)
         # G = Grid([spots], initializer=lambda *x: np.maximum(np.exp(x[0])-option.strike,0))
-        G = Grid([spots], initializer=lambda *x: np.maximum(x[0]-option.strike,0))
 
         def mu_s(t, *dim):
             # return np.zeros_like(dim[0], dtype=float) + (r - 0.5 * v)
@@ -105,18 +179,29 @@ class BlackScholesFiniteDifferenceEngine(FiniteDifferenceEngineADI):
             # return 0.5 * v + np.zeros_like(dim[0], dtype=float)
             return 0.5 * option.variance.value * dim[0]**2
 
-        self.coefficients = {()   : lambda t: -option.interest_rate.value,
-                  (0,) : mu_s,
-                  (0,0): gamma2_s}
+        if not coefficients:
+            coefficients = {()   : lambda t: -option.interest_rate.value,
+                    (0,) : mu_s,
+                    (0,0): gamma2_s}
 
-        self.boundaries = {          # D: U = 0              VN: dU/dS = 1
-                (0,)  : ((0, lambda *args: 0.0), (1, lambda t, x: 1.0)),
-                # (0,)  : ((0, lambda *args: 0.0), (1, lambda t, *x: np.exp(x[0]))),
-                        # D: U = 0              Free boundary
-                (0,0) : ((0, lambda *args: 0.0), (None, lambda *x: 1.0))}
+        if not boundaries:
+            boundaries = {          # D: U = 0              VN: dU/dS = 1
+                    (0,)  : ((0, lambda *args: 0.0), (1, lambda t, x: 1.0)),
+                    # (0,)  : ((0, lambda *args: 0.0), (1, lambda t, *x: np.exp(x[0]))),
+                            # D: U = 0              Free boundary
+                    (0,0) : ((0, lambda *args: 0.0), (None, lambda *x: 1.0))}
 
-        FiniteDifferenceEngineADI.__init__(self, G, coefficients=self.coefficients,
-                boundaries=self.boundaries, schemes={})
+        self.grid = grid
+        self.coefficients = coefficients
+        self.boundaries = boundaries
+        self.schemes = schemes
+        self.force_bandwidth = force_bandwidth
+        self._initialized = False
+
+
+    @property
+    def price(self):
+        return self.grid[self.idx]
 
     @property
     def grid_analytical(self):

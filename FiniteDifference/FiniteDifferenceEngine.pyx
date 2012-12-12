@@ -9,8 +9,7 @@
 # import itertools as it
 
 # TODO: This needs a partial redesign on how to handle boundary conditions.
-# This just isn't flexible enough. We need to be able to do things like enforce
-# 1st derivative boundaries when the is no first derivative operator, etc.
+# This just isn't flexible enough.
 
 from bisect import bisect_left
 
@@ -136,10 +135,26 @@ class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
 
     def __init__(self, grid, coefficients={}, boundaries={}, schemes={},
             force_bandwidth=None):
+        self.grid = grid
+        self.coefficients = coefficients
+        self.boundaries = boundaries
+        self.schemes = schemes
+        self.force_bandwidth = force_bandwidth
+        self._initialized = False
 
-        FiniteDifferenceEngine.__init__(self, grid, coefficients=coefficients,
-                boundaries=boundaries, schemes=schemes, force_bandwidth=force_bandwidth)
-        self.make_discrete_operators()
+    def initialized(f):
+        def newf(self, *args, **kwargs):
+            if not self._initialized:
+                FiniteDifferenceEngine.__init__(self, self.grid, coefficients=self.coefficients,
+                        boundaries=self.boundaries, schemes=self.schemes, force_bandwidth=self.force_bandwidth)
+                self.make_discrete_operators()
+                self._initialized = True
+            return f(self, *args, **kwargs)
+        return newf
+
+    @initialized
+    def init(self):
+        return
 
     def make_operator_template(self, d, dim, force_bandwidth=None):
         # Make an operator template for this dimension
@@ -279,7 +294,7 @@ class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
             low, high = self.min_possible_bandwidth(d)
             bw = force_bandwidth
             # print "Minimum bandwidth for %s: %s" % (d, (low, high))
-            if bw is not None:
+            if bw:
                 if (bw[0] > low or bw[1] < high):
                     raise ValueError("Your chosen scheme is too wide for the"
                             " specified bandwidth. (%s needs %s)" %
@@ -478,6 +493,7 @@ class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
             ret = 0
         return ret
 
+    @initialized
     def solve_implicit2(self, n, dt, initial=None, callback=None, numpy=False):
         n = int(n)
         if initial is not None:
@@ -508,6 +524,7 @@ class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
         utils.toc(':  \t')
         return V
 
+    @initialized
     def solve_implicit(self, n, dt, initial=None, callback=None, numpy=False):
         n = int(n)
         if initial is not None:
@@ -546,6 +563,7 @@ class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
         return V
 
 
+    @initialized
     def solve_hundsdorferverwer(self, n, dt, initial=None, theta=0.5, callback=None,
             numpy=False):
 
@@ -610,6 +628,7 @@ class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
         return V
 
 
+    @initialized
     def solve_craigsneyd2(self, n, dt, initial=None, theta=0.5, callback=None,
             numpy=False):
 
@@ -669,6 +688,7 @@ class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
         return V
 
 
+    @initialized
     def solve_craigsneyd(self, n, dt, initial=None, theta=0.5, callback=None,
             numpy=False):
 
@@ -723,6 +743,7 @@ class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
         return V
 
 
+    @initialized
     def solve_douglas(self, n, dt, initial=None, theta=0.5, callback=None,
             numpy=False):
 
@@ -771,6 +792,7 @@ class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
         return V
 
 
+    @initialized
     def solve_john_adi(self, n, dt, initial=None, callback=None, numpy=False):
         #TODO: I don't think this satisfies... well.. anything.
         theta = 0.5
@@ -814,6 +836,7 @@ class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
         return V
 
 
+    @initialized
     def smooth(self, n, dt, initial=None, callback=None, smoothing_steps=2,
             scheme=None):
         if scheme is None:
