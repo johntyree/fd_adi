@@ -806,7 +806,7 @@ class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
 
 
     @initialized
-    def smooth(self, n, dt, initial=None, callback=None, smoothing_steps=2,
+    def solve_smooth(self, n, dt, initial=None, callback=None, smoothing_steps=2,
             scheme=None):
         if scheme is None:
             scheme = self.solve_hundsdorferverwer

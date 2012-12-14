@@ -86,7 +86,7 @@ class BlackScholesOption_test(unittest.TestCase):
 
     def test_smooth(self):
         t, dt = self.F.option.tenor, self.dt
-        V = self.F.smooth(t/dt, dt)[self.F.idx]
+        V = self.F.solve_smooth(t/dt, dt)[self.F.idx]
         ans = self.F.option.analytical
         # print "Spot:", self.F.option.spot
         # print "Price:", V, ans, V - ans
