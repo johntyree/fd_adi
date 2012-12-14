@@ -77,16 +77,36 @@ class BlackScholesBarrierOption(BarrierOption, BlackScholesOption):
                 , volatility=0.2
                 , variance=None
                 , tenor=1.0
-                , top=(False, 120.0)
-                , bottom=(True, 90.0)
+                , top=None
+                , bottom=None
                 ):
         """Default is up and out."""
+        assert not (top and bottom)
         BarrierOption.__init__(self, spot=spot, strike=strike,
                                interest_rate=interest_rate,
                                volatility=volatility, variance=variance,
                                tenor=tenor, top=top, bottom=bottom)
+        BlackScholesOption.__init__(self, spot=spot, strike=strike,
+                               interest_rate=interest_rate,
+                               volatility=volatility, variance=variance,
+                               tenor=tenor)
+
+    def monte_carlo_paths(self, dt, n, callback=lambda *x: None):
+        #TODO: make this work with callback, etc
+        raise NotImplementedError
+        dW = np.randn(t/dt + 1, npaths)
+        dW[0,:] = 0
+        W = np.cumsum(dW, axis=0)
+        del dW
+        rate_process = np.arange(t/dt + 1) * (r - 0.5*sig**2)*dt
+        paths = spot * np.exp(rate_process[:,None] + sig*W*sqrt(dt))
+        del rate_process, W
+        barrier_paths = callback(paths, state)
+        sT = barrier_paths[-1,:]
+
 
     def compute_analytical(self):
+        assert not (self.top and self.bottom)
         exp = np.exp
         log = np.log
         sqrt = np.sqrt
@@ -105,6 +125,8 @@ class BlackScholesBarrierOption(BarrierOption, BlackScholesOption):
         else:
             return c
 
+        s = np.atleast_1d(s)
+        s[s==0] = 1e-10
         knockin, h = barrier
         sig = sqrt(self.variance.value)
         lam = (r + sig*sig / 2) / (sig*sig)
@@ -124,8 +146,8 @@ class BlackScholesBarrierOption(BarrierOption, BlackScholesOption):
 
         return ret
 
-    def _desc(self):
-        d = BarrierOption._desc(self)
+    def features(self):
+        d = BarrierOption.features(self)
         d[0] = "BlackScholesBarrierOption <%s>" % hex(id(self))
         return d
 
@@ -163,7 +185,7 @@ class BlackScholesFiniteDifferenceEngine(FiniteDifferenceEngineADI):
 
         # self.spot_idx = np.argmin(np.abs(spots - np.log(spot)))
         # self.spot = np.exp(spots[self.spot_idx])
-        self.idx = np.argmin(np.abs(spots - option.spot))
+        self.spots = spots
         spot = spots[self.idx]
         self.spots = spots
 
@@ -198,6 +220,10 @@ class BlackScholesFiniteDifferenceEngine(FiniteDifferenceEngineADI):
         self.force_bandwidth = force_bandwidth
         self._initialized = False
 
+
+    @property
+    def idx(self):
+        return np.argmin(np.abs(self.spots - self.option.spot))
 
     @property
     def price(self):

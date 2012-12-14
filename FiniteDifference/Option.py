@@ -6,6 +6,8 @@
 # import os
 # import itertools as it
 
+from __future__ import division
+
 import numpy as np
 import scipy.stats
 
@@ -56,11 +58,8 @@ class Option(object):
         "The volatility property, based on variance."
         return np.sqrt(self.variance.value)
 
-    # def __repr__(self):
-        # return "\n\t".join(self.features())
 
-
-    def _desc(self):
+    def features(self):
         return [ "Option <%s>" % hex(id(self))
             , "Spot: %s" % self.spot
             , "Strike: %s" % self.strike
@@ -71,7 +70,7 @@ class Option(object):
             ]
 
     def __str__(self):
-        return "\n".join(self._desc())
+        return "\n".join(self.features())
 
 
 class MeanRevertingProcess(object):
@@ -123,15 +122,96 @@ class BarrierOption(Option):
                         volatility=volatility,
                         variance=variance,
                         tenor=tenor)
-        self.top = top
-        self.bottom = bottom
+        self._top = top
+        self._bottom = bottom
+        self.monte_carlo_callback = self._callback_from_boundary((self.bottom, self.top))
 
-    def _desc(self):
-        d = Option._desc(self)
+    def top():
+        doc = "The top boundary."
+        def fget(self):
+            return self._top
+        def fset(self, value):
+            self._top = value
+            self.monte_carlo_callback = self._callback_from_boundary((self.bottom, self.top))
+        return locals()
+    top = property(**top())
+
+    def bottom():
+        doc = "The bottom boundary."
+        def fget(self):
+            return self._bottom
+        def fset(self, value):
+            self._bottom = value
+            self.monte_carlo_callback = self._callback_from_boundary((self.bottom, self.top))
+        return locals()
+    bottom = property(**bottom())
+
+
+    def features(self):
+        d = Option.features(self)
         d[0] = "BarrierOption <%s>" % hex(id(self))
         d.extend([ "Upper Barrier: %s" % (self.top,)
                  , "Lower Barrier: %s" % (self.bottom,)])
         return d
+
+
+    def monte_carlo_paths(dt=None, npaths=None, callback=None):
+        raise NotImplementedError
+
+
+    def monte_carlo(self, dt=0.01, npaths=100000,
+                    callback=None):
+        if not callback:
+            callback = self.monte_carlo_callback
+        start = time.time()
+        s = self.monte_carlo_paths(dt, npaths, callback)
+        duration = time.time() - start
+        payoff = np.maximum(s - self.strike, 0)
+        p = np.exp(-self.interest_rate.value * self.tenor) * payoff
+        stdp
+        return { "expected": np.mean(p)
+               , "error": stdp / np.sqrt(npaths),
+               , "duration": duration
+               , "n": npaths
+               , "std": stdp
+               }
+
+
+    def _callback_from_boundary(self, b):
+        def knockin_top(bound):
+            def f(s, state):
+                state |= s >= bound
+            return f
+        def knockout_top(bound):
+            def f(s, state):
+                state &= s < bound
+            return f
+        def knockin_bot(bound):
+            def f(s, state):
+                state |= s <= bound
+            return f
+        def knockout_bot(bound):
+            def f(s, state):
+                state &= s > bound
+            return f
+        def apply_both(f1, f2):
+            def f(*args, **kwargs):
+                f2(*args, **kwargs)
+                f1(*args, **kwargs)
+            return f
+        f = lambda *x: None
+        bot, top = b
+        if bot:
+            if bot[0]: # knockin
+                f = apply_both(f, knockin_bot(bot[1]))
+            else: #knockout
+                f = apply_both(f, knockout_bot(bot[1]))
+        if top:
+            if top[0]: # knockin
+                f = apply_both(f, knockin_top(top[1]))
+            else: #knockout
+                f = apply_both(f, knockout_top(top[1]))
+        return f
 
 
 
