@@ -121,7 +121,8 @@ class HestonBarrierOption(BarrierOption, HestonOption):
 
 
     def monte_carlo_paths(self, dt=0.01, npaths=100000,
-                          callback=lambda *x: None):
+                          callback=lambda *x: None,
+                          verbose=True):
         random_batch_size = 5
         neval = ne.evaluate
         norminv = norm.ppf
@@ -162,7 +163,7 @@ class HestonBarrierOption(BarrierOption, HestonOption):
         for i in range(nrOfSteps):
             if verbose:
                 if not i % notify:
-                    print 100*i / nrOfSteps,
+                    print int(100*i / nrOfSteps),
             V = Vt
 
             #Andersen's paper, equation (17)
@@ -231,7 +232,6 @@ class HestonBarrierOption(BarrierOption, HestonOption):
             # assert not np.isnan(Vt[i+1,:]).any()
 
         return St * state
-
 
 
     def compute_analytical(self):
@@ -339,14 +339,14 @@ class HestonFiniteDifferenceEngine(FiniteDifferenceEngineADI):
                     if grid:
                         assert np.allclose(spot_max, max(grid.mesh[0]))
                     boundaries[(0,)] = (boundaries[(0,)][0], (0, lambda *x: 0.0))
-                    boundaries[(0,0)] = F.boundaries[(0,)]
+                    boundaries[(0,0)] = boundaries[(0,)]
             if option.bottom:
                 if option.bottom[0]: # Knockin, not sure about implementing this
                     raise NotImplementedError("Knockin barriers are not supported.")
                 else:
                     spot_min = option.bottom[1]
                     boundaries[(0,)] = ((0, lambda *x: 0.0), boundaries[(0,)][1])
-                    boundaries[(0,0)] = F.boundaries[(0,)]
+                    boundaries[(0,0)] = boundaries[(0,)]
 
         if grid:
             self.spots = grid.mesh[0]
@@ -360,7 +360,11 @@ class HestonFiniteDifferenceEngine(FiniteDifferenceEngineADI):
             self.vars = vars
             if spots is None:
                 # spots = np.linspace(0,spot_max,nspots)
-                spots = utils.sinh_space(option.strike-spot_min, spot_max-spot_min, spotdensity, nspots, force_exact=force_exact) + spot_min
+                if isinstance(option, BarrierOption) and option.top and not option.top[0]:
+                        p = 3
+                        spots = np.linspace(0, spot_max**p, nspots)**(1/p)
+                else:
+                    spots = utils.sinh_space(option.strike-spot_min, spot_max-spot_min, spotdensity, nspots, force_exact=force_exact) + spot_min
             self.spots = spots
             grid = Grid([self.spots, self.vars], initializer=lambda *x: np.maximum(x[0]-option.strike,0))
 

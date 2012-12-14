@@ -494,43 +494,12 @@ class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
         return ret
 
     @initialized
-    def solve_implicit2(self, n, dt, initial=None, callback=None, numpy=False):
-        n = int(n)
-        if initial is not None:
-            V = initial.copy()
-        else:
-            V = self.grid.domain[0].copy()
-            self.grid.domain.append(V)
-
-        Lis = [(o * -dt).add(1, inplace=True)
-               for d, o in sorted(self.operators.iteritems())
-               if type(d) != tuple]
-
-        print_step = max(1, int(n / 10))
-        to_percent = 100.0 / n
-        utils.tic("solve_implicit:\t")
-        for k in range(n):
-            if not k % print_step:
-                if np.isnan(V).any():
-                    print "Impl fail @ t = %f (%i steps)" % (dt * k, k)
-                    return V
-                print int(k * to_percent),
-            if callback is not None:
-                callback(V, ((n - k) * dt))
-            V += self.cross_term(V, numpy=numpy) * dt
-            for L in Lis:
-                V = L.solve(V)
-        self.grid.domain.append(V.copy())
-        utils.toc(':  \t')
-        return V
-
-    @initialized
     def solve_implicit(self, n, dt, initial=None, callback=None, numpy=False):
         n = int(n)
         if initial is not None:
             V = initial.copy()
         else:
-            V = self.grid.domain[0].copy()
+            V = self.grid.domain[-1].copy()
             self.grid.domain.append(V)
 
         # for d, o in self.operators.items():
@@ -571,7 +540,7 @@ class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
         if initial is not None:
             V = initial.copy()
         else:
-            V = self.grid.domain[0].copy()
+            V = self.grid.domain[-1].copy()
             self.grid.domain.append(V)
 
         Firsts = [(o * dt) for o in self.operators.values()]
@@ -636,7 +605,7 @@ class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
         if initial is not None:
             V = initial.copy()
         else:
-            V = self.grid.domain[0].copy()
+            V = self.grid.domain[-1].copy()
             self.grid.domain.append(V)
 
         Firsts = [(o * dt) for o in self.operators.values()]
@@ -696,7 +665,7 @@ class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
         if initial is not None:
             V = initial.copy()
         else:
-            V = self.grid.domain[0].copy()
+            V = self.grid.domain[-1].copy()
             self.grid.domain.append(V)
 
         Firsts = [(o * dt) for o in self.operators.values()]
@@ -751,7 +720,7 @@ class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
         if initial is not None:
             V = initial.copy()
         else:
-            V = self.grid.domain[0].copy()
+            V = self.grid.domain[-1].copy()
             self.grid.domain.append(V)
 
         Firsts = [(o * dt) for d, o in self.operators.items()]
@@ -840,9 +809,10 @@ class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
     def smooth(self, n, dt, initial=None, callback=None, smoothing_steps=2,
             scheme=None):
         if scheme is None:
-            scheme = self.solve_douglas
-        V = self.solve_implicit(smoothing_steps*2, dt*0.5, initial=initial)
-        return scheme(n-smoothing_steps, dt, initial=V)
+            scheme = self.solve_hundsdorferverwer
+        # V = self.solve_implicit(smoothing_steps*2, dt*0.5, initial=initial)
+        V = self.solve_hundsdorferverwer(smoothing_steps*2, dt*0.5, theta=1, initial=initial)
+        return scheme(n-smoothing_steps, dt, initial=V, theta=0.5)
 
 
 def replicate(n, x):

@@ -169,6 +169,90 @@ def anim(plotter, domains, xs=None, ys=None, FPS=2):
 
 
 
+def trim1d(F):
+    V = F.grid.domain[-1]
+    xs = F.grid.mesh[0]
+    trimx = (0.0 * F.option.spot <= xs) & (xs <= 2.0*F.option.spot)
+    tr = lambda x: x[trimx]
+    res = tr(V)
+    a = tr(F.grid_analytical)
+    return res, a, xs
+
+def trim2d(F):
+    xs = F.grid.mesh[0]
+    ys = F.grid.mesh[1]
+    V = F.grid.domain[-1]
+    trimx = (0.0 * F.option.spot <= xs) & (xs <= 2.0*F.option.spot)
+    trimy = ys <= 1.0
+    tr = lambda x: x[trimx, :][:, trimy]
+    res = tr(V)
+    a = tr(F.grid_analytical)
+    return res, a, xs[trimx], ys[trimy]
+
+def error1d(F):
+    V = F.grid.domain[-1]
+    res, a, xs = trim1d(F)
+    inf_norm = max(abs(res-a).flat)
+    norm2 = pylab.sqrt(sum(((res-a)**2).flat))
+    return norm2
+
+def error2d(F):
+    V = F.grid.domain[-1]
+    res, a, xs, ys = trim2d(F)
+    inf_norm = max(abs(res-a).flat)
+    norm2 = pylab.sqrt(sum(((res-a)**2).flat))
+    return norm2
+
+def price_surface1d(F, trim=True):
+    res = F.grid.domain[-1]
+    xs = F.grid.mesh
+    if trim:
+        res, a, xs = trim1d(F)
+    pylab.plot(xs, res)
+
+def price_surface2d(F, trim=True):
+    res = F.grid.domain[-1]
+    xs, ys = F.grid.mesh
+    if trim:
+        res, a, xs, ys = trim2d(F)
+    surface(res, xs, ys)
+
+def error_surface2d(F, label="", trim=True):
+    a = F.grid_analytical
+    res = F.grid.domain[-1]
+    xs, ys = F.grid.mesh
+    if trim:
+        res, a, xs, ys = trim2d(F)
+    p_absolute_error(res, a, xs, ys, label=label)
+
+def p_absolute_error(V, analytical, spots, vars, marker_idx=0, label="", bad=False):
+    surface(V - analytical, spots, vars)
+    # wireframe(V - analytical, spots, vars)
+    if bad:
+        label += " - bad analytical!"
+    else:
+        label += " - $||V - V*||^\infty = %.2e$" % max(abs(V-analytical).flat)
+    pylab.title("Error in Price (%s)" % label)
+    pylab.xlabel("Var")
+    pylab.ylabel("% of strike")
+    pylab.show()
+
+def p_price(V, analytical, spots, vars, marker_idx=0, label="", bad=False):
+    surface(V, spots, vars)
+    # wireframe(V - analytical, spots, vars)
+    if bad:
+        label += " - bad analytical!"
+    pylab.title("Price (%s)" % label)
+    pylab.xlabel("Var")
+    pylab.ylabel("% of strike")
+    pylab.show()
+
+
+p = p_absolute_error
+pp = p_price
+
+
+
 def plot_dUds_err(domain, analytical, spots, vars, plotter=wireframe):
     """
     Plot the error in the derivative down each columns.

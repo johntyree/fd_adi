@@ -2,11 +2,13 @@
 # coding: utf8
 """Options"""
 
+
+from __future__ import division
+
+import time
 # import sys
 # import os
 # import itertools as it
-
-from __future__ import division
 
 import numpy as np
 import scipy.stats
@@ -168,9 +170,9 @@ class BarrierOption(Option):
         duration = time.time() - start
         payoff = np.maximum(s - self.strike, 0)
         p = np.exp(-self.interest_rate.value * self.tenor) * payoff
-        stdp
+        stdp = np.std(p)
         return { "expected": np.mean(p)
-               , "error": stdp / np.sqrt(npaths),
+               , "error": stdp / np.sqrt(npaths)
                , "duration": duration
                , "n": npaths
                , "std": stdp
