@@ -86,40 +86,6 @@ class HestonOption(Option):
             self.vol_of_variance,
             self.correlation).solve()
 
-
-class HestonBarrierOption(BarrierOption, HestonOption):
-    """#:class documentation"""
-    def __init__(self
-            , spot=100
-            , strike=99
-            , interest_rate=0.06
-            , volatility=0.2
-            , tenor=1.0
-            , mean_reversion=1
-            , mean_variance=None
-            , vol_of_variance=0.4
-            , correlation=0
-            , top=None
-            , bottom=None
-            ):
-        """"""
-        BarrierOption.__init__(self, spot=spot, strike=strike,
-                interest_rate=interest_rate,
-                volatility=volatility, variance=mean_variance,
-                tenor=tenor, top=top, bottom=bottom)
-        HestonOption.__init__(self
-                , spot=spot
-                , strike=strike
-                , interest_rate=interest_rate
-                , volatility=volatility
-                , tenor=tenor
-                , mean_reversion=mean_reversion
-                , mean_variance=mean_variance
-                , vol_of_variance=vol_of_variance
-                , correlation=correlation
-                )
-
-
     def monte_carlo_paths(self, dt=0.01, npaths=100000,
                           callback=lambda *x: None,
                           verbose=True):
@@ -232,6 +198,40 @@ class HestonBarrierOption(BarrierOption, HestonOption):
             # assert not np.isnan(Vt[i+1,:]).any()
 
         return St * state
+
+
+
+class HestonBarrierOption(BarrierOption, HestonOption):
+    """#:class documentation"""
+    def __init__(self
+            , spot=100
+            , strike=99
+            , interest_rate=0.06
+            , volatility=0.2
+            , tenor=1.0
+            , mean_reversion=1
+            , mean_variance=None
+            , vol_of_variance=0.4
+            , correlation=0
+            , top=None
+            , bottom=None
+            ):
+        """"""
+        BarrierOption.__init__(self, spot=spot, strike=strike,
+                interest_rate=interest_rate,
+                volatility=volatility, variance=mean_variance,
+                tenor=tenor, top=top, bottom=bottom)
+        HestonOption.__init__(self
+                , spot=spot
+                , strike=strike
+                , interest_rate=interest_rate
+                , volatility=volatility
+                , tenor=tenor
+                , mean_reversion=mean_reversion
+                , mean_variance=mean_variance
+                , vol_of_variance=vol_of_variance
+                , correlation=correlation
+                )
 
 
     def compute_analytical(self):

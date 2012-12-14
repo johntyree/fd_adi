@@ -39,9 +39,10 @@ class Option(object):
 
         self.tenor = float(tenor)
         self._analytical = None
+        self.monte_carlo_callback = lambda *x: None
+
 
     # We can fake const attributes by using properties wihtout setters.
-
     @property
     def analytical(self):
         return self.compute_analytical()
@@ -73,6 +74,28 @@ class Option(object):
 
     def __str__(self):
         return "\n".join(self.features())
+
+    def monte_carlo(self, dt=0.01, npaths=100000,
+                    callback=None):
+        if not callback:
+            callback = self.monte_carlo_callback
+        start = time.time()
+        s = self.monte_carlo_paths(dt, npaths, callback)
+        duration = time.time() - start
+        payoff = np.maximum(s - self.strike, 0)
+        p = np.exp(-self.interest_rate.value * self.tenor) * payoff
+        stdp = np.std(p)
+        return { "expected": np.mean(p)
+               , "error": stdp / np.sqrt(npaths)
+               , "duration": duration
+               , "n": npaths
+               , "std": stdp
+               }
+
+
+    def monte_carlo_paths(self, dt=None, npaths=None, callback=None):
+        raise NotImplementedError
+
 
 
 class MeanRevertingProcess(object):
@@ -156,27 +179,6 @@ class BarrierOption(Option):
                  , "Lower Barrier: %s" % (self.bottom,)])
         return d
 
-
-    def monte_carlo_paths(dt=None, npaths=None, callback=None):
-        raise NotImplementedError
-
-
-    def monte_carlo(self, dt=0.01, npaths=100000,
-                    callback=None):
-        if not callback:
-            callback = self.monte_carlo_callback
-        start = time.time()
-        s = self.monte_carlo_paths(dt, npaths, callback)
-        duration = time.time() - start
-        payoff = np.maximum(s - self.strike, 0)
-        p = np.exp(-self.interest_rate.value * self.tenor) * payoff
-        stdp = np.std(p)
-        return { "expected": np.mean(p)
-               , "error": stdp / np.sqrt(npaths)
-               , "duration": duration
-               , "n": npaths
-               , "std": stdp
-               }
 
 
     def _callback_from_boundary(self, b):
