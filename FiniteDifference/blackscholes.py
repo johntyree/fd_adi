@@ -30,9 +30,9 @@ class BlackScholesOption(Option):
                 variance, tenor)
 
 
-        def mu_s(t, *dim):     return r * dim[0]
+        def mu_s(t, *dim):     return self.interest_rate.value * dim[0]
 
-        def gamma2_s(t, *dim): return 0.5 * v * dim[0]**2
+        def gamma2_s(t, *dim): return 0.5 * self.variance.value * dim[0]**2
         self.coefficients = {()   : lambda t: -self.interest_rate.value,
                              (0,) : mu_s,
                              (0,0): gamma2_s}

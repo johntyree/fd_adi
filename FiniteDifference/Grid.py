@@ -29,6 +29,7 @@ class Grid(object):
                 assert(all(s == s[0])), s
         self._mesh = mesh
         self.domain = []
+        self.shape = tuple(len(m) for m in mesh)
         if len(mesh) == 1:
             self.domain.append(initializer(*mesh))
         else:
@@ -57,7 +58,7 @@ Grid object <%(hexid)s>
     dx  : %(dx)s
     shape: %(shape)s
     domain:\n%(domain)s
-        """) % keys
+        """ % keys)
 
     @property
     def mesh(self):
