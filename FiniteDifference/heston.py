@@ -441,6 +441,8 @@ class HestonFiniteDifferenceEngine(FiniteDifferenceEngineADI):
     @property
     def grid_analytical(self):
         H = self.option
+        if isinstance(H, BarrierOption):
+            raise NotImplementedError("No analytical solution for Heston barrier options.")
         hs = hs_call_vector(self.spots, H.strike,
             H.interest_rate.value, np.sqrt(self.vars), H.tenor,
             H.mean_reversion, H.mean_variance, H.vol_of_variance,
