@@ -50,7 +50,6 @@ class Option(object):
             # self._analytical = self.compute_analytical()
         # return self._analytical
 
-
     @property
     def variance(self):
         return self._variance
@@ -58,7 +57,7 @@ class Option(object):
 
     @property
     def volatility(self):
-        "The volatility property, based on variance."
+        "The volatility property, computed from variance."
         return np.sqrt(self.variance.value)
 
 
