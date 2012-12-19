@@ -330,6 +330,25 @@ class HestonFiniteDifferenceEngine(FiniteDifferenceEngineADI):
                             )
                     }
 
+        if isinstance(option, BarrierOption):
+            if option.top:
+                if option.top[0]: # Knockin, not sure about implementing this
+                    raise NotImplementedError("Knockin barriers are not supported.")
+                else:
+                    spot_max = option.top[1]
+                    if grid:
+                        assert np.allclose(spot_max, max(grid.mesh[0]))
+                    boundaries[(0,)] = (boundaries[(0,)][0], (0, lambda *x: 0.0))
+                    boundaries[(0,0)] = boundaries[(0,)]
+            if option.bottom:
+                if option.bottom[0]: # Knockin, not sure about implementing this
+                    raise NotImplementedError("Knockin barriers are not supported.")
+                else:
+                    spot_min = option.bottom[1]
+                    boundaries[(0,)] = ((0, lambda *x: 0.0), boundaries[(0,)][1])
+                    boundaries[(0,0)] = boundaries[(0,)]
+
+
         if grid:
             self.spots = grid.mesh[0]
             self.vars = grid.mesh[1]
@@ -344,7 +363,8 @@ class HestonFiniteDifferenceEngine(FiniteDifferenceEngineADI):
                 # spots = np.linspace(0,spot_max,nspots)
                 if isinstance(option, BarrierOption) and option.top and not option.top[0]:
                         p = 3
-                        spots = np.linspace(0, spot_max**p, nspots)**(1/p)
+                        spots = np.linspace(0, spot_max**p, nspots)**(1.0/p)
+                        print "Barrier spots"
                 else:
                     spots = utils.sinh_space(option.strike-spot_min, spot_max-spot_min, spotdensity, nspots, force_exact=force_exact) + spot_min
             self.spots = spots
@@ -368,7 +388,6 @@ class HestonFiniteDifferenceEngine(FiniteDifferenceEngineADI):
             flip_idx_spot = bisect_left(
                     np.round(self.spots, decimals=5),
                     np.round(option.strike, decimals=5))
-
 
 
         if schemes is None:
@@ -395,25 +414,6 @@ class HestonFiniteDifferenceEngine(FiniteDifferenceEngineADI):
             print "(1,): Start with %s differencing." % (schemes[(1,)][0]['scheme'],)
             if len(schemes[(1,)]) > 1:
                 print "(1,): Switch to %s differencing at %i." % (schemes[(1,)][1]['scheme'], schemes[(1,)][1]['from'])
-
-
-        if isinstance(option, BarrierOption):
-            if option.top:
-                if option.top[0]: # Knockin, not sure about implementing this
-                    raise NotImplementedError("Knockin barriers are not supported.")
-                else:
-                    spot_max = option.top[1]
-                    if grid:
-                        assert np.allclose(spot_max, max(grid.mesh[0]))
-                    boundaries[(0,)] = (boundaries[(0,)][0], (0, lambda *x: 0.0))
-                    boundaries[(0,0)] = boundaries[(0,)]
-            if option.bottom:
-                if option.bottom[0]: # Knockin, not sure about implementing this
-                    raise NotImplementedError("Knockin barriers are not supported.")
-                else:
-                    spot_min = option.bottom[1]
-                    boundaries[(0,)] = ((0, lambda *x: 0.0), boundaries[(0,)][1])
-                    boundaries[(0,0)] = boundaries[(0,)]
 
 
         self.grid = grid
