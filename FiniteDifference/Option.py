@@ -74,7 +74,7 @@ class Option(object):
     def __str__(self):
         return "\n".join(self.features())
 
-    def monte_carlo(self, dt=0.01, npaths=100000,
+    def monte_carlo(self, dt=0.001, npaths=10000, with_payoff=False,
                     callback=None):
         if not callback:
             callback = self.monte_carlo_callback
@@ -84,15 +84,18 @@ class Option(object):
         payoff = np.maximum(s - self.strike, 0)
         p = np.exp(-self.interest_rate.value * self.tenor) * payoff
         stdp = np.std(p)
-        return { "expected": np.mean(p)
+        ret = { "expected": np.mean(p)
                , "error": stdp / np.sqrt(npaths)
                , "duration": duration
                , "n": npaths
                , "std": stdp
                }
+        if with_payoff:
+            ret['payoff'] = payoff
+        return ret
 
 
-    def monte_carlo_paths(self, dt=None, npaths=None, callback=None):
+    def monte_carlo_paths(self, dt=None, npaths=None, callback=lambda *x: None):
         raise NotImplementedError
 
 
@@ -102,8 +105,10 @@ class MeanRevertingProcess(object):
             , mean=0
             , volatility=1
             , value=None
+            , reversion=0
              ):
         self.value = value if value is not None else mean
+        self.reversion = reversion
         self.mean = mean
         self.volatility = volatility
 

@@ -46,6 +46,7 @@ class HestonOption(Option):
                 , strike=99
                 , interest_rate=0.06
                 , volatility=0.2
+                , variance=None
                 , tenor=1.0
                 , mean_reversion=1
                 , mean_variance=None
@@ -58,17 +59,26 @@ class HestonOption(Option):
                 , volatility=volatility
                 , tenor=tenor
                 )
-        self.mean_reversion = mean_reversion
-        self.mean_variance = mean_variance if mean_variance is not None else volatility**2
-        self.vol_of_variance = vol_of_variance
+        self.variance.reversion = mean_reversion
+        print variance, self.variance
+        if variance is not None:
+            self.variance.value = variance
+        else:
+            self.variance.value = volatility**2
+        if mean_variance is not None:
+            self.variance.mean = mean_variance
+        else:
+            self.variance.mean = self.variance.value
+        self.variance.volatility = vol_of_variance
+        print self.variance
         self.correlation = correlation
 
     def features(self):
         s = Option.features(self)
         s[0] = "HestonOption <%s>" % hex(id(self))
-        s.extend([ "Mean Reversion: %s" % self.mean_reversion
-                , "Mean Variance: %s" % self.mean_variance
-                , "Vol of Variance: %s" % self.vol_of_variance
+        s.extend([ "Mean Reversion: %s" % self.variance.reversion
+                , "Mean Variance: %s" % self.variance.mean
+                , "Vol of Variance: %s" % self.variance.volatility
                 , "Correlation %s" % self.correlation
                 ])
         return s
@@ -80,28 +90,28 @@ class HestonOption(Option):
             self.interest_rate.value,
             self.volatility,
             self.tenor,
-            self.mean_reversion,
-            self.mean_variance,
-            self.vol_of_variance,
+            self.variance.reversion,
+            self.variance.mean,
+            self.variance.volatility,
             self.correlation).solve()
 
     def monte_carlo_paths(self, dt=0.01, npaths=100000,
                           callback=lambda *x: None,
                           verbose=True):
+
         random_batch_size = 5
         neval = ne.evaluate
         norminv = norm.ppf
         exp  = np.exp
         log  = np.log
         sqrt = np.sqrt
-
         S0 = self.spot
         r = self.interest_rate.value
         V0 = self.variance.value
         t = self.tenor
-        kpp = self.mean_reversion
-        tht = self.mean_variance
-        epp = self.vol_of_variance
+        kpp = self.variance.reversion
+        tht = self.variance.mean
+        epp = self.variance.volatility
         rho_sv = self.correlation
 
         #parameter values used for discretization, =0.5 uses central discretization
@@ -200,13 +210,14 @@ class HestonOption(Option):
 
 
 
-class HestonBarrierOption(BarrierOption, HestonOption):
+class HestonBarrierOption(HestonOption, BarrierOption):
     """#:class documentation"""
     def __init__(self
             , spot=100
             , strike=99
             , interest_rate=0.06
             , volatility=0.2
+            , variance=None
             , tenor=1.0
             , mean_reversion=1
             , mean_variance=None
@@ -216,9 +227,11 @@ class HestonBarrierOption(BarrierOption, HestonOption):
             , bottom=None
             ):
         """"""
+        # We must call Barrier BEFORE Heston or our variance process will be
+        # ruined.
         BarrierOption.__init__(self, spot=spot, strike=strike,
                 interest_rate=interest_rate,
-                volatility=volatility, variance=mean_variance,
+                volatility=volatility, variance=variance,
                 tenor=tenor, top=top, bottom=bottom)
         HestonOption.__init__(self
                 , spot=spot
@@ -243,7 +256,6 @@ class HestonBarrierOption(BarrierOption, HestonOption):
         b = BarrierOption.features(self)
         d.extend(b[-2:])
         return d
-
 
 
 class HestonFiniteDifferenceEngine(FiniteDifferenceEngineADI):
@@ -454,11 +466,6 @@ class HestonFiniteDifferenceEngine(FiniteDifferenceEngineADI):
         else:
             self.BADANALYTICAL = False
         return hs
-
-
-
-
-
 
 
 class HestonCos(object):
