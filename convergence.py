@@ -9,6 +9,7 @@ import sys
 # import itertools as it
 
 import pylab
+import numpy as np
 
 from FiniteDifference import utils
 from FiniteDifference.visualize import surface, wireframe
@@ -101,12 +102,13 @@ def dsdv_convergence(dt=1.0/1000, nv=500, ns=500, func=None):
                                          flip_idx_var=True, verbose=False,
                                          force_exact=False)
         if func is None:
-            func = 'hv'
+            print "No func. No-op"
+            return
         funcs = {
             'hv': lambda dt: F.solve_hundsdorferverwer(H.tenor/dt, dt, theta=0.65),
             'i' : lambda dt: F.solve_implicit(H.tenor/dt, dt),
             'd' : lambda dt: F.solve_implicit(H.tenor/dt, dt, theta=0.65),
-            'smooth': lambda dt: F.smooth(H.tenor/dt, dt, smoothing_steps=1, scheme=F.solve_hundsdorferverwer)
+            'smooth': lambda dt: F.solve_smooth(H.tenor/dt, dt, smoothing_steps=1, scheme=F.solve_hundsdorferverwer)
         }
         labels = {
             'hv': "Hundsdorfer-Verwer",
@@ -159,12 +161,13 @@ def dsdv_convergence(dt=1.0/1000, nv=500, ns=500, func=None):
 
     return errors
 
+
 class ConvergenceTester(object):
     funcs = {
         'hv': lambda F, dt: F.solve_hundsdorferverwer(F.option.tenor/dt, dt, theta=0.65, numpy=False),
         'i' : lambda F, dt: F.solve_implicit(F.option.tenor/dt, dt, numpy=False),
         'd' : lambda F, dt: F.solve_douglas(F.option.tenor/dt, dt, theta=0.65, numpy=False),
-        'smooth': lambda F, dt: F.smooth(F.option.tenor/dt, dt, smoothing_steps=1, scheme=F.solve_hundsdorferverwer)
+        'smooth': lambda F, dt: F.solve_smooth(F.option.tenor/dt, dt, smoothing_steps=1, scheme=F.solve_hundsdorferverwer)
     }
     labels = {
         'hv': "Hundsdorfer-Verwer",
@@ -185,21 +188,24 @@ class ConvergenceTester(object):
         kwargs.update(self.labels)
         self.kwargs = kwargs
 
-    def new(self, force_exact=True):
-        return self.engine(self.option, force_exact=force_exact, verbose=False, **self.engine_kwargs)
+    def new(self):
+        return self.engine(self.option, verbose=False, **self.engine_kwargs)
 
     def dt(self):
+        if self.kwargs['func'] is None:
+            print "No func. No-op"
+            return
         self.kwargs.setdefault('update_kwargs', lambda self, i: 2**-i)
         self.F = self.new()
+        self.kwargs['dx'] = tuple("%.1e" % ((max(mesh) - min(mesh)) / len(mesh)) for mesh in self.F.grid.mesh)
         d = dict(self.kwargs)
         d['func_label'] = self.labels[d['func']]
-        d['dx'] = tuple("%.1e" % ((max(mesh) - min(mesh)) / len(mesh)) for mesh in self.F.grid.mesh)
         self.title = ("Convergence test in dt using %(func_label)s scheme. "
                "dx = %(dx)s" % d)
         print self.title
         self.mode = 'dt'
         self.errors = []
-        self.domains = []
+        # self.domains = []
         self.meshes = []
         min_i, max_i = d.get('min_i', 1), d.get('max_i', 8)
         for i in range(min_i, max_i):
@@ -211,12 +217,14 @@ class ConvergenceTester(object):
             print err
             self.errors.append((dt, err))
             self.kwargs['display'](V, F, self.errors, label=self.kwargs["label"])
-            self.domains.append(V)
-            self.meshes.append(F.grid.mesh)
+            # self.domains.append(V)
+            self.meshes.append(pylab.array(F.grid.mesh))
         return self.errors
 
     def dx(self):
-        # self.F = self.new(force_exact=False)
+        if self.kwargs['func'] is None:
+            print "No func. No-op"
+            return
         if 'update_kwargs' not in self.kwargs:
             raise ValueError("No definition for update_kwargs given. We don't"
                              " know how to advance the simulation.")
@@ -228,8 +236,8 @@ class ConvergenceTester(object):
                "dt = %(dt).2e." % d)
         print self.title
         self.domains = []
-        self.meshes = []
-        min_i, max_i = d.get('min_i', 5), d.get('max_i', 11)
+        self.dxs = []
+        min_i, max_i = d.get('min_i', 5), d.get('max_i', 10)
         for i in range(min_i, max_i):
             dx = self.kwargs['update_kwargs'](self, i)
             F = self.new()
@@ -237,10 +245,10 @@ class ConvergenceTester(object):
             dx = self.kwargs['update_kwargs'](self, i)
             V = self.funcs[self.kwargs['func']](F, self.kwargs["dt"])
             self.errors.append((dx, self.kwargs["error_func"](V, F)))
-            print self.errors[-1][-1]
+            print "dx:", dx, "err:", self.errors[-1][-1]
             self.kwargs['display'](V, F, self.errors, label=self.kwargs["label"])
             # self.domains.append(V)
-            self.meshes.append(F.grid.mesh)
+            self.dxs.append(dx)
         return self.errors
 
     def show_convergence(self):
@@ -285,18 +293,19 @@ def error1d(V, F):
     res, a, xs = trim1d(V, F)
     inf_norm = max(abs(res-a).flat)
     norm2 = pylab.sqrt(sum(((res-a)**2).flat))
-    return norm2
+    meanerr = pylab.mean(abs(res - a).flat)
+    return meanerr
 
 def error2d(V, F):
     res, a, xs, ys = trim2d(V, F)
     inf_norm = max(abs(res-a).flat)
     norm2 = pylab.sqrt(sum(((res-a)**2).flat))
-    return norm2
+    meanerr = pylab.mean(abs(res - a).flat)
+    return meanerr
 
-def error_price(price):
-    def f(V, F):
-        return F.price - price
-    return f
+
+def error_price(V, F):
+    return F.price - F.option.analytical
 
 def dt_convergence(nspots=100, nvols=100, func=None):
     # global F, vals, errs
