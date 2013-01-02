@@ -12,7 +12,7 @@ import numpy as np
 
 from Option import Option, BarrierOption
 from Grid import Grid
-from FiniteDifferenceEngine import FiniteDifferenceEngineADI
+import FiniteDifferenceEngine as FDE
 import utils
 import scipy.stats
 
@@ -30,20 +30,6 @@ class BlackScholesOption(Option):
                 variance, tenor)
 
 
-        def mu_s(t, *dim):     return self.interest_rate.value * dim[0]
-
-        def gamma2_s(t, *dim): return 0.5 * self.variance.value * dim[0]**2
-        self.coefficients = {()   : lambda t: -self.interest_rate.value,
-                             (0,) : mu_s,
-                             (0,0): gamma2_s}
-
-        self.boundaries = {
-                            # D: U = 0              Von Neumann: dU/dS = 1
-                (0,)  : ((0, lambda *args: 0.0), (1, lambda t, x: 1.0)),
-                            # D: U = 0              Free boundary
-                (0,0) : ((0, lambda *args: 0.0), (None, lambda *x: None))}
-
-        self.schemes = {}
 
 
     def compute_analytical(self):
@@ -61,12 +47,13 @@ class BlackScholesOption(Option):
         t = self.tenor
         vol = np.maximum(1e-10, np.sqrt(self.variance.value))
 
-        if self.tenor == 0.0:
+        if self.tenor == 0:
             d1 = np.infty
         else:
             d1 = ((np.log(s/float(k)) + (r + 0.5*vol**2) * t)
                 / (vol * np.sqrt(t)))
-            d2 = d1 - vol*np.sqrt(t)
+
+        d2 = d1 - vol*np.sqrt(t)
         return (N(d1)*s - N(d2)*k*np.exp(-r * t), N(d1))
 
 class BlackScholesBarrierOption(BarrierOption, BlackScholesOption):
@@ -155,7 +142,7 @@ class BlackScholesBarrierOption(BarrierOption, BlackScholesOption):
 
 
 
-class BlackScholesFiniteDifferenceEngine(FiniteDifferenceEngineADI):
+class BlackScholesFiniteDifferenceEngine(FDE.FiniteDifferenceEngineADI):
 
     def __init__(self, option,
             grid=None,
@@ -169,37 +156,45 @@ class BlackScholesFiniteDifferenceEngine(FiniteDifferenceEngineADI):
             coefficients=None,
             boundaries=None,
             force_bandwidth=False,
+            logspace=False,
             verbose=True
             ):
         """@option@ is a BlackScholesOption"""
         self.cache = cache
         assert isinstance(option, Option)
+
         self.option = option
+
+        if logspace:
+            def mu_s(t, *dim):     return option.interest_rate.value - 0.5*option.variance.value
+            def gamma2_s(t, *dim): return 0.5 * option.variance.value
+        else:
+            def mu_s(t, *dim):     return option.interest_rate.value * dim[0]
+            def gamma2_s(t, *dim): return 0.5 * option.variance.value * dim[0]**2
+
 
         if grid:
             self.grid = grid
             spots = self.grid.mesh[0]
         else:
-            spots = utils.sinh_space(option.spot, spot_max, spotdensity, nspots, force_exact=force_exact)
-            grid = Grid([spots], initializer=lambda *x: np.maximum(x[0]-option.strike,0))
+            if logspace:
+                dx = (np.log(spot_max) - np.log(option.spot)) / (nspots//2)
+                spots = np.log(option.spot) + dx*np.linspace(-(nspots//2), nspots//2, nspots)
+                init = lambda x: np.maximum(np.exp(x) - option.strike, 0)
+                self.spots = np.exp(spots)
+            else:
+                spots = utils.sinh_space(option.spot, spot_max, spotdensity,
+                        nspots, force_exact=force_exact)
+                self.spots = spots
+                init = lambda x: np.maximum(x - option.strike, 0)
+            grid = Grid([spots], initializer=init)
 
-        # self.spot_idx = np.argmin(np.abs(spots - np.log(spot)))
-        # self.spot = np.exp(spots[self.spot_idx])
-        self.spots = spots
-        spot = spots[self.idx]
-        self.spots = spots
+        # spot = self.spots[self.idx]
 
         # self.option = BlackScholesOption(spot=np.exp(spot), strike=k, interest_rate=r,
                                      # variance=v, tenor=t)
         # G = Grid([spots], initializer=lambda *x: np.maximum(np.exp(x[0])-option.strike,0))
 
-        def mu_s(t, *dim):
-            # return np.zeros_like(dim[0], dtype=float) + (r - 0.5 * v)
-            return option.interest_rate.value * dim[0]
-
-        def gamma2_s(t, *dim):
-            # return 0.5 * v + np.zeros_like(dim[0], dtype=float)
-            return 0.5 * option.variance.value * dim[0]**2
 
         if not coefficients:
             coefficients = {()   : lambda t: -option.interest_rate.value,
@@ -207,18 +202,24 @@ class BlackScholesFiniteDifferenceEngine(FiniteDifferenceEngineADI):
                     (0,0): gamma2_s}
 
         if not boundaries:
-            boundaries = {          # D: U = 0              VN: dU/dS = 1
-                    (0,)  : ((0, lambda *args: 0.0), (1, lambda t, x: 1.0)),
-                    # (0,)  : ((0, lambda *args: 0.0), (1, lambda t, *x: np.exp(x[0]))),
-                            # D: U = 0              Free boundary
-                    (0,0) : ((0, lambda *args: 0.0), (None, lambda *x: 1.0))}
+            if logspace:
+                boundaries = {       # D: U = 0              Von Neumann: dU/dS = 1
+                        (0,)  : ((0, lambda *args: 0.0), (1, lambda t, x: np.exp(x))),
+                                    # D: U = 0              Free boundary
+                        (0,0)  : ((0, lambda *args: 0.0), (None, lambda t, x: np.exp(x)))}
+            else:
+                boundaries = {        # D: U = 0              Von Neumann: dU/dS = 1
+                        (0,)  : ((0, lambda *args: 0.0), (1, lambda t, x: 1.0)),
+                                    # D: U = 0              Free boundary
+                        (0,0) : ((0, lambda *args: 0.0), (None, lambda t, x: 1.0))}
 
-        self.grid = grid
-        self.coefficients = coefficients
-        self.boundaries = boundaries
-        self.schemes = schemes
-        self.force_bandwidth = force_bandwidth
-        self._initialized = False
+
+        FDE.FiniteDifferenceEngineADI.__init__(self,
+                grid,
+                coefficients=coefficients,
+                boundaries=boundaries,
+                schemes=schemes,
+                force_bandwidth=force_bandwidth)
 
 
     @property

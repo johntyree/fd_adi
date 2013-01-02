@@ -23,8 +23,7 @@ class Option(object):
                 , interest_rate=0.06
                 , volatility=0.2
                 , variance=None
-                , tenor=1.0
-                ):
+                , tenor=1.0):
         self.spot = float(spot)
         self.strike = float(strike)
         # Constant rate
@@ -39,7 +38,12 @@ class Option(object):
 
         self.tenor = float(tenor)
         self._analytical = None
-        self.monte_carlo_callback = lambda *x: None
+        # Only set monte_carlo_callback if it's empty
+        try:
+            if self.monte_carlo_callback is None:
+                self.monte_carlo_callback = lambda *x: None
+        except AttributeError:
+            self.monte_carlo_callback = lambda *x: None
 
 
     # We can fake const attributes by using properties wihtout setters.
@@ -89,6 +93,7 @@ class Option(object):
                , "duration": duration
                , "n": npaths
                , "std": stdp
+               , "dt": dt
                }
         if with_payoff:
             ret['payoff'] = payoff

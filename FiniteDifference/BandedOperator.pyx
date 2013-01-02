@@ -307,8 +307,8 @@ cdef class BandedOperator(object):
             if upper_val is not None:
                 fst_deriv = upper_val
                 assert m+1 < B.D.data.shape[0]
-                Bdata[m+1, -2] =  2 / d[-1]**2
                 Bdata[m,   -1] = -2 / d[-1]**2
+                Bdata[m+1, -2] =  2 / d[-1]**2
                 R[-1]          =  fst_deriv * 2 / d[-1]
             # Otherwise just compute it with backward differencing
             else:
@@ -911,3 +911,46 @@ cdef inline unsigned int get_int_index(int[:] haystack, int needle):
         if needle == haystack[i]:
             return i
     raise ValueError("Value not in array: %s" % needle)
+
+
+
+cpdef solve(self, n, dt):
+    n = int(n)
+    cdef double dx = self.grid.dx[0][1]
+    cdef double[:] mu = self.mu / (2*dx)
+    cdef double[:] gamma2 = self.gamma2 / (dx*dx)
+    cdef double r = self.r
+    cdef double [:] v
+    cdef int i, t
+    for t in range(1, n+1):
+        # Loop over interior
+        vm = self.grid.domain[-1]
+        v = np.zeros_like(vm, dtype=float)
+        for i in range(v.shape[0]-2, 0, -1):
+            v[i] =((
+                dt * (gamma2[i] + mu[i]) * v[i+1]
+                + dt * (gamma2[i] - mu[i]) * vm[i-1]
+                + (1 - dt * r - dt * gamma2[i] + dt * mu[i]) *vm[i])
+            / (1 + dt * (gamma2[i] + mu[i]))
+        )
+        duds = mu[-1] * self.grid.mesh[0][-1]
+        d2uds = gamma2[-1]*(self.grid.mesh[0][-1]*2*dx + 2*vm[-2] - 2*vm[-1])
+        v[-1] = vm[-1] + dt*(duds + d2uds + -r*vm[-1])
+        v1 = np.asarray(v)
+
+        # Loop over interior
+        v = np.zeros_like(vm, dtype=float)
+        duds = mu[-1] * self.grid.mesh[0][-1]
+        d2uds = gamma2[-1]*(self.grid.mesh[0][-1]*2*dx + 2*vm[-2] - 2*vm[-1])
+        v[-1] = vm[-1] + dt*(duds + d2uds + -r*vm[-1])
+        for i in range(1, v.shape[0]-1):
+            v[i] = ((vm[i]
+                    - dt * r*vm[i]
+                    - dt * mu[i]     * (v[i-1] + vm[i] - vm[i+1])
+                    + dt * gamma2[i] * (v[i-1] - vm[i] + vm[i+1]))
+                / (1 + dt*gamma2[i] - dt*mu[i]))
+        v2 = np.asarray(v)
+        v = (v1+v2)/2
+        self.grid.domain.append(v)
+    return self.grid.domain[-1]
+

@@ -21,7 +21,7 @@ import Grid
 import FiniteDifferenceEngine as FD
 
 from blackscholes import BlackScholesFiniteDifferenceEngine, BlackScholesOption
-from heston import HestonOption
+from heston import HestonOption, HestonBarrierOption
 
 
 #TODO: npt.asserts for array tests
@@ -38,6 +38,47 @@ def test_numpy_transpose_vs_rollaxis():
         utils.rolllist(t, 0, axis)
         ta = np.transpose(a, axes=t)
         npt.assert_(a.shape == np.transpose(ta, axes=t).shape)
+
+
+class BarrierOption_test(unittest.TestCase):
+
+    def setUp(self):
+        self.option = HestonBarrierOption()
+        self.s = np.array((4.5, 0.2, 5.5, 0, 3, 5.3, 0.001, 24, 1.3, 2.5))
+        self.state = np.array((1, 1, 1, 1, 1, 1, 1, 1, 1, 1), dtype=bool)
+
+    def test_knockout_impossible(self):
+        s = self.s.copy()
+        state = self.state.copy()
+        self.option.top = (False, np.infty)
+        self.option.monte_carlo_callback(s, state)
+        npt.assert_array_equal(state, np.ones(state.shape))
+
+    def test_knockout_inevitable(self):
+        self.option.top = (False, 0)
+        self.option.monte_carlo_callback(self.s, self.state)
+        npt.assert_array_equal(self.state, np.zeros(self.state.shape))
+
+    def test_knockout_partial(self):
+        self.option.top = (False, 3.0)
+        self.option.monte_carlo_callback(self.s, self.state)
+        res = np.array((0,1,0,1,0,0,1,0,1,1), dtype=bool)
+        npt.assert_array_equal(self.state, res)
+
+    def test_knockout_permanent(self):
+        self.option.top = (False, 3.0)
+        self.option.monte_carlo_callback(self.s, self.state)
+        res = np.array((0,1,0,1,0,0,1,0,1,1), dtype=bool)
+        self.s *= 0
+        self.option.monte_carlo_callback(self.s, self.state)
+        npt.assert_array_equal(self.state, res)
+
+    def test_knockout_double(self):
+        self.option.top = (False, 3.0)
+        self.option.bottom = (False, 1.0)
+        res = np.array((0,0,0,0,0,0,0,0,1,1), dtype=bool)
+        self.option.monte_carlo_callback(self.s, self.state)
+        npt.assert_array_equal(self.state, res)
 
 
 class BlackScholesOption_test(unittest.TestCase):
@@ -64,8 +105,8 @@ class BlackScholesOption_test(unittest.TestCase):
         t, dt = self.F.option.tenor, self.dt
         V = self.F.solve_implicit(t/dt, dt)[self.F.idx]
         ans = self.F.option.analytical
-        # print "Spot:", self.F.option.spot
-        # print "Price:", V, ans, V - ans
+        print "Spot:", self.F.option.spot
+        print "Price:", V, ans, V - ans
         npt.assert_allclose(V, ans, rtol=0.001)
 
     def test_john_adi(self):

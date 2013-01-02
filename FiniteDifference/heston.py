@@ -1,7 +1,6 @@
 #!/usr/bin/env python
 """Description."""
 
-#TODO: Using mean_variance, but it should be from the mean reverting process
 
 from __future__ import division
 
@@ -60,7 +59,6 @@ class HestonOption(Option):
                 , tenor=tenor
                 )
         self.variance.reversion = mean_reversion
-        print variance, self.variance
         if variance is not None:
             self.variance.value = variance
         else:
@@ -70,7 +68,6 @@ class HestonOption(Option):
         else:
             self.variance.mean = self.variance.value
         self.variance.volatility = vol_of_variance
-        print self.variance
         self.correlation = correlation
 
     def features(self):
@@ -135,6 +132,7 @@ class HestonOption(Option):
         # Z2_all = np.random.standard_normal((nrOfSteps, npaths))
 
         notify = nrOfSteps // 10
+        notify += notify == 0
         for i in range(nrOfSteps):
             if verbose:
                 if not i % notify:
@@ -228,7 +226,7 @@ class HestonBarrierOption(HestonOption, BarrierOption):
             ):
         """"""
         # We must call Barrier BEFORE Heston or our variance process will be
-        # ruined.
+        # ruined, but if we do... monte_carlo_callback is ruined...
         BarrierOption.__init__(self, spot=spot, strike=strike,
                 interest_rate=interest_rate,
                 volatility=volatility, variance=variance,
@@ -297,17 +295,17 @@ class HestonFiniteDifferenceEngine(FiniteDifferenceEngineADI):
                 if dim[0] == 0:
                     ret = 0
                 else:
-                    ret = option.mean_reversion * (option.mean_variance - dim[1])
+                    ret = option.variance.reversion * (option.variance.mean - dim[1])
                 return ret
             def gamma2_v(t, *dim):
                 if dim[0] == 0:
                     ret = 0
                 else:
-                    ret = 0.5 * option.vol_of_variance**2 * dim[1]
+                    ret = 0.5 * option.variance.volatility**2 * dim[1]
                 return ret
             def cross(t, *dim):
-                # return option.correlation * option.vol_of_variance * dim[1]
-                return option.correlation * option.vol_of_variance * dim[0] * dim[1]
+                # return option.correlation * option.variance.volatility * dim[1]
+                return option.correlation * option.variance.volatility * dim[0] * dim[1]
 
             coefficients = {()   : lambda t: -option.interest_rate.value,
                     (0,) : mu_s,
@@ -395,7 +393,7 @@ class HestonFiniteDifferenceEngine(FiniteDifferenceEngineADI):
         if flip_idx_var is True: # Need explicit boolean True
             flip_idx_var = bisect_left(
                     np.round(self.vars, decimals=5),
-                    np.round(option.mean_variance, decimals=5))
+                    np.round(option.variance.mean, decimals=5))
         if flip_idx_spot is True: # Need explicit boolean True
             flip_idx_spot = bisect_left(
                     np.round(self.spots, decimals=5),
@@ -457,7 +455,7 @@ class HestonFiniteDifferenceEngine(FiniteDifferenceEngineADI):
             raise NotImplementedError("No analytical solution for Heston barrier options.")
         hs = hs_call_vector(self.spots, H.strike,
             H.interest_rate.value, np.sqrt(self.vars), H.tenor,
-            H.mean_reversion, H.mean_variance, H.vol_of_variance,
+            H.variance.reversion, H.variance.mean, H.variance.volatility,
             H.correlation, HFUNC=HestonCos, cache=self.cache)
 
         if max(hs.flat) > self.spots[-1] * 2:

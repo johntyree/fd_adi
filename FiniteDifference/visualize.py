@@ -169,24 +169,32 @@ def anim(plotter, domains, xs=None, ys=None, FPS=2):
 
 
 
-def trim1d(F):
-    V = F.grid.domain[-1]
+def trim1d(F, V=None):
+    if V is None:
+        V = F.grid.domain[-1]
     xs = F.grid.mesh[0]
     trimx = (0.0 * F.option.spot <= xs) & (xs <= 2.0*F.option.spot)
     tr = lambda x: x[trimx]
     res = tr(V)
-    a = tr(F.grid_analytical)
-    return res, a, xs
+    try:
+        a = tr(F.grid_analytical)
+    except NotImplementedError:
+        a = None
+    return res, a, xs[trimx]
 
-def trim2d(F):
+def trim2d(F, V=None):
     xs = F.grid.mesh[0]
     ys = F.grid.mesh[1]
-    V = F.grid.domain[-1]
+    if V is None:
+        V = F.grid.domain[-1]
     trimx = (0.0 * F.option.spot <= xs) & (xs <= 2.0*F.option.spot)
     trimy = ys <= 1.0
     tr = lambda x: x[trimx, :][:, trimy]
     res = tr(V)
-    a = tr(F.grid_analytical)
+    try:
+        a = tr(F.grid_analytical)
+    except NotImplementedError:
+        a = None
     return res, a, xs[trimx], ys[trimy]
 
 def error1d(F):
@@ -194,14 +202,16 @@ def error1d(F):
     res, a, xs = trim1d(F)
     inf_norm = max(abs(res-a).flat)
     norm2 = pylab.sqrt(sum(((res-a)**2).flat))
-    return norm2
+    mae = pylab.mean((res-a).flat)
+    return mae
 
 def error2d(F):
     V = F.grid.domain[-1]
     res, a, xs, ys = trim2d(F)
     inf_norm = max(abs(res-a).flat)
     norm2 = pylab.sqrt(sum(((res-a)**2).flat))
-    return norm2
+    mae = pylab.mean((res-a).flat)
+    return mae
 
 def price_surface1d(F, trim=True):
     res = F.grid.domain[-1]
@@ -231,7 +241,8 @@ def p_absolute_error(V, analytical, spots, vars, marker_idx=0, label="", bad=Fal
     if bad:
         label += " - bad analytical!"
     else:
-        label += " - $||V - V*||^\infty = %.2e$" % max(abs(V-analytical).flat)
+        # label += " - $||V - V*||^\infty = %.2e$" % max(abs(V-analytical).flat)
+        label += " - MAE = %.2e$" % np.mean(abs(V-analytical).flat)
     pylab.title("Error in Price (%s)" % label)
     pylab.xlabel("Var")
     pylab.ylabel("% of strike")

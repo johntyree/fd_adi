@@ -7,11 +7,11 @@ import sys
 # import itertools as it
 
 from FiniteDifference import utils
-from FiniteDifference.heston import HestonOption, hs_call_vector, HestonFiniteDifferenceEngine
 
-from FiniteDifference.Option import BlackScholesOption
+from FiniteDifference.heston import HestonOption, hs_call_vector, HestonFiniteDifferenceEngine
+from FiniteDifference.blackscholes import BlackScholesOption
+
 from FiniteDifference.Grid import Grid
-from FiniteDifference import FiniteDifferenceEngine as FD
 
 # FD.DEBUG = True
 
