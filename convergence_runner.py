@@ -32,11 +32,16 @@ except IndexError:
     sys.exit(1)
 
 
-
 def save(*args, **kwargs):
     args = list(args)
     args[0] = os.path.join(figure_dir, str(int(time.time())) + '_' + args[0])
     savefig(*args, **kwargs)
+
+
+def mc_error(price):
+    def newf(V, F):
+        return abs(F.price - price)
+    return newf
 
 def rundt():
     engine = FD.heston.HestonFiniteDifferenceEngine
@@ -60,7 +65,7 @@ def rundx():
     engine = FD.heston.HestonFiniteDifferenceEngine
     ct = cv.ConvergenceTester(option, engine,
             {'force_exact': False, 'spotdensity': 10, 'varexp': 4},
-            dt=dt, min_i=4, max_i=9, func=func, error_func=cv.error2d,
+            dt=dt, min_i=4, max_i=9, func=func, error_func=mc_error(),
             update_kwargs=update_kwargs)
     err = ct.dx()
     key = ('heston', mode, option.strike)
@@ -69,13 +74,16 @@ def rundx():
 errors = {}
 
 strike = 80.0
-option = FD.heston.HestonOption(tenor=1, strike=strike, volatility=0.2, mean_reversion=1, vol_of_variance=0.2, correlation=-0.7)
+price = 25.6137
+# option = FD.heston.HestonOption(tenor=1, strike=strike, volatility=0.2, mean_reversion=1, vol_of_variance=0.2, correlation=-0.7)
+option = FD.heston.HestonBarrierOption(tenor=1, strike=strike, volatility=0.2, mean_reversion=1, vol_of_variance=0.2, correlation=-0.7, top=(False, 120.0))
 print option
-print option.analytical
+# print option.analytical
 
-fname = "vanilla_strike-%s_%s_%s" % (strike, func, mode)
+# fname = "vanilla_strike-%s_%s_%s" % (strike, func, mode)
+fname = "barrier_strike-%s_%s_%s" % (strike, func, mode)
 
-rundx()
+rundt()
 
 with open('data_convergence/%s.py' % fname, 'w') as fout:
     fout.write(str(errors) + '\n')
