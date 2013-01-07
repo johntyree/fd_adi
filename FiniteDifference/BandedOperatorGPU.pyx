@@ -24,14 +24,14 @@ from libcpp cimport bool as cbool
 REAL = np.float64
 ctypedef np.float64_t REAL_t
 
-cdef class BandedOperatorGPU(object):
+cdef class BandedOperator(object):
 
     attrs = ('derivative', 'order', 'axis', 'deltas', 'dirichlet', 'blocks')
 
     cdef public unsigned int blocks, order, axis
     cdef public D, R, deltas, dirichlet, solve_banded_offsets, derivative
     cdef public shape
-
+    cdef public top_factors, bottom_factors
 
     def __init__(self, data_offsets, residual=None, int inplace=True,
             int derivative=1, int order=2, deltas=None, int axis=0):
@@ -62,7 +62,7 @@ cdef class BandedOperatorGPU(object):
             raise ValueError("Residual vector has wrong shape: got %i,"
                              "expected %i." % (residual.shape[0], size))
 
-        # NB: When adding something here, also add to BandedOperatorGPU.attrs
+        # NB: When adding something here, also add to BandedOperator.attrs
         self.blocks = 1
         self.derivative = derivative
         self.order = order
@@ -128,7 +128,7 @@ cdef class BandedOperatorGPU(object):
         else:
             raise ValueError("Unknown scheme: %s" % scheme)
 
-        self = BandedOperatorGPU((data, offsets), residual=residual, axis=axis)
+        self = BandedOperator((data, offsets), residual=residual, axis=axis)
         self.derivative = derivative
         self.order = order
         self.deltas = deltas
@@ -136,7 +136,7 @@ cdef class BandedOperatorGPU(object):
         return self
 
     def copy(self):
-        B = BandedOperatorGPU((self.D.data, self.D.offsets), residual=self.R, inplace=False)
+        B = BandedOperator((self.D.data, self.D.offsets), residual=self.R, inplace=False)
         B.copy_meta_data(self)
         return B
 
@@ -197,61 +197,79 @@ cdef class BandedOperatorGPU(object):
         return ret
 
 
-    def foldin(self):
-        bo = self
-        block_len = bo.shape[0] // bo.blocks
-        bottoms = self.foldbottom(bo.D.data, block_len, bo.blocks)
-        tops = self.foldtop(bo.D.data, block_len, bo.blocks)
-        bo.D.offsets = bo.D.offsets[1:-1]
-        return tops, bottoms
+    def diagonalize(self):
+        assert (self.D.offsets == (2, 1, 0, -1, -2)).all()
+        self.foldtop()
+        self.foldbottom()
+        self.D = scipy.sparse.dia_matrix((self.D.data[1:-1], self.D.offsets[1:-1]), shape=self.shape)
 
 
-    def foldbottom(self):
+    def undiagonalize(self):
+        assert (self.D.offsets == (1, 0, -1)).all()
+        data = np.zeros((5, self.D.shape[0]))
+        offsets = (2, 1, 0, -1, -2)
+        data[1:-1] = self.D.data
+        self.D = scipy.sparse.dia_matrix((data, offsets), shape=self.shape)
+        self.foldtop(unfold=True)
+        self.foldbottom(unfold=True)
+
+
+    def foldbottom(self, unfold=False):
         d = self.D.data
         blocks = self.blocks
         block_len = self.shape[0] // blocks
-        factor = np.empty(blocks)
-        m = get_int_index(self.offsets, 0)
+        self.bottom_factors = np.empty(blocks)
+        m = get_int_index(self.D.offsets, 0)
         for b in range(blocks):
-            cn1 = m-1, (b+1)*block_len - 1 - 1
+            cn1 = m-1, (b+1)*block_len - 1
             bn  = m,   (b+1)*block_len - 1
             bn1 = m,   (b+1)*block_len - 1 - 1
             an  = m+1, (b+1)*block_len - 1 - 1
             an1 = m+1, (b+1)*block_len - 1 - 2
             zn  = m+2, (b+1)*block_len - 1 - 2
-            # print "Block %i %s, %s: d[zn] = %f, d[an1] =%f" % (b, zn, an1, d[zn], d[an1])
+            # print "Block %i %s, %s: d[zn] = %f, d[an1] = %f" % (b, zn, an1, d[zn], d[an1])
+            # print "Second row:", d[an1], d[bn1], d[cn1]
             # print "Bottom row:", d[zn], d[an], d[bn]
-            # print "second row:", d[an1], d[bn1], d[cn1]
-            factor[b] = d[zn] / d[an1] if d[an1] != 0 else 0
-            d[zn] -= d[an1] * factor[b]
-            d[an] -= d[bn1] * factor[b]
-            d[bn] -= d[cn1] * factor[b]
-        return factor
+            if unfold:
+                d[zn] -= d[an1] * self.bottom_factors[b]
+                d[an] -= d[bn1] * self.bottom_factors[b]
+                d[bn] -= d[cn1] * self.bottom_factors[b]
+            else:
+                self.bottom_factors[b] = -d[zn] / d[an1] if d[an1] != 0 else 0
+                d[zn] += d[an1] * self.bottom_factors[b]
+                d[an] += d[bn1] * self.bottom_factors[b]
+                d[bn] += d[cn1] * self.bottom_factors[b]
 
 
-    def foldtop(self):
+    def foldtop(self, unfold=False):
         d = self.D.data
         blocks = self.blocks
         block_len = self.shape[0] // blocks
 
-        m = get_int_index(self.offsets, 0)
-        factor = np.empty(blocks)
+        m = get_int_index(self.D.offsets, 0)
+        self.top_factors = np.empty(blocks)
         for b in range(blocks):
-            d0 = m-2, b*block_len + 2
-            c0 = m-1, b*block_len + 1
-            c1 = m-1, b*block_len + 2
+            a1 = m+1, b*block_len
             b0 = m,   b*block_len
             b1 = m,   b*block_len + 1
-            a1 = m+1, b*block_len + 1
-            # print "Block %i %s, %s: d[d0] = %f, d[c1] =%f" % (b, d0, c1, d[d0], d[c1])
-            factor[b] = d[d0] / d[c1] if d[c1] != 0 else 0
-            d[d0] -= d[c1] * factor[b]
-            d[c0] -= d[b1] * factor[b]
-            d[b0] -= d[a1] * factor[b]
-        return factor
+            c0 = m-1, b*block_len + 1
+            c1 = m-1, b*block_len + 2
+            d0 = m-2, b*block_len + 2
+            # print "Block %i %s, %s: d[d0] = %f, d[c1] = %f" % (b, d0, c1, d[d0], d[c1])
+            # print "Top row   :", d[b0], d[c0], d[d0]
+            # print "Second row:", d[a1], d[b1], d[c1]
+            if unfold:
+                d[d0] -= d[c1] * self.top_factors[b]
+                d[c0] -= d[b1] * self.top_factors[b]
+                d[b0] -= d[a1] * self.top_factors[b]
+            else:
+                self.top_factors[b] = -d[d0] / d[c1] if d[c1] != 0 else 0
+                d[d0] += d[c1] * self.top_factors[b]
+                d[c0] += d[b1] * self.top_factors[b]
+                d[b0] += d[a1] * self.top_factors[b]
 
 
-    def fold_vector(self, vec, tops, bottoms):
+    def fold_vector(self, vec, unfold=False):
         v = vec.copy()
         blocks = self.blocks
         block_len = self.shape[0] // blocks
@@ -260,9 +278,14 @@ cdef class BandedOperatorGPU(object):
             u0 = b*block_len
             u1 = u0 + 1
             un = (b+1)*block_len - 1
-            un1 = (b+1)*block_len - 2
-            v[u0] -= v[u1] * tops[b]
-            v[un] -= v[un1] * bottoms[b]
+            un1 = un - 1
+            print "[%f, %f .. %f, %f]" % (v[u0], v[u1], v[un1], v[un])
+            if unfold:
+                v[u0] -= v[u1]  * self.top_factors[b]
+                v[un] -= v[un1] * self.bottom_factors[b]
+            else:
+                v[u0] += v[u1]  * self.top_factors[b]
+                v[un] += v[un1] * self.bottom_factors[b]
         return v
 
 
@@ -280,12 +303,14 @@ cdef class BandedOperatorGPU(object):
             # print "Setting V[-1,:] to", self.dirichlet[-1]
             V[...,-1] = self.dirichlet[1]
 
-        _, tops, bottoms = self.foldin()
+        self.diagonalize()
+
+        ret = self.fold_vector(self.D.dot(V.flat), unfold=True)
 
         if self.R is not None:
-            ret = self.D.dot(V.flat) + self.R
-        else:
-            ret = self.D.dot(V.flat)
+            ret += self.R
+
+        self.undiagonalize()
 
         ret = ret.reshape(V.shape)
 
@@ -308,16 +333,20 @@ cdef class BandedOperatorGPU(object):
         if self.dirichlet[1] is not None:
             V[...,-1] = self.dirichlet[1]
 
-        _, tops, bottoms = self.foldin()
+        self.diagonalize()
 
         if self.R is not None:
             V0 = V.flat - self.R
         else:
             V0 = V
 
+        V0 = self.fold_vector(V0)
+
         ret = spl.solve_banded(self.solve_banded_offsets,
                 self.D.data, V0.flat,
                 overwrite_ab=overwrite, overwrite_b=True).reshape(V.shape)
+
+        self.undiagonalize()
 
         t = range(V.ndim)
         utils.rolllist(t, V.ndim-1, self.axis)
@@ -700,7 +729,7 @@ cdef class BandedOperatorGPU(object):
                 B = self
             else:
                 newdata = np.zeros((len(newoffsets), self.D.data.shape[1]))
-                B = BandedOperatorGPU((newdata, newoffsets), residual=self.R)
+                B = BandedOperator((newdata, newoffsets), residual=self.R)
 
             last = B.shape[1]
             for torow, o in enumerate(B.D.offsets):
@@ -771,16 +800,16 @@ cdef class BandedOperatorGPU(object):
         return self.add(other, inplace=True)
 
     def add(self, other, cbool inplace=False):
-        if isinstance(other, BandedOperatorGPU):
+        if isinstance(other, BandedOperator):
             return self.add_operator(other, inplace)
         else:
             return self.add_scalar(other, inplace)
 
 
     # TODO: This needs to be faster
-    def add_operator(BandedOperatorGPU self, BandedOperatorGPU other, cbool inplace=False):
+    def add_operator(BandedOperator self, BandedOperator other, cbool inplace=False):
         """
-        Add a second BandedOperatorGPU to this one.
+        Add a second BandedOperator to this one.
         Does not alter self.R, the residual vector.
         """
         cdef REAL_t[:,:] data = self.D.data
@@ -791,7 +820,7 @@ cdef class BandedOperatorGPU(object):
         cdef int[:] Boffsets
         cdef int o
         cdef unsigned int i
-        cdef BandedOperatorGPU B
+        cdef BandedOperator B
         cdef cbool fail
 
         if self.axis != other.axis:
@@ -824,7 +853,7 @@ cdef class BandedOperatorGPU(object):
             newdata = np.zeros((Boffsets.shape[0], self.shape[1]))
             # And make a new operator with the appropriate shape
             # Remember to carry the residual with us.
-            B = BandedOperatorGPU((newdata, Boffsets), self.R)
+            B = BandedOperator((newdata, Boffsets), self.R)
             # Copy our data into the new operator since carefully, since we
             # may have resized.
             for i in range(selfoffsets.shape[0]):

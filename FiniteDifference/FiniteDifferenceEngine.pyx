@@ -24,7 +24,9 @@ import itertools
 import utils
 import scipy.linalg as spl
 
-import BandedOperator as BO
+# import BandedOperator as BO
+# BandedOperator = BO.BandedOperator
+import BandedOperatorGPU as BO
 BandedOperator = BO.BandedOperator
 
 from visualize import fp

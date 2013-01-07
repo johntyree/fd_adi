@@ -1066,6 +1066,49 @@ class Grid_test(unittest.TestCase):
         npt.assert_array_equal(G.domain[-1], U)
 
 
+class BandedOperatorGPU_test(unittest.TestCase):
+
+    def setUp(self):
+        k = 3.0
+        nspots = 7
+        spot_max = 1500.0
+        spotdensity = 7.0  # infinity is linear?
+        spots = utils.sinh_space(k, spot_max, spotdensity, nspots)
+        self.flip_idx = 4
+        self.vec = spots
+
+
+    def test_create(self):
+        vec = self.vec
+        last = len(vec)-1
+        idx = 1
+        d = np.hstack((np.nan, np.diff(vec)))
+        deltas = d
+        sch0 = 'center'
+        axis = 1
+        sch1 = 'center'
+        for dv in [1,2]:
+            oldX1 = utils.nonuniform_complete_coefficients(deltas, up_or_down=sch1, flip_idx=idx)[dv-1]
+            X1 = FD.BandedOperator.for_vector(vec, scheme=sch1, derivative=dv, order=2, axis=axis)
+
+            high, low = 1,-1
+            m = tuple(oldX1.offsets).index(0)
+            oldX1.data = oldX1.data[m-high:m-low+1]
+            oldX1.offsets = oldX1.offsets[m-high:m-low+1]
+
+            # print "old D.todense()"
+            # fp(oldX1.D.todense())
+            # print "new D.todense()"
+            # fp(X1.D.todense())
+            # print
+            # print X1.shape, oldX1.shape
+            # print (X1.D.offsets, oldX1.offsets),  "%s+%s (dv %i) idx %i" % (sch0, sch1, dv, idx)
+            assert X1.axis == axis
+            assert (X1.D.todense() == oldX1.todense()).all(),  "%s+%s (dv %i) idx %i" % (sch0, sch1, dv, idx)
+            assert (X1.D.offsets == oldX1.offsets).all(),  "%s+%s (dv %i) idx %i" % (sch0, sch1, dv, idx)
+            assert (X1.D.data.shape == oldX1.data.shape),  "%s+%s (dv %i) idx %i" % (sch0, sch1, dv, idx)
+            assert (X1.D.data == oldX1.data).all(),  "%s+%s (dv %i) idx %i" % (sch0, sch1, dv, idx)
+
 
 class BandedOperator_test(unittest.TestCase):
 
@@ -1140,6 +1183,7 @@ class BandedOperator_test(unittest.TestCase):
             pass
         else:
             raise AssertionError("In place addition should fail for different sized operators.")
+
 
     def test_mul(self):
         vec = self.vec
@@ -1366,7 +1410,6 @@ class BandedOperator_test(unittest.TestCase):
                     assert (X12.D.offsets == manualX12.offsets[::-1]).all(),  "%s+%s (dv %i) idx %i" % (sch0, sch1, dv, idx)
                     assert (X12.D.data.shape == manualX12.data.shape),  "%s+%s (dv %i) idx %i" % (sch0, sch1, dv, idx)
                     assert (X12.D.data == manualX12.data[::-1]).all(),  "%s+%s (dv %i) idx %i" % (sch0, sch1, dv, idx)
-
 
 
 class ScalingFuncs(unittest.TestCase):
