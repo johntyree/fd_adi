@@ -24,6 +24,8 @@ import itertools
 import utils
 import scipy.linalg as spl
 
+import itertools as it
+
 # import BandedOperator as BO
 # BandedOperator = BO.BandedOperator
 import BandedOperatorGPU as BO
@@ -365,54 +367,71 @@ cdef class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
         return low, high
 
 
-    def make_discrete_operators(self):
-        ndim = self.grid.ndim
-        coeffs = self.coefficients
-        bounds = self.boundaries
-        force_bandwidth = self.force_bandwidth
-        dirichlets = {}
+
+    # We partially apply the function to all of the values except this
+    # dimension, and change the input to accept an index into mesh
+    # rather than the mesh value itself. This way the caller doesn't need
+    # to know anything other than the row it's working on.
+    # f : (t x R^n -> R) -> Z -> R
+    def wrapscalarfunc(self, f, args, dim):
+        x = list(args)
+        x.insert(dim, None)
+        def newf(i):
+            x[dim] = self.grid.mesh[dim][i]
+            return f(self.t, *x)
+        return newf
+
+    # Here we do the same except we go ahead and evalutate the function for
+    # the entire vector. This is just for numpy's speed and is otherwise
+    # redundant.
+    def evalvectorfunc(self, f, args, dim):
+        x = list(args)
+        x.insert(dim, self.grid.mesh[dim])
+        vec = f(self.t, *x)
+        if np.isscalar(vec):
+            vec += np.zeros_like(self.grid.mesh[dim])
+        return vec
+
+
+    def coefficient_vector(self, f, t, dims):
+        """Evaluate f with the cartesian product of the elements of
+        self.grid.mesh, ordered by dims. The first dim is the fastest varying
+        (column major).
+        Example (actual implementation is vectorized):
+            mesh = [(1,2,3), (4,5,6), (7,8,9)]
+            dims = (2,0,1)
+            output = [f(a,b,c)
+                        for b in mesh[1]
+                        for a in mesh[0]
+                        for c in mesh[2]
+                        ]
+        """
+        gridsize = self.grid.size
+        mesh = self.grid.mesh[dims]
+        # This can be rewritten with repeat and tile, not sure if faster
+        args = np.fromiter(it.chain(*it.izip(*it.product(*mesh))), float).reshape(mesh.shape[0], gridsize)
+        ret = f(t, *iter(args))
+        return ret
+
+
+    def make_operator_templates(self, force_bandwidth):
+        templates = {}
         mixed = {}
-
-        # We partially apply the function to all of the values except this
-        # dimension, and change the semantics to accept an index into mesh
-        # rather than the mesh value itself. This way the caller doesn't need
-        # to know anything other than the row it's working on.
-        # f : (t x R^n -> R) -> Z -> R
-        def wrapscalarfunc(f, args, dim):
-            x = list(args)
-            x.insert(dim, None)
-            def newf(i):
-                x[dim] = self.grid.mesh[dim][i]
-                return f(self.t, *x)
-            return newf
-
-        # Here we do the same except we go ahead and evalutate the function for
-        # the entire vector. This is just for numpy's speed and is otherwise
-        # redundant.
-        def evalvectorfunc(f, args, dim):
-            x = list(args)
-            x.insert(dim, self.grid.mesh[dim])
-            vec = f(self.t, *x)
-            if np.isscalar(vec):
-                vec += np.zeros_like(self.grid.mesh[dim])
-            return vec
-
-        # d = (0,0) or so...
-        for d in coeffs.keys():
+        # d = (0,0), for example ...
+        for d in self.coefficients.keys():
             # Don't need an operator for the 0th derivative
-            # Mixed derivatives are handled specially
             if d == ():
                 continue
 
+            # Mixed derivatives are handled specially
             mix = BandedOperator.check_derivative(d)
             if mix:
                 mixed[d] = True
                 continue
 
             dim = d[0]
-            Bs = []
 
-            # # Make an operator template for this dimension
+            # Make an operator template for this dimension
             low, high = self.min_possible_bandwidth(d)
             bw = force_bandwidth
             # print "Minimum bandwidth for %s: %s" % (d, (low, high))
@@ -423,12 +442,26 @@ cdef class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
                             (bw, (low, high)))
                 low, high = bw
             Binit = self.make_operator_template(d, dim,
-                    force_bandwidth=(low, high))
+                                                force_bandwidth=(low, high))
             assert Binit.axis == dim, "Binit.axis %s, dim %s" % (Binit.axis, dim)
             offs = Binit.D.offsets
             assert max(offs) >= high, "(%s < %s)" % (max(offs), high)
             assert min(offs) <= low,  "(%s > %s)" % (min(offs), low)
+            templates[d] = Binit
+        return templates, mixed
 
+
+    def make_discrete_operators(self):
+        ndim = self.grid.ndim
+        coeffs = self.coefficients
+        bounds = self.boundaries
+        force_bandwidth = self.force_bandwidth
+        dirichlets = {}
+        templates, mixed = self.make_operator_templates(force_bandwidth)
+
+        for d, Binit in templates.items():
+            dim = d[0]
+            ColumnOperators = []
             # Take cartesian product of other dimension values
             otherdims = range(ndim)
             otherdims.remove(dim)
@@ -442,11 +475,9 @@ cdef class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
                 # Adjust the boundary conditions as necessary
                 if d in bounds:
                     b = bounds[d]
-                    lowfunc = wrapscalarfunc(b[0][1], a, dim)
-                    highfunc = wrapscalarfunc(b[1][1], a, dim)
+                    lowfunc  = self.wrapscalarfunc(b[0][1], a, dim)
+                    highfunc = self.wrapscalarfunc(b[1][1], a, dim)
                     b = ((b[0][0], lowfunc(0)), (b[1][0], highfunc(-1)))
-                    # if DEBUG and B.axis == 1:
-                        # from IPython.core.debugger import Tracer; Tracer()() ### XXX BREAKPOINT
 
                     B.applyboundary(b, self.grid.mesh)
                     # If we have a dirichlet boundary, save our function
@@ -455,21 +486,24 @@ cdef class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
                     if b[1][0] == 0:
                         B.dirichlet[1] =  b[1][1]
 
-                # Give the operator the right coefficient
-                # Here we wrap the functions with the appropriate values for
-                # this particular dimension.
+
+
+            # Give the operator the right coefficient
+            # Here we wrap the functions with the appropriate values for
+            # this particular dimension.
+            # for a in argset:
                 if d in coeffs:
-                    B.vectorized_scale(evalvectorfunc(coeffs[d], a, dim))
-                Bs.append(B)
-            self.simple_operators[d] = flatten_tensor_aligned(Bs, check=False)
+                    B.vectorized_scale(self.evalvectorfunc(coeffs[d], a, dim))
+                ColumnOperators.append(B)
+            self.simple_operators[d] = flatten_tensor_aligned(ColumnOperators, check=False)
 
 
             # Combine scaled derivatives for this dimension
             if dim not in self.operators:
-                self.operators[dim] = Bs
+                self.operators[dim] = ColumnOperators
             else:
                 ops = self.operators[dim] # list reference
-                for col, b in enumerate(Bs):
+                for col, b in enumerate(ColumnOperators):
                     assert b.axis == dim
                     if tuple(ops[col].D.offsets) == tuple(b.D.offsets):
                         ops[col] += b
@@ -483,8 +517,8 @@ cdef class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
         # Also, this gets plowed during the solve steps if we have dirichlet
         # boundaries
         if () in coeffs:
-            for Bs in self.operators.values():
-                for B in Bs:
+            for ColumnOperators in self.operators.values():
+                for B in ColumnOperators:
                     B += coeffs[()](self.t) / float(ndim)
 
         # Handle the mixed derivatives. Not very DRY, refactor someday?
@@ -507,7 +541,7 @@ cdef class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
 
             # If we were doing mixed derivatives here, we'd have to do splicing
             # now at the meta-operator level.
-            # Bs = self.make_operator_template(d, dim=d[0])
+            # ColumnOperators = self.make_operator_template(d, dim=d[0])
             # Bm1 = self.make_operator_template(d, dim=d[1])
             # TODO: We'll need to do complicated transposing for this in the
             # general case
@@ -528,7 +562,7 @@ cdef class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
                     for i in range(Bs.shape[0]-o):
                         # print "(%i, %i)" % (row, i+o), "Block", i, i+o, "*", Bs.data[row, i+o]
                         a = (np.array(self.grid.mesh[0][i]).repeat(d1_size),)
-                        vec = evalvectorfunc(coeffs[d], a, 1)
+                        vec = self.evalvectorfunc(coeffs[d], a, 1)
                         # print "= high"
                         # fp(data[row][i+o])
                         data[row][i+o].vectorized_scale(vec)
@@ -539,7 +573,7 @@ cdef class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
                     for i in range(abs(o), Bs.shape[0]):
                         # print "(%i, %i)" % (row, i-abs(o)), "Block", i, i-abs(o), "*", Bs.data[row, i-abs(o)]
                         a = (np.array(self.grid.mesh[0][i]).repeat(d1_size),)
-                        vec = evalvectorfunc(coeffs[d], a, 1)
+                        vec = self.evalvectorfunc(coeffs[d], a, 1)
                         # print "= low"
                         # fp(data[row][i-abs(o)])
                         data[row][i-abs(o)].vectorized_scale(vec)
@@ -566,7 +600,10 @@ cdef class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
                 self.operators[d] = flatten_tensor_misaligned(self.operators[d])
         return
 
+
     def cross_term(self, V, numpy=True):
+        """Apply the cross derivative operator, either using Numpy's gradient()
+        or our own matrix."""
         if (0,1) in self.coefficients:
             if numpy:
                 x = self.grid.mesh[0]
