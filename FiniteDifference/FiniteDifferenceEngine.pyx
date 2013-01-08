@@ -205,6 +205,10 @@ class FiniteDifferenceEngineADE(FiniteDifferenceEngine):
 FiniteDifferenceEngineADE.solve = MethodType(BO.solve, None, FiniteDifferenceEngineADE)
 
 def initialized(f):
+    """Create compound operators and initialize the underlying FiniteDifferenceEngine.
+    Under normal circumstances, this is called automatically. If you want to
+    access the operators before they are used, you must call this yourself to
+    create them."""
     def newf(self, *args, **kwargs):
         if not self._initialized:
             FiniteDifferenceEngine.__init__(self, self.grid, coefficients=self.coefficients,
@@ -212,6 +216,7 @@ def initialized(f):
             self.make_discrete_operators()
             self._initialized = True
         return f(self, *args, **kwargs)
+    newf.__name__ = f.__name__
     return newf
 
 cdef class FiniteDifferenceEngineADI(FiniteDifferenceEngine):

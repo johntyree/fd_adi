@@ -141,85 +141,32 @@ cdef class BandedOperator(object):
         return B
 
 
-    def apply(self, V, overwrite=False):
-        if not overwrite:
-            V = V.copy()
-        t = range(V.ndim)
-        utils.rolllist(t, self.axis, V.ndim-1)
-        V = np.transpose(V, axes=t)
-
-        if self.dirichlet[0] is not None:
-            # print "Setting V[0,:] to", self.dirichlet[0]
-            V[...,0] = self.dirichlet[0]
-        if self.dirichlet[1] is not None:
-            # print "Setting V[-1,:] to", self.dirichlet[-1]
-            V[...,-1] = self.dirichlet[1]
-
-
-        if self.R is not None:
-            ret = self.D.dot(V.flat) + self.R
-        else:
-            ret = self.D.dot(V.flat)
-
-        ret = ret.reshape(V.shape)
-
-        t = range(V.ndim)
-        utils.rolllist(t, V.ndim-1, self.axis)
-        ret = np.transpose(ret, axes=t)
-
-        return ret
-
-    def solve(self, V, overwrite=False):
-        if not overwrite:
-            V = V.copy()
-        t = range(V.ndim)
-        utils.rolllist(t, self.axis, V.ndim-1)
-        V = np.transpose(V, axes=t)
-
-        if self.dirichlet[0] is not None:
-            V[...,0] = self.dirichlet[0]
-        if self.dirichlet[1] is not None:
-            V[...,-1] = self.dirichlet[1]
-
-        if self.R is not None:
-            V0 = V.flat - self.R
-        else:
-            V0 = V
-
-        ret = spl.solve_banded(self.solve_banded_offsets,
-                self.D.data, V0.flat,
-                overwrite_ab=overwrite, overwrite_b=True).reshape(V.shape)
-
-        t = range(V.ndim)
-        utils.rolllist(t, V.ndim-1, self.axis)
-        ret = np.transpose(ret, axes=t)
-
-        return ret
-
-
     def diagonalize(self):
         assert (self.D.offsets == (2, 1, 0, -1, -2)).all()
         self.foldtop()
         self.foldbottom()
         self.D = scipy.sparse.dia_matrix((self.D.data[1:-1], self.D.offsets[1:-1]), shape=self.shape)
+        self.solve_banded_offsets = (1,1)
 
 
     def undiagonalize(self):
         assert (self.D.offsets == (1, 0, -1)).all()
-        data = np.zeros((5, self.D.shape[0]))
+        data = np.zeros((5, self.shape[0]))
         offsets = (2, 1, 0, -1, -2)
         data[1:-1] = self.D.data
         self.D = scipy.sparse.dia_matrix((data, offsets), shape=self.shape)
         self.foldtop(unfold=True)
         self.foldbottom(unfold=True)
+        self.solve_banded_offsets = (abs(min(offsets)), abs(max(offsets)))
 
 
     def foldbottom(self, unfold=False):
         d = self.D.data
         blocks = self.blocks
         block_len = self.shape[0] // blocks
-        self.bottom_factors = np.empty(blocks)
         m = get_int_index(self.D.offsets, 0)
+        if not unfold:
+            self.bottom_factors = np.empty(blocks)
         for b in range(blocks):
             cn1 = m-1, (b+1)*block_len - 1
             bn  = m,   (b+1)*block_len - 1
@@ -239,15 +186,17 @@ cdef class BandedOperator(object):
                 d[zn] += d[an1] * self.bottom_factors[b]
                 d[an] += d[bn1] * self.bottom_factors[b]
                 d[bn] += d[cn1] * self.bottom_factors[b]
+        if unfold:
+            self.bottom_factors = None
 
 
     def foldtop(self, unfold=False):
         d = self.D.data
         blocks = self.blocks
         block_len = self.shape[0] // blocks
-
         m = get_int_index(self.D.offsets, 0)
-        self.top_factors = np.empty(blocks)
+        if not unfold:
+            self.top_factors = np.empty(blocks)
         for b in range(blocks):
             a1 = m+1, b*block_len
             b0 = m,   b*block_len
@@ -267,6 +216,8 @@ cdef class BandedOperator(object):
                 d[d0] += d[c1] * self.top_factors[b]
                 d[c0] += d[b1] * self.top_factors[b]
                 d[b0] += d[a1] * self.top_factors[b]
+        if unfold:
+            self.top_factors = None
 
 
     def fold_vector(self, vec, unfold=False):
@@ -279,7 +230,7 @@ cdef class BandedOperator(object):
             u1 = u0 + 1
             un = (b+1)*block_len - 1
             un1 = un - 1
-            print "[%f, %f .. %f, %f]" % (v[u0], v[u1], v[un1], v[un])
+            # print "[%f, %f .. %f, %f]" % (v[u0], v[u1], v[un1], v[un])
             if unfold:
                 v[u0] -= v[u1]  * self.top_factors[b]
                 v[un] -= v[un1] * self.bottom_factors[b]
@@ -289,7 +240,11 @@ cdef class BandedOperator(object):
         return v
 
 
-    def tri_apply(self, V, overwrite=False):
+    cdef inline cbool is_folded(self):
+        return self.top_factors is not None or self.bottom_factors is not None
+
+
+    def apply(self, V, overwrite=False):
         if not overwrite:
             V = V.copy()
         t = range(V.ndim)
@@ -303,14 +258,17 @@ cdef class BandedOperator(object):
             # print "Setting V[-1,:] to", self.dirichlet[-1]
             V[...,-1] = self.dirichlet[1]
 
-        self.diagonalize()
-
-        ret = self.fold_vector(self.D.dot(V.flat), unfold=True)
+        if self.is_folded():
+            # self.diagonalize()
+            ret = self.fold_vector(self.D.dot(V.flat), unfold=True)
+        else:
+            ret = self.D.dot(V.flat)
 
         if self.R is not None:
             ret += self.R
 
-        self.undiagonalize()
+        # if self.is_folded():
+            # self.undiagonalize()
 
         ret = ret.reshape(V.shape)
 
@@ -321,7 +279,7 @@ cdef class BandedOperator(object):
         return ret
 
 
-    def tri_solve(self, V, overwrite=False):
+    def solve(self, V, overwrite=False):
         if not overwrite:
             V = V.copy()
         t = range(V.ndim)
@@ -333,20 +291,21 @@ cdef class BandedOperator(object):
         if self.dirichlet[1] is not None:
             V[...,-1] = self.dirichlet[1]
 
-        self.diagonalize()
-
         if self.R is not None:
             V0 = V.flat - self.R
         else:
             V0 = V
 
-        V0 = self.fold_vector(V0)
+        if self.is_folded():
+            # self.diagonalize()
+            V0 = self.fold_vector(V0)
 
         ret = spl.solve_banded(self.solve_banded_offsets,
                 self.D.data, V0.flat,
                 overwrite_ab=overwrite, overwrite_b=True).reshape(V.shape)
 
-        self.undiagonalize()
+        if self.is_folded():
+            self.undiagonalize()
 
         t = range(V.ndim)
         utils.rolllist(t, V.ndim-1, self.axis)
