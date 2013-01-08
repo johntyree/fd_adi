@@ -841,8 +841,8 @@ cdef class BandedOperator(object):
         # Don't touch the residual.
         return B
 
-
-    @cython.boundscheck(False)
+    #TODO
+    #@cython.boundscheck(False)
     def vectorized_scale(self, REAL_t[:] vector):
         """
         @vector@ is the correpsonding mesh vector of the current dimension.
@@ -860,47 +860,32 @@ cdef class BandedOperator(object):
         cdef unsigned int noffsets = len(self.D.offsets)
         cdef signed int o
         cdef unsigned int i, j, begin, end, vbegin
+
         if blocks > 1 and vector.shape[0] == block_len:
             vector = np.tile(vector, self.blocks)
         assert vector.shape[0] == operator_rows
+
         cdef cbool low_dirichlet = self.dirichlet[0] is not None
         cdef cbool high_dirichlet = self.dirichlet[1] is not None
-        for row in range(noffsets):
-            o = offsets[row]
-            while block_len / 2 < o:
-                o -= block_len
-            while o < block_len / -2:
-                o += block_len
-            vbegin = begin = 0
-            vend = end = block_len
-            if o >= 0:
-                begin = o + low_dirichlet
-                vbegin = low_dirichlet
-                vend -= o
-            if o <= 0:
-                end += o - high_dirichlet
-                vbegin -= o
-                vend -= high_dirichlet
-            vbegin = vbegin - begin
-            for i in range(blocks):
-                for j in range(begin, end):
-                    data[row, j] *= vector[j+vbegin]
-                begin += block_len
-                end += block_len
 
         if low_dirichlet:
-            begin = 1
-        else:
-            begin = 0
+            for b in range(blocks):
+                vector[b*block_len] = 1
         if high_dirichlet:
-            end = block_len - 1
-        else:
-            end = block_len
-        for i in range(blocks):
-            for j in range(begin, end):
-                R[j] *= vector[j]
-            begin += block_len
-            end += block_len
+            for b in range(blocks):
+                vector[(b+1)*block_len - 1] = 1
+
+        for row in range(noffsets):
+            o = offsets[row]
+            if o >= 0: # upper diags
+                for i in range(operator_rows - o):
+                    data[row, i+o] *= vector[i]
+            else: # lower diags
+                for i in range(-o, operator_rows):
+                    data[row, i+o] *= vector[i]
+
+        for i in range(operator_rows):
+            R[i] *= vector[i]
         return
 
 
