@@ -51,7 +51,6 @@ cdef class FiniteDifferenceEngine(object):
     cdef public simple_operators
 
     def __init__(self, grid, coefficients={}, boundaries={}, schemes={}):
-    # def __init__(self, grid, coefficients={}, boundaries={}, schemes={}, force_bandwidth=None):
         """
         @coefficients@ is a dict of tuple, function pairs with c[i,j] referring to the
         coefficient of the i j derivative, dU/didj. Absent pairs are counted as zeros.
@@ -138,7 +137,6 @@ cdef class FiniteDifferenceEngine(object):
         self.coefficients = coefficients
         self.boundaries = boundaries
         self.schemes = dict(schemes)
-        # self.force_bandwidth = force_bandwidth
         self.t = 0
         self.default_scheme = 'center'
         self.default_order = 2
@@ -168,6 +166,7 @@ class FiniteDifferenceEngineADE(FiniteDifferenceEngine):
         FiniteDifferenceEngine.__init__(self, self.grid, coefficients=self.coefficients,
                 boundaries=self.boundaries, schemes=self.schemes)
 
+
     def initialized(f):
         def newf(self, *args, **kwargs):
             if not self._initialized:
@@ -176,7 +175,8 @@ class FiniteDifferenceEngineADE(FiniteDifferenceEngine):
         return newf
 
 
-    # def solve_exp(self, n, dt, bfunc):
+    def solve_exp(self, n, dt, bfunc):
+        """What is this doing? Who knows!? Not you."""
         # n = int(n)
         # dx = self.grid.dx[0][1]
         # mu = self.mu / (2*dx)
@@ -201,8 +201,48 @@ class FiniteDifferenceEngineADE(FiniteDifferenceEngine):
             # v[-1] = bfunc(t, -1)
             # self.grid.domain.append(v)
         # return v
+        pass
 
-FiniteDifferenceEngineADE.solve = MethodType(BO.solve, None, FiniteDifferenceEngineADE)
+
+    def solve(self, n, dt):
+        n = int(n)
+        cdef double dx = self.grid.dx[0][1]
+        cdef double[:] mu = self.mu / (2*dx)
+        cdef double[:] gamma2 = self.gamma2 / (dx*dx)
+        cdef double r = self.r
+        cdef double [:] v
+        cdef int i, t
+        for t in range(1, n+1):
+            # Loop over interior
+            vm = self.grid.domain[-1]
+            v = np.zeros_like(vm, dtype=float)
+            for i in range(v.shape[0]-2, 0, -1):
+                v[i] =((
+                    dt * (gamma2[i] + mu[i]) * v[i+1]
+                    + dt * (gamma2[i] - mu[i]) * vm[i-1]
+                    + (1 - dt * r - dt * gamma2[i] + dt * mu[i]) *vm[i])
+                / (1 + dt * (gamma2[i] + mu[i]))
+            )
+            duds = mu[-1] * self.grid.mesh[0][-1]
+            d2uds = gamma2[-1]*(self.grid.mesh[0][-1]*2*dx + 2*vm[-2] - 2*vm[-1])
+            v[-1] = vm[-1] + dt*(duds + d2uds + -r*vm[-1])
+            v1 = np.asarray(v)
+
+            # Loop over interior
+            v = np.zeros_like(vm, dtype=float)
+            duds = mu[-1] * self.grid.mesh[0][-1]
+            d2uds = gamma2[-1]*(self.grid.mesh[0][-1]*2*dx + 2*vm[-2] - 2*vm[-1])
+            v[-1] = vm[-1] + dt*(duds + d2uds + -r*vm[-1])
+            for i in range(1, v.shape[0]-1):
+                v[i] = ((vm[i]
+                        - dt * r*vm[i]
+                        - dt * mu[i]     * (v[i-1] + vm[i] - vm[i+1])
+                        + dt * gamma2[i] * (v[i-1] - vm[i] + vm[i+1]))
+                    / (1 + dt*gamma2[i] - dt*mu[i]))
+            v2 = np.asarray(v)
+            v = (v1+v2)/2
+            self.grid.domain.append(v)
+        return self.grid.domain[-1]
 
 def initialized(f):
     """Create compound operators and initialize the underlying FiniteDifferenceEngine.
@@ -385,9 +425,6 @@ cdef class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
             Binit = self.make_operator_template(d, dim,
                     force_bandwidth=(low, high))
             assert Binit.axis == dim, "Binit.axis %s, dim %s" % (Binit.axis, dim)
-            # if dim == 1:
-                # print Binit.D.data
-                # print
             offs = Binit.D.offsets
             assert max(offs) >= high, "(%s < %s)" % (max(offs), high)
             assert min(offs) <= low,  "(%s > %s)" % (min(offs), low)
@@ -417,20 +454,6 @@ cdef class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
                         B.dirichlet[0] =  b[0][1]
                     if b[1][0] == 0:
                         B.dirichlet[1] =  b[1][1]
-
-
-                    # If it's a dirichlet boundary we mark it because we have to
-                    # handle it absolutely last, it doesn't get scaled.
-                    # lf = hf = None
-                    # if B.dirichlet[0] is not None:
-                        # lf = lowfunc
-                    # if B.dirichlet[1] is not None:
-                        # hf = highfunc
-                    # if lf or hf:
-                        # vals = dirichlets.setdefault(dim, [])
-                        # vals.append((lval, hval))
-                else:
-                    raise ValueError("%s has no boundary condition specified." % d)
 
                 # Give the operator the right coefficient
                 # Here we wrap the functions with the appropriate values for
@@ -535,23 +558,9 @@ cdef class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
 
         # Dirichlet boundaries are handled in the apply and solve methods.
 
-        # # Now everything else is done we can apply dirichlet boundaries
-        # for (dim, funcs) in dirichlets.items():
-            # # For each operator in this dimension
-            # for i, B in enumerate(self.operators[dim]):
-                # m = tuple(B.D.offsets).index(0)
-                # lowfunc, highfunc = funcs[i]
-                # if lowfunc:
-                    # # Cancel out the old value
-                    # # B.D.data[m, 0] = -1
-                    # # Replace with the new one
-                    # B.R[0] = lowfunc(0)
-                # if highfunc:
-                    # # B.D.data[m, -1] = -1
-                    # B.R[-1] = highfunc(-1)
-
         # Flatten into one large operator for speed
-        # We'll apply this to a flattened domain and then reshape it.
+        # The apply and solve methods will flatten the domain (V.flat) and then
+        # reshape it.
         for d in self.operators.keys():
             if isinstance(self.operators[d], list):
                 self.operators[d] = flatten_tensor_misaligned(self.operators[d])
@@ -584,11 +593,6 @@ cdef class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
             V = self.grid.domain[-1].copy()
             self.grid.domain.append(V)
 
-        # for d, o in self.operators.items():
-            # print d
-            # fp(o)
-            # print
-
         Lis = [(o * -dt).add(1, inplace=True)
                for d, o in sorted(self.operators.iteritems())
                if type(d) != tuple]
@@ -610,7 +614,6 @@ cdef class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
             V += self.cross_term(V, numpy=numpy) * dt
             for L in Lis:
                 V = L.solve(V)
-            # self.grid.domain.append(V.copy())
         utils.toc(':  \t')
         self.grid.domain.append(V.copy())
         return V
@@ -623,11 +626,6 @@ cdef class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
         else:
             V = self.grid.domain[-1].copy()
             self.grid.domain.append(V)
-
-        # for d, o in self.operators.items():
-            # print d
-            # fp(o)
-            # print
 
         Ls = [(o * dt)
                for d, o in sorted(self.operators.iteritems())
@@ -649,8 +647,8 @@ cdef class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
             V += self.cross_term(V, numpy=numpy) * dt
             for L in Ls:
                 V += L.apply(V)
-            self.grid.domain.append(V.copy())
         utils.toc(':  \t')
+        self.grid.domain.append(V.copy())
         return V
 
 
@@ -888,47 +886,6 @@ cdef class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
 
 
     @initialized
-    def solve_john_adi(self, n, dt, initial=None, callback=None, numpy=False):
-        #TODO: I don't think this satisfies... well.. anything.
-        theta = 0.5
-        n = int(n)
-        if initial is not None:
-            V = initial.copy()
-        else:
-            V = self.grid.domain[0].copy()
-            self.grid.domain.append(V)
-
-        Les = [(o * ((1-theta)*dt)).add(1, inplace=True)
-               for d, o in sorted(self.operators.iteritems())
-               if type(d) != tuple]
-        Lis = [(o * (-theta*dt)).add(1, inplace=True)
-               for d, o in sorted(self.operators.iteritems())
-               if type(d) != tuple]
-
-        Leis = zip(Les, Lis)
-
-        print_step = max(1, int(n / 10))
-        to_percent = 100.0 / n
-        utils.tic("solve_john_adi:\t")
-        for k in range(n):
-            if not k % print_step:
-                if np.isnan(V).any():
-                    print "solve_john_adi fail @ t = %f (%i steps)" % (dt * k, k)
-                    return V
-                print int(k * to_percent),
-                sys.stdout.flush()
-            if callback is not None:
-                callback(V, ((n - k) * dt))
-            for Le, Li in Leis:
-                V = Le.apply(V)
-                V += self.cross_term(V, numpy=numpy) * 0.5 * dt
-                V = Li.solve(V)
-        utils.toc(':  \t')
-        self.grid.domain.append(V.copy())
-        return V
-
-
-    @initialized
     def solve_smooth(self, n, dt, initial=None, callback=None, smoothing_steps=2,
             scheme=None):
         if scheme is None:
@@ -988,11 +945,5 @@ def flatten_tensor_misaligned(mats):
     return B
 
 
-
-def main():
-    """Run main."""
-
-    return 0
-
 if __name__ == '__main__':
-    main()
+    print "This is just a library."
