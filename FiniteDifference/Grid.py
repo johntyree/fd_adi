@@ -29,11 +29,16 @@ class Grid(object):
                 assert(all(s == s[0])), s
         self._mesh = mesh
         self.domain = []
+        self.ndim = len(mesh)
         self.shape = tuple(len(m) for m in mesh)
+
         if len(mesh) == 1:
             self.domain.append(initializer(*mesh))
         else:
             self.domain.append(initializer(*(x.T for x in np.meshgrid(*mesh))))
+        if np.isscalar(self.domain[-1]):
+            self.domain[-1] *= np.ones(self.shape)
+
         self.dx = [np.hstack((np.nan, np.diff(m))) for m in mesh]
 
         self.initializer = initializer
