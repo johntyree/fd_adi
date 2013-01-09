@@ -314,7 +314,7 @@ cdef class BandedOperator(object):
         return ret
 
 
-    @cython.boundscheck(False)
+    # @cython.boundscheck(False)
     def applyboundary(self, boundary, mesh):
         """
         @boundary@ is a tuple from FiniteDifferenceEngine.boundaries.
@@ -749,9 +749,10 @@ cdef class BandedOperator(object):
             fail = False
             if selfoffsets.shape[0] != otheroffsets.shape[0]:
                 fail = True
-            for i in range(num_otheroffsets):
-                if otheroffsets[i] != selfoffsets[i]:
-                    fail = True
+            else:
+                for i in range(num_otheroffsets):
+                    if otheroffsets[i] != selfoffsets[i]:
+                        fail = True
             if fail:
                 print "Self offsets:", self.D.offsets
                 print "Them offsets:", other.D.offsets
@@ -842,7 +843,7 @@ cdef class BandedOperator(object):
         return B
 
     #TODO
-    #@cython.boundscheck(False)
+    # @cython.boundscheck(False)
     def vectorized_scale(self, REAL_t[:] vector):
         """
         @vector@ is the correpsonding mesh vector of the current dimension.
@@ -932,7 +933,7 @@ cdef inline int sign(int i):
     else:
         return 1
 
-@cython.boundscheck(False)
+# @cython.boundscheck(False)
 cdef inline unsigned int get_real_index(REAL_t[:] haystack, REAL_t needle):
     cdef unsigned int length = haystack.shape[0]
     for i in range(length):
@@ -941,7 +942,7 @@ cdef inline unsigned int get_real_index(REAL_t[:] haystack, REAL_t needle):
     raise ValueError("Value not in array: %s" % needle)
 
 
-@cython.boundscheck(False)
+# @cython.boundscheck(False)
 cdef inline unsigned int get_int_index(int[:] haystack, int needle):
     cdef unsigned int length = haystack.shape[0]
     for i in range(length):
