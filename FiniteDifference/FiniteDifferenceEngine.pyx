@@ -37,6 +37,9 @@ DEBUG = False
 
 from Option import Option
 
+REAL = np.float64
+ctypedef np.float64_t REAL_t
+
 cdef class FiniteDifferenceEngine(object):
     cdef public shape
     cdef public ndim
@@ -393,13 +396,16 @@ cdef class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
         return vec
 
 
-    def coefficient_vector(self, f, t, dims):
+    def coefficient_vector(self, f, t, dim):
         """Evaluate f with the cartesian product of the elements of
-        self.grid.mesh, ordered by dims. The first dim is the fastest varying
-        (column major).
+        self.grid.mesh, ordered such that dim is the fastest varying. The
+        relative order of the other dimensions remains the same.
+
         Example (actual implementation is vectorized):
             mesh = [(1,2,3), (4,5,6), (7,8,9)]
-            dims = (2,0,1)
+            dim = 1
+            newmesh = [(4,5,6), (1,2,3), (7,8,9)]
+            [f(4,1,7), f(5,1,7), ..., f(4,2,7), f(5,2,7), ..., f(5,3,9), f(6,3,9)]
             output = [f(a,b,c)
                         for b in mesh[1]
                         for a in mesh[0]
@@ -407,10 +413,17 @@ cdef class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
                         ]
         """
         gridsize = self.grid.size
-        mesh = self.grid.mesh[dims]
+        mesh = list(self.grid.mesh)
+        m = mesh.pop(dim)
+        mesh.append(m)
         # This can be rewritten with repeat and tile, not sure if faster
-        args = np.fromiter(it.chain(*it.izip(*it.product(*mesh))), float).reshape(mesh.shape[0], gridsize)
+        args = np.fromiter(it.chain(*it.izip(*it.product(*mesh))), float)
+        args = np.split(args, self.grid.ndim)
+        m = args.pop()
+        args.insert(dim, m)
         ret = f(t, *iter(args))
+        if np.isscalar(ret):
+            ret = np.repeat(<float>ret, gridsize)
         return ret
 
 
@@ -458,10 +471,13 @@ cdef class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
         force_bandwidth = self.force_bandwidth
         dirichlets = {}
         templates, mixed = self.make_operator_templates(force_bandwidth)
+        TESTER2 = {}
 
         for d, Binit in templates.items():
             dim = d[0]
             ColumnOperators = []
+            TESTER = []
+            SCALEVECTORS = []
             # Take cartesian product of other dimension values
             otherdims = range(ndim)
             otherdims.remove(dim)
@@ -492,15 +508,27 @@ cdef class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
             # Here we wrap the functions with the appropriate values for
             # this particular dimension.
             # for a in argset:
+                TESTER.append(B.copy())
                 if d in coeffs:
                     B.vectorized_scale(self.evalvectorfunc(coeffs[d], a, dim))
+                    SCALEVECTORS.append(self.evalvectorfunc(coeffs[d], a, dim))
                 ColumnOperators.append(B)
-            self.simple_operators[d] = flatten_tensor_aligned(ColumnOperators, check=False)
+            self.simple_operators[d] = flatten_tensor_aligned(ColumnOperators, check=True)
+
+            B2 = flatten_tensor_aligned(TESTER, check=True)
+            if d in coeffs:
+                full = self.coefficient_vector(coeffs[d], 0, dim)
+                blocky = np.hstack(SCALEVECTORS)
+                np.testing.assert_array_equal(blocky, full)
+                B2.vectorized_scale(self.coefficient_vector(coeffs[d], 0, dim))
+            np.testing.assert_array_equal(self.simple_operators[d].D.data, B2.D.data)
+            assert self.simple_operators[d] == B2
 
 
             # Combine scaled derivatives for this dimension
             if dim not in self.operators:
                 self.operators[dim] = ColumnOperators
+                TESTER2[dim] = B2
             else:
                 ops = self.operators[dim] # list reference
                 for col, b in enumerate(ColumnOperators):
@@ -511,7 +539,15 @@ cdef class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
                         # print col, dim, ops[col].axis, b.axis
                         ops[col] = ops[col] + b
 
-        # Now the 0th derivative (x * V)
+                if tuple(TESTER2[dim].D.offsets) == tuple(self.simple_operators[d].D.offsets):
+                    TESTER2[dim] += self.simple_operators[d]
+                else:
+                    # print col, dim, TESTER2[dim].axis, self.simple_operators[dim].axis
+                    TESTER2[dim] = TESTER2[dim] + self.simple_operators[d]
+
+
+
+        # Now the 0th derivative (r * V)
         # We split this evenly among each dimension
         #TODO: This function is ONLY dependent on time. NOT MESH
         # Also, this gets plowed during the solve steps if we have dirichlet
@@ -520,6 +556,8 @@ cdef class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
             for ColumnOperators in self.operators.values():
                 for B in ColumnOperators:
                     B += coeffs[()](self.t) / float(ndim)
+            for op in TESTER2.values():
+                    op += coeffs[()](self.t) / float(ndim)
 
         # Handle the mixed derivatives. Not very DRY, refactor someday?
         # iters over keys by default
@@ -598,6 +636,15 @@ cdef class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
         for d in self.operators.keys():
             if isinstance(self.operators[d], list):
                 self.operators[d] = flatten_tensor_misaligned(self.operators[d])
+
+        x = dict(self.operators)
+        if (0,1) in x:
+            x.pop((0,1))
+        for k in x:
+            # print "Key: ", k
+            # fp(x[k].D.todense() -  TESTER2[k].D.todense(), 'e')
+            # np.testing.assert_array_equal(x[k].D.data, TESTER2[k].D.data)
+            assert x[k] == TESTER2[k]
         return
 
 
@@ -946,11 +993,15 @@ def flatten_tensor_aligned(mats, check=True):
     residual = np.hstack([x.R for x in mats])
     diags = np.hstack([x.D.data for x in mats])
     B = BandedOperator((diags, mats[0].D.offsets), residual=residual)
-    B.copy_meta_data(mats[0], dirichlet=mats[0].dirichlet, derivative=None)
-    B.dirichlet = list(zip(*(m.dirichlet for m in mats)))
-    for i, bound in enumerate(mats[0].dirichlet):
-        if bound is None:
-            B.dirichlet[i] = None
+    # TODO: Not sure why I set derivative to be None. Passes tests without it.
+    # Need derivative to be copied for making blockwise ops.
+    # B.copy_meta_data(mats[0], dirichlet=mats[0].dirichlet, derivative=None)
+    B.copy_meta_data(mats[0])
+    if len(mats) > 1:
+        B.dirichlet = list(zip(*(m.dirichlet for m in mats)))
+        for i, bound in enumerate(mats[0].dirichlet):
+            if bound is None:
+                B.dirichlet[i] = None
     B.blocks = len(mats)
     return B
 
@@ -972,12 +1023,11 @@ def flatten_tensor_misaligned(mats):
     residual = np.hstack([x.R for x in mats])
     B = BandedOperator((newdata, offsets), residual=residual)
     B.copy_meta_data(mats[0])
-    B.dirichlet = list(zip(*(m.dirichlet for m in mats)))
-    for i, bound in enumerate(mats[0].dirichlet):
-        if bound is None:
-            B.dirichlet[i] = None
-        else:
-            B.dirichlet[i] = np.array(B.dirichlet[i])
+    if len(mats) > 1:
+        B.dirichlet = list(zip(*(m.dirichlet for m in mats)))
+        for i, bound in enumerate(mats[0].dirichlet):
+            if bound is None:
+                B.dirichlet[i] = None
     B.blocks = len(mats)
     return B
 
