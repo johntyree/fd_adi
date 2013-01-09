@@ -26,6 +26,12 @@ from heston import HestonOption, HestonBarrierOption
 
 #TODO: npt.asserts for array tests
 
+def todia(A):
+    d = scipy.sparse.dia_matrix(A)
+    d.data = d.data[::-1]
+    d.offsets = d.offsets[::-1]
+    return d
+
 
 def test_numpy_transpose_vs_rollaxis():
     a = np.ones((3,1,4,2,0,5))
@@ -719,6 +725,31 @@ class FiniteDifferenceEngineADI_test(unittest.TestCase):
         self.F.init()
 
 
+    def test_coefficient_vector(self):
+        mesh = (np.arange(3), np.arange(10,12))
+        G = Grid.Grid(mesh, initializer=lambda *x: 0.0)
+        print G
+        F = FD.FiniteDifferenceEngineADI(G, coefficients={(0,1): lambda t, *x: 1})
+
+        op = self.F.operators[(0,1)]
+        op.D.data[op.D.data != 0] = op.D.data[op.D.data != 0]**0
+        op.D = todia(op.D)
+        diamat = op.D
+        densemat = diamat.todense()
+
+        f0 = lambda t, *x: x[0]
+        f1 = lambda t, *x: x[1]
+        f = lambda t, *x: x
+
+        vec = F.coefficient_vector(f, 0, 0)
+        ref = np.tile(mesh[0], G.shape[1]), np.repeat(mesh[1], G.shape[0])
+        npt.assert_array_equal(ref, vec, "Failed when focused on dim: %i", 0)
+
+        vec = F.coefficient_vector(f, 0, 1)
+        ref = np.repeat(mesh[0], G.shape[1]), np.tile(mesh[1], G.shape[0])
+        npt.assert_array_equal(ref, vec, "Failed when focused on dim: %i", 1)
+
+
     def test_combine_dimensional_operators(self):
         # raise unittest.case.SkipTest
         oldL1 = self.L1_.copy()
@@ -1056,50 +1087,6 @@ class Grid_test(unittest.TestCase):
         # print G
         # print U
         npt.assert_array_equal(G.domain[-1], U)
-
-
-class BandedOperatorGPU_test(unittest.TestCase):
-
-    def setUp(self):
-        k = 3.0
-        nspots = 7
-        spot_max = 1500.0
-        spotdensity = 7.0  # infinity is linear?
-        spots = utils.sinh_space(k, spot_max, spotdensity, nspots)
-        self.flip_idx = 4
-        self.vec = spots
-
-
-    def test_create(self):
-        vec = self.vec
-        last = len(vec)-1
-        idx = 1
-        d = np.hstack((np.nan, np.diff(vec)))
-        deltas = d
-        sch0 = 'center'
-        axis = 1
-        sch1 = 'center'
-        for dv in [1,2]:
-            oldX1 = utils.nonuniform_complete_coefficients(deltas, up_or_down=sch1, flip_idx=idx)[dv-1]
-            X1 = FD.BandedOperator.for_vector(vec, scheme=sch1, derivative=dv, order=2, axis=axis)
-
-            high, low = 1,-1
-            m = tuple(oldX1.offsets).index(0)
-            oldX1.data = oldX1.data[m-high:m-low+1]
-            oldX1.offsets = oldX1.offsets[m-high:m-low+1]
-
-            # print "old D.todense()"
-            # fp(oldX1.D.todense())
-            # print "new D.todense()"
-            # fp(X1.D.todense())
-            # print
-            # print X1.shape, oldX1.shape
-            # print (X1.D.offsets, oldX1.offsets),  "%s+%s (dv %i) idx %i" % (sch0, sch1, dv, idx)
-            assert X1.axis == axis
-            assert (X1.D.todense() == oldX1.todense()).all(),  "%s+%s (dv %i) idx %i" % (sch0, sch1, dv, idx)
-            assert (X1.D.offsets == oldX1.offsets).all(),  "%s+%s (dv %i) idx %i" % (sch0, sch1, dv, idx)
-            assert (X1.D.data.shape == oldX1.data.shape),  "%s+%s (dv %i) idx %i" % (sch0, sch1, dv, idx)
-            assert (X1.D.data == oldX1.data).all(),  "%s+%s (dv %i) idx %i" % (sch0, sch1, dv, idx)
 
 
 class BandedOperator_test(unittest.TestCase):
@@ -1561,6 +1548,125 @@ class ScalingFuncs(unittest.TestCase):
         assert newB == vecB
 
 
+    def test_block_vectorizedscale(self):
+        no_nan = np.nan_to_num
+        vec = self.vec
+        oldB = self.oldB
+        manualB = self.manualB
+        flag = int(1)
+        data = np.ones((5,len(vec)), dtype=float)*flag
+        data[0][:2] = 0
+        data[1][0] = 0
+        data[3][-1] = 0
+        data[4][-2:] = 0
+        offsets = [2,1,0,-1,-2]
+        res = np.ones_like(vec)
+
+        blocks = 3
+
+        blockvec = np.tile(vec, blocks)
+
+        newB = oldB.copy()
+        newB.scale(self.f0)
+        vecB = oldB.copy()
+        vecB.vectorized_scale(self.f0(vec))
+
+
+        npt.assert_array_equal(no_nan(newB.D.data), 0)
+        npt.assert_array_equal(no_nan(vecB.D.data), 0)
+
+        for dchlet in itertools.product([1, None], repeat=2):
+            oldB = FD.BandedOperator((data.copy(), offsets), res.copy())
+            oldB.dirichlet = dchlet
+
+            veczeroB = block_repeat(oldB, blocks)
+            veczeroB.vectorized_scale(self.f0(blockvec))
+            manualzeroB = np.zeros_like(oldB.D.data)
+            if veczeroB.dirichlet[0] is not None:
+                manualzeroB[0, 2] = flag
+                manualzeroB[1, 1] = flag
+                manualzeroB[2, 0] = flag
+            if veczeroB.dirichlet[1] is not None:
+                manualzeroB[2, -1] = flag
+                manualzeroB[3, -2] = flag
+                manualzeroB[4, -3] = flag
+            manualzeroB = np.tile(manualzeroB, blocks)
+
+            # print dchlet
+            # print
+            # print "veczeroB"
+            # fp(veczeroB.D.data)
+            # print
+            # print "manualzeroB"
+            # fp(manualzeroB)
+            # print
+
+            manualB = oldB.copy()
+            bottom = 0
+            top = last = manualB.shape[0]
+            if dchlet[0]:
+                bottom += 1
+            if dchlet[1]:
+                top -= 1
+            manualB.D.data[0][bottom+2:]  *= vec[bottom : last-2]+2
+            manualB.D.data[1][bottom+1:]  *= vec[bottom : last-1]+2
+            manualB.D.data[2][bottom:top] *= vec[bottom : top]+2
+            manualB.D.data[3][:top-1]     *= vec[1      : top]+2
+            manualB.D.data[4][:top-2]     *= vec[2      : top]+2
+            manualB.R[bottom:top]       *= vec[bottom:top]+2
+            manualB = block_repeat(manualB, blocks)
+
+            vecB = block_repeat(oldB, blocks)
+            vecB.vectorized_scale(self.fx(blockvec))
+
+            newB = block_repeat(oldB, blocks)
+            newB.scale(lambda i: blockvec[i]+2)
+            print "vec"
+            fp(vec)
+            print
+            print "manual"
+            fp(manualB.D.data)
+            print
+            print "newB"
+            fp(newB.D.data)
+            print
+            print "vecB"
+            fp(vecB.D.data)
+            print
+            print "manualR"
+            print manualB.R
+            print
+            print "vecR"
+            print vecB.R
+            print
+            print "newR"
+            print newB.R
+            print
+            print "manual"
+            fp(manualB.D)
+            print
+            print "newB"
+            fp(newB.D)
+            npt.assert_array_equal(veczeroB.D.data, manualzeroB)
+            npt.assert_(newB == vecB)
+            npt.assert_array_equal(manualB, newB)
+            npt.assert_array_equal(manualB, vecB)
+
+        newB = oldB.copy()
+        newB.scale(self.fcoeff)
+        vecB = oldB.copy()
+        vecB.vectorized_scale(self.coeff(len(vec)))
+        # print "new"
+        # fp(newB.data)
+        # print
+        # print "vec"
+        # fp(vecB.data)
+        # print
+        # print "newR"
+        # print newB.R
+        assert newB == vecB
+
+
     def test_scale_dirichlet(self):
         no_nan = np.nan_to_num
         vec = self.vec
@@ -1670,6 +1776,16 @@ class ScalingFuncs(unittest.TestCase):
         # print "newR"
         # print newB.R
         npt.assert_array_equal(manualB, newB)
+
+
+def block_repeat(B, blocks):
+    B = B.copy()
+    B.D = scipy.sparse.dia_matrix((np.tile(B.D.data, blocks), B.D.offsets), [x*blocks for x in B.shape])
+    B.R = np.tile(B.R, blocks)
+    B.blocks = blocks
+    B.shape = tuple(x*blocks for x in B.shape)
+    return B
+
 
 
 def main():
