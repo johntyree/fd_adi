@@ -26,7 +26,7 @@ ctypedef np.float64_t REAL_t
 
 cdef class BandedOperator(object):
 
-    attrs = ('derivative', 'order', 'axis', 'deltas', 'dirichlet', 'blocks')
+    attrs = ('derivative', 'order', 'axis', 'deltas', 'dirichlet', 'blocks', 'top_factors', 'bottom_factors')
 
     cdef public unsigned int blocks, order, axis
     cdef public D, R, deltas, dirichlet, solve_banded_offsets, derivative
@@ -69,6 +69,8 @@ cdef class BandedOperator(object):
         self.deltas = deltas if deltas is not None else np.array([np.nan])
         self.solve_banded_offsets = (abs(min(offsets)), abs(max(offsets)))
         self.dirichlet = [None, None]
+        self.top_factors = None
+        self.bottom_factors = None
         self.axis = axis
 
     def copy_meta_data(self, other, **kwargs):
@@ -84,17 +86,34 @@ cdef class BandedOperator(object):
         true = op == 2
         false = op == 3
 
-        no_nan = np.nan_to_num
+        def no_nan(x):
+            return np.array(0) if x is None else np.nan_to_num(x)
+
         for attr in self.attrs:
-            if attr == 'deltas':
+            if (   attr == 'deltas'
+                or attr == 'top_factors'
+                or attr == 'bottom_factors'):
                 continue
+            # print "%s:" % attr,  getattr(self, attr), getattr(other, attr)
             if getattr(self, attr) != getattr(other, attr):
+                print attr
+                print getattr(self, attr)
+                print getattr(other, attr)
                 return false
+        # print "Data", (self.D.data == other.D.data).all()
+        # print "offsets", (self.D.offsets == other.D.offsets).all()
+        # print "R", (self.R == other.R).all()
+        # print "deltas", (no_nan(self.deltas) == no_nan(other.deltas)).all()
+        # print "top_fact", (no_nan(self.top_factors) == no_nan(other.top_factors)).all()
+        # print "bot_fact", (no_nan(self.bottom_factors) == no_nan(other.bottom_factors)).all()
+        # print "shape", (self.shape == other.shape)
 
         if ((self.D.data == other.D.data).all()
                 and (self.D.offsets == other.D.offsets).all()
                 and (self.R == other.R).all()
                 and (no_nan(self.deltas) == no_nan(other.deltas)).all()
+                and (no_nan(self.top_factors) == no_nan(other.top_factors)).all()
+                and (no_nan(self.bottom_factors) == no_nan(other.bottom_factors)).all()
                 and (self.shape == other.shape)):
             return true
         else:
@@ -157,6 +176,8 @@ cdef class BandedOperator(object):
         self.foldtop(unfold=True)
         self.foldbottom(unfold=True)
         self.solve_banded_offsets = (abs(min(offsets)), abs(max(offsets)))
+        self.top_factors = None
+        self.bottom_factors = None
 
 
     def foldbottom(self, unfold=False):
