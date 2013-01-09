@@ -525,9 +525,9 @@ class FiniteDifferenceEngineADI_test(unittest.TestCase):
         spot_max = 1500.0
         var_max = 13.0
         nspots = 5
-        nvols = 6
+        nvols = 5
         spotdensity = 7.0  # infinity is linear?
-        varexp = 4
+        varexp = 5
 
         # TODO:!!!!XXX TODO XXX
         # var_max = nvols-1
@@ -749,25 +749,25 @@ class FiniteDifferenceEngineADI_test(unittest.TestCase):
         # oldL2.data = oldL2.data[1:]
         # oldL2.offsets = oldL2.offsets[1:]
 
-        # print "offsets"
-        # print oldL1.offsets, L1.D.offsets
-        # print "old"
-        # fp(oldL1.data)
-        # print
-        # print "new"
-        # fp(L1.D.data)
-        # print
-        # print "diff"
-        # fp(L1.D.data - oldL1.data)
-        # print
-        # print "old"
-        # fp(oldL1.todense())
-        # print
-        # print "new"
-        # fp(L1.D.todense())
-        # print
-        # print "diff"
-        # fp(oldL1.todense() - L1.D.todense())
+        print "offsets"
+        print oldL1.offsets, L1.D.offsets
+        print "old"
+        fp(oldL1.data)
+        print
+        print "new"
+        fp(L1.D.data)
+        print
+        print "diff"
+        fp(L1.D.data - oldL1.data)
+        print
+        print "old"
+        fp(oldL1.todense())
+        print
+        print "new"
+        fp(L1.D.todense())
+        print
+        print "diff"
+        fp(oldL1.todense() - L1.D.todense())
         npt.assert_allclose(L1.D.todense(), oldL1.todense())
         npt.assert_allclose(L1.D.data, oldL1.data)
         # print "old"
