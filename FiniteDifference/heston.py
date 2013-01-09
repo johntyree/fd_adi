@@ -292,16 +292,18 @@ class HestonFiniteDifferenceEngine(FiniteDifferenceEngineADI):
                 # return 0.5 * dim[1]
                 return 0.5 * dim[1] * dim[0]**2
             def mu_v(t, *dim):
-                if dim[0] == 0:
-                    ret = 0
-                else:
-                    ret = option.variance.reversion * (option.variance.mean - dim[1])
+                if np.isscalar(dim[0]):
+                    if dim[0] == 0:
+                        return 0
+                ret = option.variance.reversion * (option.variance.mean - dim[1])
+                ret[dim[0]==0] = 0
                 return ret
             def gamma2_v(t, *dim):
-                if dim[0] == 0:
-                    ret = 0
-                else:
-                    ret = 0.5 * option.variance.volatility**2 * dim[1]
+                if np.isscalar(dim[0]):
+                    if dim[0] == 0:
+                        return 0
+                ret = 0.5 * option.variance.volatility**2 * dim[1]
+                ret[dim[0]==0] = 0
                 return ret
             def cross(t, *dim):
                 # return option.correlation * option.variance.volatility * dim[1]
