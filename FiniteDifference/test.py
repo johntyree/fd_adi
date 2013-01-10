@@ -1056,9 +1056,6 @@ class FiniteDifferenceEngineADI_test(unittest.TestCase):
         npt.assert_array_almost_equal(d2gdxdy_scaled, manuald2gdxdy_scaled)
 
 
-
-
-
 class Grid_test(unittest.TestCase):
 
     def setUp(self):
