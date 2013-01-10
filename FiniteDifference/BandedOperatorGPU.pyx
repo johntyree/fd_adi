@@ -185,9 +185,13 @@ cdef class BandedOperator(object):
 
     def foldbottom(self, unfold=False):
         d = self.D.data
+        m = get_int_index(self.D.offsets, 0)
+        for i in [1, 0,-1, -2]:
+            if self.D.offsets[m-i] != i:
+                raise ValueError("Operator data is the wrong shape. Requires "
+                        "contiguous offsets (1, 0, -1, -2).")
         blocks = self.blocks
         block_len = self.shape[0] // blocks
-        m = get_int_index(self.D.offsets, 0)
         if not unfold:
             self.bottom_factors = np.empty(blocks)
         for b in range(blocks):
@@ -215,9 +219,13 @@ cdef class BandedOperator(object):
 
     def foldtop(self, unfold=False):
         d = self.D.data
+        m = get_int_index(self.D.offsets, 0)
+        for i in [2, 1, 0,-1]:
+            if self.D.offsets[m-i] != i:
+                raise ValueError("Operator data is the wrong shape. Requires "
+                        "contiguous offsets (2, 1, 0, -1).")
         blocks = self.blocks
         block_len = self.shape[0] // blocks
-        m = get_int_index(self.D.offsets, 0)
         if not unfold:
             self.top_factors = np.empty(blocks)
         for b in range(blocks):
