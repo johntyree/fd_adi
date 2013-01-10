@@ -157,18 +157,24 @@ cdef class BandedOperator(object):
 
 
     def diagonalize(self):
-        assert (self.D.offsets == (2, 1, 0, -1, -2)).all()
-        self.foldtop()
-        self.foldbottom()
-        self.D = scipy.sparse.dia_matrix((self.D.data[1:-1], self.D.offsets[1:-1]), shape=self.shape)
+        # This is an ugly heuristic
+        if 2 in self.D.offsets:
+            self.foldtop()
+        if -2 in self.D.offsets:
+            self.foldbottom()
         self.solve_banded_offsets = (1,1)
+        self.D = scipy.sparse.dia_matrix((self.D.data[1:-1], self.D.offsets[1:-1]), shape=self.shape)
 
 
     def undiagonalize(self):
-        assert (self.D.offsets == (1, 0, -1)).all()
         data = np.zeros((5, self.shape[0]))
-        offsets = (2, 1, 0, -1, -2)
-        data[1:-1] = self.D.data
+        offsets = np.array((2, 1, 0, -1, -2), dtype=np.int32)
+        selfoffsets = self.D.offsets
+        for i in range(selfoffsets.shape[0]):
+            o = selfoffsets[i]
+            fro = get_int_index(selfoffsets, o)
+            to = get_int_index(offsets, o)
+            data[to] += self.D.data[fro]
         self.D = scipy.sparse.dia_matrix((data, offsets), shape=self.shape)
         self.foldtop(unfold=True)
         self.foldbottom(unfold=True)
