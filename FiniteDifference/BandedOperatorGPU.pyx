@@ -94,29 +94,26 @@ cdef class BandedOperator(object):
                 or attr == 'top_factors'
                 or attr == 'bottom_factors'):
                 continue
-            # print "%s:" % attr,  getattr(self, attr), getattr(other, attr)
             if getattr(self, attr) != getattr(other, attr):
-                print attr
-                print getattr(self, attr)
-                print getattr(other, attr)
+                print "%s:" % attr,  getattr(self, attr), getattr(other, attr)
                 return false
-        # print "Data", (self.D.data == other.D.data).all()
-        # print "offsets", (self.D.offsets == other.D.offsets).all()
-        # print "R", (self.R == other.R).all()
-        # print "deltas", (no_nan(self.deltas) == no_nan(other.deltas)).all()
-        # print "top_fact", (no_nan(self.top_factors) == no_nan(other.top_factors)).all()
-        # print "bot_fact", (no_nan(self.bottom_factors) == no_nan(other.bottom_factors)).all()
-        # print "shape", (self.shape == other.shape)
 
-        if ((self.D.data == other.D.data).all()
+        if ((self.shape == other.shape)
                 and (self.D.offsets == other.D.offsets).all()
-                and (self.R == other.R).all()
-                and (no_nan(self.deltas) == no_nan(other.deltas)).all()
                 and (no_nan(self.top_factors) == no_nan(other.top_factors)).all()
                 and (no_nan(self.bottom_factors) == no_nan(other.bottom_factors)).all()
-                and (self.shape == other.shape)):
+                and (no_nan(self.deltas) == no_nan(other.deltas)).all()
+                and (self.R == other.R).all()
+                and (self.D.data == other.D.data).all()):
             return true
         else:
+            print "shape", (self.shape == other.shape)
+            print "offsets", (self.D.offsets == other.D.offsets).all()
+            print "top_fact", (no_nan(self.top_factors) == no_nan(other.top_factors)).all()
+            print "bot_fact", (no_nan(self.bottom_factors) == no_nan(other.bottom_factors)).all()
+            print "deltas", (no_nan(self.deltas) == no_nan(other.deltas)).all()
+            print "R", (self.R == other.R).all()
+            print "Data", (self.D.data == other.D.data).all()
             return false
 
 
