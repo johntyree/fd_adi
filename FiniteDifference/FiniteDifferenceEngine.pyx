@@ -429,44 +429,6 @@ cdef class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
     def make_operator_templates(self, force_bandwidth):
         templates = {}
         mixed_derivs = {}
-        coeffs = self.coefficients
-        # d = (0,0), for example ...
-        for d in coeffs.keys():
-            # Don't need an operator for the 0th derivative
-            if d == ():
-                continue
-
-            # Mixed derivatives are handled specially
-            mix = BandedOperator.check_derivative(d)
-            if mix:
-                mixed_derivs[d] = True
-                continue
-
-            dim = d[0]
-
-            # Make an operator template for this dimension
-            low, high = self.min_possible_bandwidth(d)
-            bw = force_bandwidth
-            # print "Minimum bandwidth for %s: %s" % (d, (low, high))
-            if bw:
-                if (bw[0] > low or bw[1] < high):
-                    raise ValueError("Your chosen scheme is too wide for the"
-                            " specified bandwidth. (%s needs %s)" %
-                            (bw, (low, high)))
-                low, high = bw
-            Binit = self.make_operator_template(d, dim,
-                                                force_bandwidth=(low, high))
-            assert Binit.axis == dim, "Binit.axis %s, dim %s" % (Binit.axis, dim)
-            offs = Binit.D.offsets
-            assert max(offs) >= high, "(%s < %s)" % (max(offs), high)
-            assert min(offs) <= low,  "(%s > %s)" % (min(offs), low)
-            templates[d] = Binit
-
-        return templates, mixed_derivs
-
-    def make_operator_templates2(self, force_bandwidth):
-        templates = {}
-        mixed_derivs = {}
         mixops = {}
         coeffs = self.coefficients
         bounds = self.boundaries
@@ -528,9 +490,11 @@ cdef class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
             Bs = replicate(self.grid.size / self.grid.shape[B.axis], B)
             Bs = flatten_tensor_aligned(Bs)
             if lowbound:
-                Bs.dirichlet[0] = tuple(lowbound)
+                Bs.dirichlet[0] = tuple(lowbound) if len(lowbound) > 1 else lowbound[0]
             if highbound:
-                Bs.dirichlet[1] = tuple(highbound)
+                Bs.dirichlet[1] = tuple(highbound) if len(highbound) > 1 else highbound[0]
+            # if not Bs.is_tridiagonal():
+                # Bs.diagonalize()
             templates[d] = Bs
 
         # TODO
@@ -600,7 +564,6 @@ cdef class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
         force_bandwidth = self.force_bandwidth
         dirichlets = {}
         templates, mixed = self.make_operator_templates(force_bandwidth)
-        templates2, mixed = self.make_operator_templates2(force_bandwidth)
         combined_ops = {}
         simple_ops = {}
 
@@ -654,190 +617,29 @@ cdef class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
                 assert op0 == op1
 
 
-        for d, Binit in templates.items():
-            # if d in mixed:
-                # continue
-            dim = d[0]
-            ColumnOperators = []
-            simple_column_ops = []
-            # Take cartesian product of other dimension values
-            otherdims = range(ndim)
-            otherdims.remove(dim)
-            argset = itertools.product(*(self.grid.mesh[i] for i in otherdims))
-            # Pair our current dimension with all combinations of the other
-            # dimension values
-            for a in argset:
-                # Make a new operator from our template
-                B = Binit.copy()
-
-                # Adjust the boundary conditions as necessary
-                if d in bounds:
-                    b = bounds[d]
-                    lowfunc  = self.wrapscalarfunc(b[0][1], a, dim)
-                    highfunc = self.wrapscalarfunc(b[1][1], a, dim)
-                    b = ((b[0][0], lowfunc(0)), (b[1][0], highfunc(-1)))
-
-                    B.applyboundary(b, self.grid.mesh)
-                    # If we have a dirichlet boundary, save our function
-                    if b[0][0] == 0:
-                        B.dirichlet[0] =  b[0][1]
-                    if b[1][0] == 0:
-                        B.dirichlet[1] =  b[1][1]
-
-
-            # Give the operator the right coefficient
-            # Here we wrap the functions with the appropriate values for
-            # this particular dimension.
-            # for a in argset:
-                simple_column_ops.append(B.copy())
-                if d in coeffs:
-                    B.vectorized_scale(self.evalvectorfunc(coeffs[d], a, dim))
-                ColumnOperators.append(B)
-            self.simple_operators[d] = flatten_tensor_aligned(ColumnOperators, check=True)
-
-            simple_ops[d] = flatten_tensor_aligned(simple_column_ops, check=True)
+        for d in templates:
+            simple_ops[d] = templates[d].copy()
+            dim = simple_ops[d].axis
             if d in coeffs:
                 simple_ops[d].vectorized_scale(self.coefficient_vector(coeffs[d], 0, dim))
 
-            check_operators("scaling {}".format(d))
-
-
-            # Combine scaled derivatives for this dimension
-            if dim not in self.operators:
-                self.operators[dim] = ColumnOperators
-                combined_ops[dim] = simple_ops[d].copy()
+            if d in mixed:
+                combined_ops[d] = simple_ops[d].copy()
             else:
-                ops = self.operators[dim] # list reference
-                for col, b in enumerate(ColumnOperators):
-                    assert b.axis == dim
-                    if tuple(ops[col].D.offsets) == tuple(b.D.offsets):
-                        ops[col] += b
+                # Combine scaled derivatives for this dimension
+                if dim not in combined_ops:
+                    combined_ops[dim] = simple_ops[d].copy()
+                    # 0th derivative (r * V) is split evenly among each dimension
+                    #TODO: This function is ONLY dependent on time. NOT MESH
+                    if () in coeffs:
+                        combined_ops[dim] += coeffs[()](self.t) / float(ndim)
+                else:
+                    if tuple(combined_ops[dim].D.offsets) == tuple(simple_ops[d].D.offsets):
+                        combined_ops[dim] += simple_ops[d]
                     else:
-                        # print col, dim, ops[col].axis, b.axis
-                        ops[col] = ops[col] + b
+                        # print col, dim, combined_ops[dim].axis, self.simple_operators[dim].axis
+                        combined_ops[dim] = combined_ops[dim] + simple_ops[d]
 
-                if tuple(combined_ops[dim].D.offsets) == tuple(simple_ops[d].D.offsets):
-                    combined_ops[dim] += simple_ops[d]
-                else:
-                    # print col, dim, combined_ops[dim].axis, self.simple_operators[dim].axis
-                    combined_ops[dim] = combined_ops[dim] + simple_ops[d]
-
-            check_operators("combining {}".format(d))
-
-
-
-        # Now the 0th derivative (r * V)
-        # We split this evenly among each dimension
-        #TODO: This function is ONLY dependent on time. NOT MESH
-        # Also, this gets plowed during the solve steps if we have dirichlet
-        # boundaries
-        if () in coeffs:
-            for ColumnOperators in self.operators.values():
-                for B in ColumnOperators:
-                    B += coeffs[()](self.t) / float(ndim)
-            for op in combined_ops.values():
-                    op += coeffs[()](self.t) / float(ndim)
-        check_operators("0th deriv")
-
-        # Handle the mixed derivatives. Not very DRY, refactor someday?
-        # iters over keys by default
-        # First we build a normal central difference vector in the first
-        # dimension.
-        for d in mixed:
-            if len(d) > 2:
-                raise NotImplementedError("Derivatives must be 2nd order or"
-                        " less.")
-            # Just to make sure
-            for sd in self.schemes.get(d, ({},)): # a tuple of dicts
-                s = sd.get('scheme', self.default_scheme)
-                if s != 'center':
-                    raise NotImplementedError("Mixed derivatives can only be"
-                        " done with central differencing.")
-
-            d0_size = len(self.grid.mesh[d[0]])
-            d1_size = len(self.grid.mesh[d[1]])
-
-            # TODO: We'll need to do complicated transposing for this in the
-            # general case
-            Bs = BandedOperator.for_vector(self.grid.mesh[d[0]], derivative=1, axis=0)
-            Bm1 = BandedOperator.for_vector(self.grid.mesh[d[1]], derivative=1, axis=1)
-            Bb1 = Bm1.copy()
-            Bp1 = Bm1.copy()
-
-            # TODO: Hardcoding in for centered differencing
-            Bps = [Bp1 * 0, Bp1 * 0] + replicate(d0_size-2, Bp1)
-            Bbs = [Bb1 * 0] + replicate(d0_size-2, Bb1) +  [Bb1 * 0]
-            Bms = replicate(d0_size-2, Bm1) + [Bm1 * 0, Bm1 * 0]
-
-            offsets = Bs.D.offsets
-            data = [Bps, Bbs, Bms]
-            for row, o in enumerate(offsets):
-                if o >= 0:
-                    for i in range(Bs.shape[0]-o):
-                        # print "(%i, %i)" % (row, i+o), "Block", i, i+o, "*", Bs.data[row, i+o]
-                        a = (np.array(self.grid.mesh[d[0]][i]).repeat(d1_size),)
-                        vec = self.evalvectorfunc(coeffs[d], a, 1)
-                        # print "= high"
-                        # fp(data[row][i+o])
-                        data[row][i+o].vectorized_scale(vec)
-                        # fp(data[row][i+o])
-                        # print "="
-                        data[row][i+o] *= Bs.D.data[row, i+o]
-                else:
-                    for i in range(abs(o), Bs.shape[0]):
-                        # print "(%i, %i)" % (row, i-abs(o)), "Block", i, i-abs(o), "*", Bs.data[row, i-abs(o)]
-                        a = (np.array(self.grid.mesh[d[0]][i]).repeat(d1_size),)
-                        vec = self.evalvectorfunc(coeffs[d], a, 1)
-                        # print "= low"
-                        # fp(data[row][i-abs(o)])
-                        data[row][i-abs(o)].vectorized_scale(vec)
-                        # fp(data[row][i-abs(o)])
-                        # print "="
-                        data[row][i-abs(o)] *= Bs.D.data[row, i-abs(o)]
-
-
-            # We flatten here because it's faster
-            Bps[0].D.offsets += d1_size
-            Bms[0].D.offsets -= d1_size
-            BP = flatten_tensor_aligned(Bps, check=False)
-            BB = flatten_tensor_aligned(Bbs, check=False)
-            BM = flatten_tensor_aligned(Bms, check=False)
-            self.simple_operators[d] = BP+BB+BM
-            self.operators[d] = self.simple_operators[d].copy()
-
-            simple_ops[d] = templates2[d].copy()
-            simple_ops[d].vectorized_scale(self.coefficient_vector(coeffs[d], 0, simple_ops[d].axis))
-            combined_ops[d] = simple_ops[d].copy()
-
-        # Dirichlet boundaries are handled in the apply and solve methods.
-
-        # Flatten into one large operator for speed
-        # The apply and solve methods will flatten the domain (V.flat) and then
-        # reshape it.
-        for d in self.operators.keys():
-            if isinstance(self.operators[d], list):
-                self.operators[d] = flatten_tensor_misaligned(self.operators[d])
-
-        # x = self.simple_operators
-        # for d in x:
-            # if x[d] != simple_ops[d]:
-                # msg =  "Simple op doesn't match block op: %s" % (d,)
-                # print d
-                # # fp(x[d].D.data - simple_ops[d].D.data, 'e')
-                # fp(simple_ops[d].R[None,:])
-                # fp(x[d].R[None,:])
-                # np.testing.assert_array_equal(x[d].D.data, simple_ops[d].D.data, msg)
-                # assert x[d] == simple_ops[d], msg
-
-        # x = self.operators
-        # for k in x:
-            # if x[k] != TESTER[k]:
-                # msg =  "Compound op doesn't match block op: %s" % (k,)
-                # print "Key: ", k
-                # fp(x[k].D.todense() -  TESTER[k].D.todense(), 'e')
-                # np.testing.assert_array_equal(x[k].D.data, TESTER[k].D.data, msg)
-                # assert x[k] == TESTER[k], msg
-        check_operators("final")
         self.operators = combined_ops
         self.simple_operators = simple_ops
         return
