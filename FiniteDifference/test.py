@@ -775,7 +775,7 @@ class BandedOperator_test(unittest.TestCase):
         idx = self.flip_idx
         d = np.hstack((np.nan, np.diff(vec)))
         for scheme in ["center", "forward", "backward"]:
-            C1 = FD.BandedOperator.for_vector(vec, scheme=scheme, derivative=1, order=2)
+            C1 = FD.BO.for_vector(vec, scheme=scheme, derivative=1, order=2)
             C2 = C1.add(C1)
             assert C2 is not C1
             assert C2.D.data is not C1.D.data
@@ -790,8 +790,8 @@ class BandedOperator_test(unittest.TestCase):
         vec = self.vec
         idx = self.flip_idx
         d = np.hstack((np.nan, np.diff(vec)))
-        C1 = FD.BandedOperator.for_vector(vec, scheme='center', derivative=1, order=2)
-        F1 = FD.BandedOperator.for_vector(vec, scheme='forward', derivative=1, order=2)
+        C1 = FD.BO.for_vector(vec, scheme='center', derivative=1, order=2)
+        F1 = FD.BO.for_vector(vec, scheme='forward', derivative=1, order=2)
         oldCF1 = np.zeros((len(set(F1.D.offsets) | set(C1.D.offsets)), C1.D.shape[1]))
         oldCF1R = np.zeros_like(F1.R)
 
@@ -813,8 +813,8 @@ class BandedOperator_test(unittest.TestCase):
         vec = self.vec
         idx = self.flip_idx
         d = np.hstack((np.nan, np.diff(vec)))
-        B2 = FD.BandedOperator.for_vector(vec, scheme='backward', derivative=2, order=2, force_bandwidth=(-2,2))
-        C2 = FD.BandedOperator.for_vector(vec, scheme='center', derivative=2, order=2, force_bandwidth=(-2,2))
+        B2 = FD.BO.for_vector(vec, scheme='backward', derivative=2, order=2, force_bandwidth=(-2,2))
+        C2 = FD.BO.for_vector(vec, scheme='center', derivative=2, order=2, force_bandwidth=(-2,2))
         oldCB2 = np.zeros((len(set(B2.D.offsets) | set(C2.D.offsets)), C2.D.shape[1]))
         oldCB2[1:,:] += B2.D.data[1:, :]
         oldCB2[1:4,:] += C2.D.data[1:4, :]
@@ -824,8 +824,8 @@ class BandedOperator_test(unittest.TestCase):
         npt.assert_array_equal(oldCB2, B2.D.data)
         npt.assert_array_equal(oldCB2R, B2.R)
 
-        B2 = FD.BandedOperator.for_vector(vec, scheme='backward', derivative=2, order=2)
-        C2 = FD.BandedOperator.for_vector(vec, scheme='center', derivative=2, order=2)
+        B2 = FD.BO.for_vector(vec, scheme='backward', derivative=2, order=2)
+        C2 = FD.BO.for_vector(vec, scheme='center', derivative=2, order=2)
         try:
             B2.add(C2, inplace=True)
         except ValueError:
@@ -838,7 +838,7 @@ class BandedOperator_test(unittest.TestCase):
         vec = self.vec
         idx = self.flip_idx
         d = np.hstack((np.nan, np.diff(vec)))
-        B2 = FD.BandedOperator.for_vector(vec, scheme='backward', derivative=2, order=2, force_bandwidth=(-2,2))
+        B2 = FD.BO.for_vector(vec, scheme='backward', derivative=2, order=2, force_bandwidth=(-2,2))
         B2.R += 1
         BB2 = B2
         assert (B2 is not B2 * 1)
@@ -872,9 +872,9 @@ class BandedOperator_test(unittest.TestCase):
         vec = self.vec
         idx = self.flip_idx
         d = np.hstack((np.nan, np.diff(vec)))
-        B2 = FD.BandedOperator.for_vector(vec, scheme='backward', derivative=2, order=2, force_bandwidth=(-2,2))
+        B2 = FD.BO.for_vector(vec, scheme='backward', derivative=2, order=2, force_bandwidth=(-2,2))
         assert B2 == B2
-        C2 = FD.BandedOperator.for_vector(vec, scheme='center', derivative=2, order=2, force_bandwidth=(-2,2))
+        C2 = FD.BO.for_vector(vec, scheme='center', derivative=2, order=2, force_bandwidth=(-2,2))
         # print C2, B2
         # fp(C2.D)
         # fp(B2.D)
@@ -885,7 +885,7 @@ class BandedOperator_test(unittest.TestCase):
         vec = self.vec
         idx = self.flip_idx
         d = np.hstack((np.nan, np.diff(vec)))
-        B2 = FD.BandedOperator.for_vector(vec, scheme='backward', derivative=2, order=2, force_bandwidth=(-2,2))
+        B2 = FD.BO.for_vector(vec, scheme='backward', derivative=2, order=2, force_bandwidth=(-2,2))
         origB2 = B2.copy()
         oldB2 = B2.copy()
 
@@ -903,7 +903,7 @@ class BandedOperator_test(unittest.TestCase):
         vec = self.vec
         idx = self.flip_idx
         d = np.hstack((np.nan, np.diff(vec)))
-        B2 = FD.BandedOperator.for_vector(vec, scheme='backward', derivative=2, order=2, force_bandwidth=(-2,2))
+        B2 = FD.BO.for_vector(vec, scheme='backward', derivative=2, order=2, force_bandwidth=(-2,2))
         origB2 = B2.copy()
         oldB2 = B2.copy()
 
@@ -919,7 +919,7 @@ class BandedOperator_test(unittest.TestCase):
         vec = self.vec
         idx = self.flip_idx
         d = np.hstack((np.nan, np.diff(vec)))
-        C1 = FD.BandedOperator.for_vector(vec, scheme='center', derivative=1, order=2, force_bandwidth=(-2,2))
+        C1 = FD.BO.for_vector(vec, scheme='center', derivative=1, order=2, force_bandwidth=(-2,2))
         CC1 = C1.copy()
         CCC1 = CC1.copy()
 
@@ -947,7 +947,7 @@ class BandedOperator_test(unittest.TestCase):
         for sch1 in ['center', 'up', 'down']:
             for dv in [1,2]:
                 oldX1 = utils.nonuniform_complete_coefficients(deltas, up_or_down=sch1, flip_idx=idx)[dv-1]
-                X1 = FD.BandedOperator.for_vector(vec, scheme=sch1, derivative=dv, order=2, axis=axis)
+                X1 = FD.BO.for_vector(vec, scheme=sch1, derivative=dv, order=2, axis=axis)
 
                 high, low = 1,-1
                 if (sch0 == 'up' and idx > 1) or (sch1 == 'up' and idx < last-1):
@@ -982,8 +982,8 @@ class BandedOperator_test(unittest.TestCase):
         for sch0,sch1 in itertools.product(['center', 'up', 'down'], repeat=2):
             for dv in [1,2]:
                 for idx in range(0, len(vec)-1):
-                    X1 = FD.BandedOperator.for_vector(vec, scheme=sch0, derivative=dv, order=2, force_bandwidth=(-2,2))+1
-                    X2 = FD.BandedOperator.for_vector(vec, scheme=sch1, derivative=dv, order=2, force_bandwidth=(-2,2))+1
+                    X1 = FD.BO.for_vector(vec, scheme=sch0, derivative=dv, order=2, force_bandwidth=(-2,2))+1
+                    X2 = FD.BO.for_vector(vec, scheme=sch1, derivative=dv, order=2, force_bandwidth=(-2,2))+1
                     X12 = X1.splice_with(X2, idx)
                     manualX12 = np.vstack((X1.D.todense()[:idx, :], X2.D.todense()[idx:,:]))
                     manualX12 = scipy.sparse.dia_matrix(manualX12)
@@ -1028,8 +1028,8 @@ class BandedOperator_test(unittest.TestCase):
             for dv in [1,2]:
                 for idx in range(0, len(vec)-1):
                     # add identity to avoid empty center
-                    X1 = FD.BandedOperator.for_vector(vec, scheme=sch0, derivative=dv, order=2)+1
-                    X2 = FD.BandedOperator.for_vector(vec, scheme=sch1, derivative=dv, order=2)+1
+                    X1 = FD.BO.for_vector(vec, scheme=sch0, derivative=dv, order=2)+1
+                    X2 = FD.BO.for_vector(vec, scheme=sch1, derivative=dv, order=2)+1
                     X12 = X1.splice_with(X2, idx)
                     manualX12 = np.vstack((X1.D.todense()[:idx, :], X2.D.todense()[idx:,:]))
                     manualX12 = scipy.sparse.dia_matrix(manualX12)

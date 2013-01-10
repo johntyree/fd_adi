@@ -22,17 +22,7 @@ cimport cython
 from cpython cimport bool
 from libcpp cimport bool as cbool
 
-REAL = np.float64
-ctypedef np.float64_t REAL_t
-
 cdef class BandedOperator(object):
-
-    attrs = ('derivative', 'order', 'axis', 'deltas', 'dirichlet', 'blocks', 'top_factors', 'bottom_factors')
-
-    cdef public unsigned int blocks, order, axis
-    cdef public D, R, deltas, dirichlet, solve_banded_offsets, derivative
-    cdef public shape
-    cdef public top_factors, bottom_factors
 
     def __init__(self, data_offsets, residual=None, int inplace=True,
             int derivative=1, int order=2, deltas=None, int axis=0):
@@ -45,6 +35,7 @@ cdef class BandedOperator(object):
             U2 = L.I * (U1 - R) --> U2 = B.solve(U1)
         """
 
+        self.attrs = ('derivative', 'order', 'axis', 'deltas', 'dirichlet', 'blocks', 'top_factors', 'bottom_factors')
         data, offsets = data_offsets
         assert data.shape[1] > 3, "Vector too short to use finite differencing."
         if not inplace:
@@ -118,46 +109,13 @@ cdef class BandedOperator(object):
             return false
 
 
-    @classmethod
-    def for_vector(cls, vector, scheme="center", derivative=1, order=2,
-            residual=None, force_bandwidth=None, axis=0):
-        """
-        A linear operator for discrete derivative of @vector@.
-
-        @derivative@ is a tuple specifying the sequence of derivatives. For
-        example, `(0,0)` is the second derivative in the first dimension.
-        """
-
-        cls.check_derivative(derivative)
-
-        deltas = np.hstack((np.nan, np.diff(vector)))
-        scheme = scheme.lower()
-
-        bw = force_bandwidth
-        if scheme.startswith("forward") or scheme.startswith('up'):
-            data, offsets = cls.forwardcoeffs(deltas, derivative=derivative, order=order, force_bandwidth=bw)
-        elif scheme.startswith("backward") or scheme.startswith('down'):
-            data, offsets = cls.backwardcoeffs(deltas, derivative=derivative, order=order, force_bandwidth=bw)
-        elif scheme.startswith("center") or scheme == "":
-            data, offsets = cls.centercoeffs(deltas, derivative=derivative, order=order, force_bandwidth=bw)
-        else:
-            raise ValueError("Unknown scheme: %s" % scheme)
-
-        self = BandedOperator((data, offsets), residual=residual, axis=axis)
-        self.derivative = derivative
-        self.order = order
-        self.deltas = deltas
-        self.axis = axis
-        return self
-
-
-    def copy(self):
+    cpdef copy(self):
         B = BandedOperator((self.D.data, self.D.offsets), residual=self.R, inplace=False)
         B.copy_meta_data(self)
         return B
 
 
-    def diagonalize(self):
+    cpdef diagonalize(self):
         # This is an ugly heuristic
         if 2 in self.D.offsets:
             self.foldtop()
@@ -167,7 +125,7 @@ cdef class BandedOperator(object):
         self.D = scipy.sparse.dia_matrix((self.D.data[1:-1], self.D.offsets[1:-1]), shape=self.shape)
 
 
-    def undiagonalize(self):
+    cpdef undiagonalize(self):
         data = np.zeros((5, self.shape[0]))
         offsets = np.array((2, 1, 0, -1, -2), dtype=np.int32)
         selfoffsets = self.D.offsets
@@ -184,7 +142,7 @@ cdef class BandedOperator(object):
         self.bottom_factors = None
 
 
-    def foldbottom(self, unfold=False):
+    cpdef foldbottom(self, unfold=False):
         d = self.D.data
         m = get_int_index(self.D.offsets, 0)
         for i in [1, 0,-1, -2]:
@@ -218,7 +176,7 @@ cdef class BandedOperator(object):
             self.bottom_factors = None
 
 
-    def foldtop(self, unfold=False):
+    cpdef foldtop(self, unfold=False):
         d = self.D.data
         m = get_int_index(self.D.offsets, 0)
         for i in [2, 1, 0,-1]:
@@ -252,7 +210,7 @@ cdef class BandedOperator(object):
             self.top_factors = None
 
 
-    def fold_vector(self, vec, unfold=False):
+    cpdef fold_vector(self, vec, unfold=False):
         v = vec.copy()
         blocks = self.blocks
         block_len = self.shape[0] // blocks
@@ -275,13 +233,14 @@ cdef class BandedOperator(object):
     cdef inline cbool is_folded(self):
         return self.top_factors is not None or self.bottom_factors is not None
 
-    cpdef bool is_tridiagonal(self):
+    cpdef cbool is_tridiagonal(self):
         return (self.is_folded() or
                     self.D.offsets[0] == 1
                 and self.D.offsets[1] == 0
                 and self.D.offsets[2] == -1)
 
-    def apply(self, V, overwrite=False):
+
+    cpdef apply(self, V, overwrite=False):
         if not overwrite:
             V = V.copy()
         t = range(V.ndim)
@@ -296,16 +255,12 @@ cdef class BandedOperator(object):
             V[...,-1] = self.dirichlet[1]
 
         if self.is_folded():
-            # self.diagonalize()
             ret = self.fold_vector(self.D.dot(V.flat), unfold=True)
         else:
             ret = self.D.dot(V.flat)
 
         if self.R is not None:
             ret += self.R
-
-        # if self.is_folded():
-            # self.undiagonalize()
 
         ret = ret.reshape(V.shape)
 
@@ -316,7 +271,7 @@ cdef class BandedOperator(object):
         return ret
 
 
-    def solve(self, V, overwrite=False):
+    cpdef solve(self, V, overwrite=False):
         if not overwrite:
             V = V.copy()
         t = range(V.ndim)
@@ -334,15 +289,11 @@ cdef class BandedOperator(object):
             V0 = V
 
         if self.is_folded():
-            # self.diagonalize()
             V0 = self.fold_vector(V0)
 
         ret = spl.solve_banded(self.solve_banded_offsets,
                 self.D.data, V0.flat,
                 overwrite_ab=overwrite, overwrite_b=True).reshape(V.shape)
-
-        if self.is_folded():
-            self.undiagonalize()
 
         t = range(V.ndim)
         utils.rolllist(t, V.ndim-1, self.axis)
@@ -352,7 +303,7 @@ cdef class BandedOperator(object):
 
 
     # @cython.boundscheck(False)
-    def applyboundary(self, boundary, mesh):
+    cpdef applyboundary(self, boundary, mesh):
         """
         @boundary@ is a tuple from FiniteDifferenceEngine.boundaries.
 
@@ -480,190 +431,8 @@ cdef class BandedOperator(object):
             # print "R:", B.R
 
 
-    @staticmethod
-    def check_derivative(d):
-        mixed = False
-        try:
-            d = tuple(d)
-            if len(d) > 2:
-                raise NotImplementedError, "Can't do more than 2nd order derivatives."
-            if len(set(d)) != 1:
-                mixed = True
-            map(int, d)
-            d = len(d)
-        except TypeError:
-            try:
-                d = int(d)
-            except TypeError:
-                raise TypeError("derivative must be a number or an iterable of numbers")
-        if d > 2 or d < 1:
-            raise NotImplementedError, "Can't do 0th order or more than 2nd order derivatives."
-        return mixed
 
-
-    @staticmethod
-    def check_order(order):
-        if order != 2:
-            raise NotImplementedError, ("Order must be 2")
-
-
-
-    @classmethod
-    def forwardcoeffs(cls, deltas, derivative=1, order=2, force_bandwidth=None):
-        d = deltas
-
-        cls.check_derivative(derivative)
-        cls.check_order(order)
-
-        if derivative == 1:
-            if force_bandwidth is not None:
-                l, u = [int(o) for o in force_bandwidth]
-                offsets = range(u, l-1, -1)
-            else:
-                if order == 2:
-                    offsets = [2, 1,0,-1]
-                else:
-                    raise NotImplementedError
-            data = np.zeros((len(offsets),len(d)))
-            m = offsets.index(0)
-            assert m-2 >= 0
-            assert m < data.shape[0]
-            for i in range(1,len(d)-2):
-                data[m-1,i+1] = (d[i+1] + d[i+2])  /         (d[i+1]*d[i+2])
-                data[m-2,i+2] = -d[i+1]            / (d[i+2]*(d[i+1]+d[i+2]))
-                data[m,i]     = (-2*d[i+1]-d[i+2]) / (d[i+1]*(d[i+1]+d[i+2]))
-            # Use centered approximation for the last (inner) row.
-            data[m-1,-1] =           d[-2]  / (d[-1]*(d[-2]+d[-1]))
-            data[m,  -2] = (-d[-2] + d[-1]) /        (d[-2]*d[-1])
-            data[m+1,-3] =          -d[-1]  / (d[-2]*(d[-2]+d[-1]))
-
-        elif derivative == 2:
-            if force_bandwidth is not None:
-                l, u = [int(o) for o in force_bandwidth]
-                offsets = range(u, l-1, -1)
-            else:
-                if order == 2:
-                    offsets = [2, 1, 0,-1]
-                else:
-                    raise NotImplementedError
-            data = np.zeros((len(offsets),len(d)))
-            m = offsets.index(0)
-            for i in range(1,len(d)-2):
-                denom = (0.5*(d[i+2]+d[i+1])*d[i+2]*d[i+1]);
-                data[m-2,i+2] =   d[i+1]         / denom
-                data[m-1,i+1] = -(d[i+2]+d[i+1]) / denom
-                data[m,i]     =   d[i+2]         / denom
-            # Use centered approximation for the last (inner) row
-            data[m-1,-1] = 2  / (d[-1]*(d[-2]+d[-1]))
-            data[m  ,-2] = -2 /       (d[-2]*d[-1])
-            data[m+1,-3] = 2  / (d[-2  ]*(d[-2]+d[-1]))
-        else:
-            raise NotImplementedError, ("Order must be 1 or 2")
-        return (data, offsets)
-
-
-    @classmethod
-    def centercoeffs(cls, deltas, derivative=1, order=2, force_bandwidth=None):
-        """Centered differencing coefficients."""
-        d = deltas
-
-        cls.check_derivative(derivative)
-        cls.check_order(order)
-
-        if derivative == 1:
-            if force_bandwidth is not None:
-                l, u = [int(o) for o in force_bandwidth]
-                offsets = range(u, l-1, -1)
-            else:
-                if order == 2:
-                    # TODO: Be careful here, why is this 10-1?
-                    offsets = [1,0,-1]
-                else:
-                    raise NotImplementedError
-            data = np.zeros((len(offsets),len(d)))
-            m = offsets.index(0)
-            assert m-1 >= 0
-            assert m+1 < data.shape[0]
-            for i in range(1,len(d)-1):
-                data[m-1,i+1] =            d[i]  / (d[i+1]*(d[i]+d[i+1]))
-                data[m  ,i  ] = (-d[i] + d[i+1]) /         (d[i]*d[i+1])
-                data[m+1,i-1] =         -d[i+1]  / (d[i  ]*(d[i]+d[i+1]))
-        elif derivative == 2:
-            if force_bandwidth is not None:
-                l, u = [int(o) for o in force_bandwidth]
-                offsets = range(u, l-1, -1)
-            else:
-                if order == 2:
-                    # TODO: Be careful here, why is this 10-1?
-                    offsets = [1,0,-1]
-                else:
-                    raise NotImplementedError
-            data = np.zeros((len(offsets),len(d)))
-            m = offsets.index(0)
-            # Inner rows
-            for i in range(1,len(d)-1):
-                data[m-1,i+1] =  2 / (d[i+1]*(d[i]+d[i+1]))
-                data[m  ,i  ] = -2 /       (d[i]*d[i+1])
-                data[m+1,i-1] =  2 / (d[i  ]*(d[i]+d[i+1]))
-        else:
-            raise NotImplementedError("Derivative must be 1 or 2")
-
-        return (data, offsets)
-
-
-    @classmethod
-    def backwardcoeffs(cls, deltas, derivative=1, order=2, force_bandwidth=None):
-        d = deltas
-
-        cls.check_derivative(derivative)
-        cls.check_order(order)
-
-        if derivative == 1:
-            if force_bandwidth is not None:
-                l, u = [int(o) for o in force_bandwidth]
-                offsets = range(u, l-1, -1)
-            else:
-                if order == 2:
-                    offsets = [1,0,-1,-2]
-                else:
-                    raise NotImplementedError
-            data = np.zeros((len(offsets),len(d)))
-            m = offsets.index(0)
-            for i in range(2,len(d)-1):
-                data[m, i]     = (d[i-1]+2*d[i])  / (d[i]*(d[i-1]+d[i]));
-                data[m+1, i-1] = (-d[i-1] - d[i]) / (d[i-1]*d[i]);
-                data[m+2, i-2] = d[i]             / (d[i-1]*(d[i-1]+d[i]));
-            # Use centered approximation for the first (inner) row.
-            data[m-1,2] =          d[1]  / (d[2]*(d[1]+d[2]))
-            data[m,  1] = (-d[1] + d[2]) /       (d[1]*d[2])
-            data[m+1,0] =         -d[2]  / (d[1]*(d[1]+d[2]))
-        elif derivative == 2:
-            if force_bandwidth is not None:
-                l, u = [int(o) for o in force_bandwidth]
-                offsets = range(u, l-1, -1)
-            else:
-                if order == 2:
-                    offsets = [1,0,-1,-2]
-                else:
-                    raise NotImplementedError
-            data = np.zeros((len(offsets),len(d)))
-            m = offsets.index(0)
-            for i in range(2,len(d)-1):
-                denom = (0.5*(d[i]+d[i-1])*d[i]*d[i-1]);
-                data[m,     i] =   d[i-1]       / denom;
-                data[m+1, i-1] = -(d[i]+d[i-1]) / denom;
-                data[m+2, i-2] =   d[i]         / denom;
-            # Use centered approximation for the first (inner) row
-            data[m+1,0] =  2 / (d[1  ]*(d[1]+d[2]))
-            data[m,1]   = -2 /       (d[1]*d[2])
-            data[m-1,2] =  2 / (d[2]*(d[1]+d[2]))
-        else:
-            raise NotImplementedError, ("Derivative must be 1 or 2")
-
-        return (data, offsets)
-
-
-    def splice_with(self, begin, at, inplace=False):
+    cpdef splice_with(self, begin, at, inplace=False):
         """
         Splice a second operator into this one by replacing rows after @at@.
         If inplace is True, splice it directly into this object.
@@ -730,33 +499,31 @@ cdef class BandedOperator(object):
         return B
 
 
+    cpdef mul(self, val, inplace=False):
+        return self.__imul__(val) if inplace else self.__mul__(val)
     def __mul__(self, val):
-        return self.mul(val, inplace=False)
+        B = self.copy()
+        return B.__imul__(val)
     def __imul__(self, val):
-        return self.mul(val, inplace=True)
-    def mul(self, val, inplace=False):
-        if inplace:
-            B = self
+        self.vectorized_scale(np.ones(self.shape[0]) * val)
+        return self
+
+    cpdef add(self, val, inplace=False):
+        return self.__iadd__(val) if inplace else self.__add__(val)
+    def __add__(self, val):
+        if isinstance(val, BandedOperator):
+            return self.add_operator(val, False)
         else:
-            B = self.copy()
-
-        B.vectorized_scale(np.ones(B.shape[0]) * val)
-        return B
-
-
-    def __add__(self, other):
-        return self.add(other, inplace=False)
-    def __iadd__(self, other):
-        return self.add(other, inplace=True)
-    def add(self, other, cbool inplace=False):
-        if isinstance(other, BandedOperator):
-            return self.add_operator(other, inplace)
+            return self.add_scalar(val, False)
+    def __iadd__(self, val):
+        if isinstance(val, BandedOperator):
+            return self.add_operator(val, True)
         else:
-            return self.add_scalar(other, inplace)
+            return self.add_scalar(val, True)
+
+
     # TODO: This needs to be faster
-
-
-    def add_operator(BandedOperator self, BandedOperator other, cbool inplace=False):
+    cpdef add_operator(BandedOperator self, BandedOperator other, cbool inplace=False):
         """
         Add a second BandedOperator to this one.
         Does not alter self.R, the residual vector.
@@ -847,7 +614,7 @@ cdef class BandedOperator(object):
         return B
 
 
-    def add_scalar(self, float other, cbool inplace=False):
+    cpdef add_scalar(self, float other, cbool inplace=False):
         """
         Add a scalar to the main diagonal or
         Does not alter self.R, the residual vector.
@@ -881,7 +648,7 @@ cdef class BandedOperator(object):
 
     #TODO
     # @cython.boundscheck(False)
-    def vectorized_scale(self, REAL_t[:] vector):
+    cpdef vectorized_scale(self, REAL_t[:] vector):
         """
         @vector@ is the correpsonding mesh vector of the current dimension.
 
@@ -927,7 +694,7 @@ cdef class BandedOperator(object):
         return
 
 
-    def scale(self, func):
+    cpdef scale(self, func):
         """
         func must be compatible with the following:
             func(x)
@@ -986,5 +753,217 @@ cdef inline unsigned int get_int_index(int[:] haystack, int needle):
         if needle == haystack[i]:
             return i
     raise ValueError("Value not in array: %s" % needle)
+
+
+cpdef check_derivative(d):
+    mixed = False
+    try:
+        d = tuple(d)
+        if len(d) > 2:
+            raise NotImplementedError, "Can't do more than 2nd order derivatives."
+        if len(set(d)) != 1:
+            mixed = True
+        map(int, d)
+        d = len(d)
+    except TypeError:
+        try:
+            d = int(d)
+        except TypeError:
+            raise TypeError("derivative must be a number or an iterable of numbers")
+    if d > 2 or d < 1:
+        raise NotImplementedError, "Can't do 0th order or more than 2nd order derivatives. (%s)" % d
+    return mixed
+
+
+cpdef check_order(order):
+    if order != 2:
+        raise NotImplementedError, ("Order must be 2")
+
+
+
+cpdef for_vector(vector, scheme="center", derivative=1, order=2,
+        residual=None, force_bandwidth=None, axis=0):
+    """
+    A linear operator for discrete derivative of @vector@.
+
+    @derivative@ is a tuple specifying the sequence of derivatives. For
+    example, `(0,0)` is the second derivative in the first dimension.
+    """
+
+    check_derivative(derivative)
+
+    deltas = np.hstack((np.nan, np.diff(vector)))
+    scheme = scheme.lower()
+
+    bw = force_bandwidth
+    if scheme.startswith("forward") or scheme.startswith('up'):
+        data, offsets = forwardcoeffs(deltas, derivative=derivative, order=order, force_bandwidth=bw)
+    elif scheme.startswith("backward") or scheme.startswith('down'):
+        data, offsets = backwardcoeffs(deltas, derivative=derivative, order=order, force_bandwidth=bw)
+    elif scheme.startswith("center") or scheme == "":
+        data, offsets = centercoeffs(deltas, derivative=derivative, order=order, force_bandwidth=bw)
+    else:
+        raise ValueError("Unknown scheme: %s" % scheme)
+
+    B = BandedOperator((data, offsets), residual=residual, axis=axis)
+    B.derivative = derivative
+    B.order = order
+    B.deltas = deltas
+    B.axis = axis
+    return B
+
+
+
+
+cpdef forwardcoeffs(deltas, derivative=1, order=2, force_bandwidth=None):
+    d = deltas
+
+    check_derivative(derivative)
+    check_order(order)
+
+    if derivative == 1:
+        if force_bandwidth is not None:
+            l, u = [int(o) for o in force_bandwidth]
+            offsets = range(u, l-1, -1)
+        else:
+            if order == 2:
+                offsets = [2, 1,0,-1]
+            else:
+                raise NotImplementedError
+        data = np.zeros((len(offsets),len(d)))
+        m = offsets.index(0)
+        assert m-2 >= 0
+        assert m < data.shape[0]
+        for i in range(1,len(d)-2):
+            data[m-1,i+1] = (d[i+1] + d[i+2])  /         (d[i+1]*d[i+2])
+            data[m-2,i+2] = -d[i+1]            / (d[i+2]*(d[i+1]+d[i+2]))
+            data[m,i]     = (-2*d[i+1]-d[i+2]) / (d[i+1]*(d[i+1]+d[i+2]))
+        # Use centered approximation for the last (inner) row.
+        data[m-1,-1] =           d[-2]  / (d[-1]*(d[-2]+d[-1]))
+        data[m,  -2] = (-d[-2] + d[-1]) /        (d[-2]*d[-1])
+        data[m+1,-3] =          -d[-1]  / (d[-2]*(d[-2]+d[-1]))
+
+    elif derivative == 2:
+        if force_bandwidth is not None:
+            l, u = [int(o) for o in force_bandwidth]
+            offsets = range(u, l-1, -1)
+        else:
+            if order == 2:
+                offsets = [2, 1, 0,-1]
+            else:
+                raise NotImplementedError
+        data = np.zeros((len(offsets),len(d)))
+        m = offsets.index(0)
+        for i in range(1,len(d)-2):
+            denom = (0.5*(d[i+2]+d[i+1])*d[i+2]*d[i+1]);
+            data[m-2,i+2] =   d[i+1]         / denom
+            data[m-1,i+1] = -(d[i+2]+d[i+1]) / denom
+            data[m,i]     =   d[i+2]         / denom
+        # Use centered approximation for the last (inner) row
+        data[m-1,-1] = 2  / (d[-1]*(d[-2]+d[-1]))
+        data[m  ,-2] = -2 /       (d[-2]*d[-1])
+        data[m+1,-3] = 2  / (d[-2  ]*(d[-2]+d[-1]))
+    else:
+        raise NotImplementedError, ("Order must be 1 or 2")
+    return (data, offsets)
+
+
+cpdef centercoeffs(deltas, derivative=1, order=2, force_bandwidth=None):
+    """Centered differencing coefficients."""
+    d = deltas
+
+    check_derivative(derivative)
+    check_order(order)
+
+    if derivative == 1:
+        if force_bandwidth is not None:
+            l, u = [int(o) for o in force_bandwidth]
+            offsets = range(u, l-1, -1)
+        else:
+            if order == 2:
+                # TODO: Be careful here, why is this 10-1?
+                offsets = [1,0,-1]
+            else:
+                raise NotImplementedError
+        data = np.zeros((len(offsets),len(d)))
+        m = offsets.index(0)
+        assert m-1 >= 0
+        assert m+1 < data.shape[0]
+        for i in range(1,len(d)-1):
+            data[m-1,i+1] =            d[i]  / (d[i+1]*(d[i]+d[i+1]))
+            data[m  ,i  ] = (-d[i] + d[i+1]) /         (d[i]*d[i+1])
+            data[m+1,i-1] =         -d[i+1]  / (d[i  ]*(d[i]+d[i+1]))
+    elif derivative == 2:
+        if force_bandwidth is not None:
+            l, u = [int(o) for o in force_bandwidth]
+            offsets = range(u, l-1, -1)
+        else:
+            if order == 2:
+                # TODO: Be careful here, why is this 10-1?
+                offsets = [1,0,-1]
+            else:
+                raise NotImplementedError
+        data = np.zeros((len(offsets),len(d)))
+        m = offsets.index(0)
+        # Inner rows
+        for i in range(1,len(d)-1):
+            data[m-1,i+1] =  2 / (d[i+1]*(d[i]+d[i+1]))
+            data[m  ,i  ] = -2 /       (d[i]*d[i+1])
+            data[m+1,i-1] =  2 / (d[i  ]*(d[i]+d[i+1]))
+    else:
+        raise NotImplementedError("Derivative must be 1 or 2")
+
+    return (data, offsets)
+
+
+cpdef backwardcoeffs(deltas, derivative=1, order=2, force_bandwidth=None):
+    d = deltas
+
+    check_derivative(derivative)
+    check_order(order)
+
+    if derivative == 1:
+        if force_bandwidth is not None:
+            l, u = [int(o) for o in force_bandwidth]
+            offsets = range(u, l-1, -1)
+        else:
+            if order == 2:
+                offsets = [1,0,-1,-2]
+            else:
+                raise NotImplementedError
+        data = np.zeros((len(offsets),len(d)))
+        m = offsets.index(0)
+        for i in range(2,len(d)-1):
+            data[m, i]     = (d[i-1]+2*d[i])  / (d[i]*(d[i-1]+d[i]));
+            data[m+1, i-1] = (-d[i-1] - d[i]) / (d[i-1]*d[i]);
+            data[m+2, i-2] = d[i]             / (d[i-1]*(d[i-1]+d[i]));
+        # Use centered approximation for the first (inner) row.
+        data[m-1,2] =          d[1]  / (d[2]*(d[1]+d[2]))
+        data[m,  1] = (-d[1] + d[2]) /       (d[1]*d[2])
+        data[m+1,0] =         -d[2]  / (d[1]*(d[1]+d[2]))
+    elif derivative == 2:
+        if force_bandwidth is not None:
+            l, u = [int(o) for o in force_bandwidth]
+            offsets = range(u, l-1, -1)
+        else:
+            if order == 2:
+                offsets = [1,0,-1,-2]
+            else:
+                raise NotImplementedError
+        data = np.zeros((len(offsets),len(d)))
+        m = offsets.index(0)
+        for i in range(2,len(d)-1):
+            denom = (0.5*(d[i]+d[i-1])*d[i]*d[i-1]);
+            data[m,     i] =   d[i-1]       / denom;
+            data[m+1, i-1] = -(d[i]+d[i-1]) / denom;
+            data[m+2, i-2] =   d[i]         / denom;
+        # Use centered approximation for the first (inner) row
+        data[m+1,0] =  2 / (d[1  ]*(d[1]+d[2]))
+        data[m,1]   = -2 /       (d[1]*d[2])
+        data[m-1,2] =  2 / (d[2]*(d[1]+d[2]))
+    else:
+        raise NotImplementedError, ("Derivative must be 1 or 2")
+
+    return (data, offsets)
 
 

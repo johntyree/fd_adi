@@ -27,6 +27,7 @@ import scipy.linalg as spl
 import itertools as it
 
 import BandedOperator as BO
+cimport BandedOperator as BO
 BandedOperator = BO.BandedOperator
 
 from visualize import fp
@@ -290,9 +291,7 @@ cdef class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
                 s = self.default_scheme
             idx = sd.get('from', 0)
             o = sd.get('order', self.default_order)
-            B = BandedOperator.for_vector(self.grid.mesh[dim],
-                    scheme=s, derivative=len(d), order=o,
-                    force_bandwidth=force_bandwidth, axis=dim)
+            B = BO.for_vector(self.grid.mesh[dim], s, len(d), o, None, force_bandwidth, dim)
             if Binit is not None:
                 if idx >= B.D.shape[0]-1:
                     raise ValueError("Cannot splice beyond the end of the "
@@ -437,7 +436,7 @@ cdef class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
                 continue
 
             # Mixed derivatives are handled specially
-            mix = BandedOperator.check_derivative(d)
+            mix = BO.check_derivative(d)
             if mix:
                 mixed_derivs[d] = True
                 continue
@@ -504,8 +503,8 @@ cdef class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
 
             # TODO: We'll need to do complicated transposing for this in the
             # general case
-            Bs = BandedOperator.for_vector(self.grid.mesh[d[0]], derivative=1, axis=0)
-            Bm1 = BandedOperator.for_vector(self.grid.mesh[d[1]], derivative=1, axis=1)
+            Bs = BO.for_vector(self.grid.mesh[d[0]], "center", 1, 2, None, None, 0)
+            Bm1 = BO.for_vector(self.grid.mesh[d[1]], "center", 1, 2, None, None, 1)
             Bb1 = Bm1.copy()
             Bp1 = Bm1.copy()
 
