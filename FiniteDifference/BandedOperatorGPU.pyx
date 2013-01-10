@@ -274,7 +274,11 @@ cdef class BandedOperator(object):
     cdef inline cbool is_folded(self):
         return self.top_factors is not None or self.bottom_factors is not None
 
-
+    cpdef bool is_tridiagonal(self):
+        return (self.is_folded() or
+                    self.D.offsets[0] == 1
+                and self.D.offsets[1] == 0
+                and self.D.offsets[2] == -1)
 
     def apply(self, V, overwrite=False):
         if not overwrite:
