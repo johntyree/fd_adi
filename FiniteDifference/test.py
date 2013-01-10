@@ -1061,6 +1061,48 @@ class BandedOperator_test(unittest.TestCase):
                     assert (X12.D.data == manualX12.data[::-1]).all(),  "%s+%s (dv %i) idx %i" % (sch0, sch1, dv, idx)
 
 
+
+    def test_diagonalize(self):
+
+        blocks = 3
+
+        def foldMatFor(A, blocks):
+            l = A.shape[0] // blocks
+            data = np.zeros((3, A.shape[0]))
+            data[1, :] = 1
+            offsets = (1, 0, -1)
+            m = len(A.offsets) // 2
+            for b in range(blocks):
+                data[0, b*l+1] = -A.data[m-2,b*l+2] / A.data[m-1,b*l+2] if A.data[m-1,b*l+2] else 0
+                data[2, (b+1)*l-2] = -A.data[m+2,(b+1)*l-3] / A.data[m+1,(b+1)*l-3] if A.data[m+2,(b+1)*l-3] else 0
+                d = scipy.sparse.dia_matrix((data, offsets), shape=A.shape)
+            return d
+
+        mat = np.matrix("""
+                        -1.5 0.5 2 0 0;
+                        -1   2  -1 0 0;
+                        0   -1   2 -1 0;
+                        0   0    -1 2 -1;
+                        0   0   -1.5 0.5 2""").A
+        vec = np.random.random(mat.shape[1])
+        diamat = todia(scipy.sparse.dia_matrix(mat))
+        x = foldMatFor(diamat, 1)
+        blockx = scipy.sparse.block_diag([x]*blocks)
+        blockdiamat = todia(scipy.sparse.block_diag([diamat]*blocks).todense())
+
+        blocktridiamat = todia(blockx.dot(blockdiamat))
+        B = FD.BandedOperator((blockdiamat.data, (2, 1, 0, -1, -2)), inplace=False)
+        B.blocks = blocks
+
+        npt.assert_array_equal(B.D.data, blockdiamat.data)
+
+        B.diagonalize()
+        npt.assert_array_equal(B.D.data, blocktridiamat.data)
+
+        B.undiagonalize()
+        npt.assert_array_equal(B.D.data, blockdiamat.data)
+
+
 class ScalingFuncs(unittest.TestCase):
     def setUp(self):
         k = 3.0
