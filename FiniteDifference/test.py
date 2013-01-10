@@ -538,7 +538,6 @@ class FiniteDifferenceEngineADI_test(unittest.TestCase):
         dims.remove(())
 
 
-        F.simple_operators[(0,1)] = F.operators[(0,1)]
         for dim in dims:
             op_['grid_delta'][dim] = F.simple_operators[dim].copy()
             op_['grid_delta'][dim].R = None
@@ -574,6 +573,7 @@ class FiniteDifferenceEngineADI_test(unittest.TestCase):
             npt.assert_(op_['derivative'][dim].shape == g.shape)
             np_['derivative'][dim] = cb(np_['grid_delta'][dim] / np_['delta'][dim], inplace=True)
             np_['derivative'][dim] *= F.coefficients[dim](0,X,Y)
+            op_['derivative'][dim] *= F.coefficients[dim](0,X,Y)
 
         np_['derivative'][(1,0)] = cb(np_['grid_delta'][(1,0)] / np_['delta'][(1,0)], inplace=True)
         np_['derivative'][(1,0)] *= F.coefficients[(0,1)](0,X,Y)

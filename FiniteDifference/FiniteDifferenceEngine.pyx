@@ -423,12 +423,12 @@ cdef class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
             ret = np.repeat(<float>ret, gridsize)
         return ret
 
-    def make_operator_templates(self, force_bandwidth):
+    def make_discrete_operators(self):
         templates = {}
         mixed_derivs = {}
-        mixops = {}
         coeffs = self.coefficients
         bounds = self.boundaries
+        force_bandwidth = self.force_bandwidth
         # d = (0,0), for example ...
         for d in coeffs.keys():
             # Don't need an operator for the 0th derivative
@@ -539,7 +539,9 @@ cdef class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
             BB = flatten_tensor_aligned(Bbs, check=False)
             BM = flatten_tensor_aligned(Bms, check=False)
             templates[d] = BP + BM + BB
-        return templates, mixed_derivs
+        self.simple_operators = templates
+        self.scale_and_combine_operators()
+        return mixed_derivs
 
 
     def check_mixed_derivative_parameters(self, mds):
@@ -553,93 +555,34 @@ cdef class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
                     raise NotImplementedError("Mixed derivatives can only be"
                         " done with central differencing.")
 
-
-    def make_discrete_operators(self):
-        ndim = self.grid.ndim
+    def scale_and_combine_operators(self):
         coeffs = self.coefficients
-        bounds = self.boundaries
-        force_bandwidth = self.force_bandwidth
-        dirichlets = {}
-        templates, mixed = self.make_operator_templates(force_bandwidth)
-        combined_ops = {}
-        simple_ops = {}
+        self.operators = {}
 
-        def check_operators(tag):
-            k0 = set(self.simple_operators.keys())
-            k1 = set(simple_ops.keys())
-            assert k0 == k1, "Simple ops have different keys: {}, {}".format(k0-k1, k1-k0)
-            try:
-                msg = "Simple ops: %s" % tag
-                for k in self.simple_operators:
-                    if k == (0,1): continue
-                    assert self.simple_operators[k] == simple_ops[k], msg + " " + str(k)
-
-            except AttributeError:
-                msg = "Flattened Simple ops: %s" % tag
-                for k in self.simple_operators:
-                    if k == (0,1): continue
-                    assert flatten_tensor_misaligned(self.simple_operators[k]) == simple_ops[k], msg + " " + str(k)
-
-            k0 = set(self.operators.keys())
-            k1 = set(combined_ops.keys())
-            assert k0 == k1, "Combined ops have different keys: {}, {}".format(k0-k1, k1-k0)
-            try:
-                msg = "Combined ops: %s" % tag
-                for k in self.operators:
-                    if k == (0,1): continue
-                    assert self.operators[k] == combined_ops[k], msg + " " + str(k)
-            except AttributeError:
-                msg = "Flattened Combined ops: %s" % tag
-                for k in self.operators:
-                    if k == (0,1): continue
-                    assert flatten_tensor_misaligned(self.operators[k]) == combined_ops[k], msg + " " + str(k)
-
-            k = (0,1)
-            if k in self.simple_operators:
-                op0 = self.simple_operators[k].copy()
-                op1 = simple_ops[k].copy()
-                np.testing.assert_array_almost_equal(op0.D.data,
-                                              op1.D.data)
-                op0.D *= 0
-                op1.D *= 0
-                assert op0 == op1
-
-            if k in self.operators:
-                op0 = self.operators[k].copy()
-                op1 = combined_ops[k].copy()
-                np.testing.assert_array_almost_equal(op0.D.data,
-                                              op1.D.data)
-                op0.D *= 0
-                op1.D *= 0
-                assert op0 == op1
-
-
-        for d in templates:
-            simple_ops[d] = templates[d].copy()
-            dim = simple_ops[d].axis
+        for d, op in self.simple_operators.items():
+            print d, op
+            op = op.copy()
+            dim = op.axis
             if d in coeffs:
-                simple_ops[d].vectorized_scale(self.coefficient_vector(coeffs[d], 0, dim))
+                op.vectorized_scale(self.coefficient_vector(coeffs[d], self.t, dim))
 
-            if d in mixed:
-                combined_ops[d] = simple_ops[d].copy()
+            if len(set(d)) > 1:
+                self.operators[d] = op
             else:
                 # Combine scaled derivatives for this dimension
-                if dim not in combined_ops:
-                    combined_ops[dim] = simple_ops[d].copy()
+                if dim not in self.operators:
+                    self.operators[dim] = op
                     # 0th derivative (r * V) is split evenly among each dimension
                     #TODO: This function is ONLY dependent on time. NOT MESH
                     if () in coeffs:
-                        combined_ops[dim] += coeffs[()](self.t) / float(ndim)
+                        self.operators[dim] += coeffs[()](self.t) / float(self.grid.ndim)
                 else:
-                    if tuple(combined_ops[dim].D.offsets) == tuple(simple_ops[d].D.offsets):
-                        combined_ops[dim] += simple_ops[d]
+                    if tuple(self.operators[dim].D.offsets) == tuple(op.D.offsets):
+                        self.operators[dim] += op
                     else:
                         # print col, dim, combined_ops[dim].axis, self.simple_operators[dim].axis
-                        combined_ops[dim] = combined_ops[dim] + simple_ops[d]
+                        self.operators[dim] = self.operators[dim] + op
 
-        self.operators = combined_ops
-        self.simple_operators = simple_ops
-        return
 
 
     def cross_term(self, V, numpy=True):
