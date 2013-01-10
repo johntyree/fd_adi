@@ -1,6 +1,7 @@
 # coding: utf8
-# cython: profile=True
+# cython: annotate=True
 # cython: infer_types=True
+# cython: profile=True
 """Description."""
 
 # import sys
