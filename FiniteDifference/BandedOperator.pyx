@@ -210,8 +210,8 @@ cdef class BandedOperator(object):
             self.top_factors = None
 
 
-    cpdef fold_vector(self, vec, unfold=False):
-        v = vec.copy()
+    cpdef fold_vector(self, REAL_t[:] v, unfold=False):
+        cdef int direction
         blocks = self.blocks
         block_len = self.shape[0] // blocks
 
@@ -220,14 +220,14 @@ cdef class BandedOperator(object):
             u1 = u0 + 1
             un = (b+1)*block_len - 1
             un1 = un - 1
+            # print u0, u1, un1, un
             # print "[%f, %f .. %f, %f]" % (v[u0], v[u1], v[un1], v[un])
-            if unfold:
-                v[u0] -= v[u1]  * self.top_factors[b]
-                v[un] -= v[un1] * self.bottom_factors[b]
-            else:
-                v[u0] += v[u1]  * self.top_factors[b]
-                v[un] += v[un1] * self.bottom_factors[b]
-        return v
+            direction = -1 if unfold else 1
+            if self.top_factors is not None:
+                v[u0] += direction * v[u1]  * self.top_factors[b]
+            if self.bottom_factors is not None:
+                v[un] += direction * v[un1] * self.bottom_factors[b]
+        return np.asarray(v)
 
 
     cdef inline cbool is_folded(self):

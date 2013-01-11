@@ -24,7 +24,7 @@ cdef class BandedOperator(object):
     cpdef undiagonalize(self)
     cpdef foldbottom(self, unfold=*)
     cpdef foldtop(self, unfold=*)
-    cpdef fold_vector(self, vec, unfold=*)
+    cpdef fold_vector(self, REAL_t[:] v, unfold=*)
     cpdef cbool is_tridiagonal(self)
     cpdef apply(self, V, overwrite=*)
     cpdef solve(self, V, overwrite=*)
