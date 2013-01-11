@@ -294,7 +294,7 @@ cdef class BandedOperator(object):
         if self.R is not None:
             V0 = V.flat - self.R
         else:
-            V0 = V
+            V0 = V.ravel()
 
         if self.is_folded():
             V0 = self.fold_vector(V0)
