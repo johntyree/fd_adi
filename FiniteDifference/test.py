@@ -448,10 +448,10 @@ class FiniteDifferenceEngineADI_test(unittest.TestCase):
 
 
         # fp(op.D)
-        print op.D.offsets
-        print op.dirichlet
+        # print op.D.offsets
+        # print op.dirichlet
 
-        xm = foldMatFor(op.D, op.blocks)
+        # xm = foldMatFor(op.D, op.blocks)
 
         V0 = F.solve_implicit(n, 1.0/n)
         F.grid.reset()
@@ -460,25 +460,25 @@ class FiniteDifferenceEngineADI_test(unittest.TestCase):
         op.diagonalize()
         # fp(op.D - xm.dot(orig.D))
 
-        vec = np.random.random(F.grid.shape)
-        vec[0,:] = 0
-        vec[:,-1] = op.dirichlet[1]
+        # vec = np.random.random(F.grid.shape)
+        # vec[0,:] = 0
+        # vec[:,-1] = op.dirichlet[1]
 
-        x0 = solveWithRes(orig.D, vec.copy().flatten(), 0, orig.blocks).reshape(vec.shape)
-        v0 = op.solve(vec)
+        # x0 = solveWithRes(orig.D, vec.copy().flatten(), 0, orig.blocks).reshape(vec.shape)
+        # v0 = op.solve(vec)
 
-        print "op"
-        fp(v0)
-        print "mat"
-        fp(x0)
+        # print "op"
+        # fp(v0)
+        # print "mat"
+        # fp(x0)
 
-        fp(v0-x0, 'e')
+        # fp(v0-x0, 'e')
 
         print op.D.offsets
         print op.is_tridiagonal()
         print op.top_factors
         print op.bottom_factors
-        print x0
+        # print x0
         # fp(op.D)
         V1 = F.solve_implicit(n, 1.0/n)
         F.grid.reset()
@@ -917,6 +917,7 @@ class BandedOperator_test(unittest.TestCase):
         self.flip_idx = 4
         self.vec = spots
 
+
     def test_addself(self):
         vec = self.vec
         idx = self.flip_idx
@@ -1206,7 +1207,6 @@ class BandedOperator_test(unittest.TestCase):
                     assert (X12.D.offsets == manualX12.offsets[::-1]).all(),  "%s+%s (dv %i) idx %i" % (sch0, sch1, dv, idx)
                     assert (X12.D.data.shape == manualX12.data.shape),  "%s+%s (dv %i) idx %i" % (sch0, sch1, dv, idx)
                     assert (X12.D.data == manualX12.data[::-1]).all(),  "%s+%s (dv %i) idx %i" % (sch0, sch1, dv, idx)
-
 
 
     def test_diagonalize(self):
