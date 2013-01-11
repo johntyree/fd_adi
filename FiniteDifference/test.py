@@ -26,6 +26,18 @@ from heston import HestonOption, HestonBarrierOption
 
 #TODO: npt.asserts for array tests
 
+def compose(*funcs):
+    names = []
+    for f in reversed(funcs):
+        names.append(f.__name__)
+    def newf(x):
+        for f in reversed(funcs):
+            x = f(x)
+        return x
+    newf.__name__ = ' ∘ '.join(reversed(names))
+    return newf
+
+
 def todia(A):
     d = scipy.sparse.dia_matrix(A)
     d.data = d.data[::-1]
@@ -185,6 +197,35 @@ def implicit_manual(V, L1, R1x, L2, R2x, dt, n, spots, vars, coeffs, crumbs=[], 
     return crumbs
 
 
+
+def foldMatFor(A, blocks):
+    l = A.shape[0] // blocks
+    data = np.zeros((3, A.shape[0]))
+    data[1, :] = 1
+    offsets = (1, 0, -1)
+    m = len(A.offsets) // 2
+    for b in range(blocks):
+        data[0, b*l+1] = -A.data[m-2,b*l+2] / A.data[m-1,b*l+2] if A.data[m-1,b*l+2] else 0
+        data[2, (b+1)*l-2] = -A.data[m+2,(b+1)*l-3] / A.data[m+1,(b+1)*l-3] if A.data[m+2,(b+1)*l-3] else 0
+        d = scipy.sparse.dia_matrix((data, offsets), shape=A.shape)
+    return d
+
+def apWithRes(A, U, R, blocks=1):
+    A = todia(A)
+    d = foldMatFor(A, blocks)
+    diagonalize = d.dot
+    undiagonalize = d.todense().I.dot
+    ret = undiagonalize(diagonalize(A).dot(U)) + R
+    return d, ret
+
+def solveWithRes(A, U, R, blocks=1):
+    A = todia(A)
+    d = foldMatFor(A, blocks)
+    diagonalize = compose(todia, d.dot)
+    undiagonalize = compose(lambda x: x.A[0], d.todense().I.dot)
+    diaA = diagonalize(A)
+    ret = diaA.todense().I.dot(d.dot(U-R)).A[0]
+    return ret
 
 class FiniteDifferenceEngineADI_test(unittest.TestCase):
 
@@ -396,6 +437,112 @@ class FiniteDifferenceEngineADI_test(unittest.TestCase):
         self.F = FD.FiniteDifferenceEngineADI(self.G, coefficients=coeffs,
                 boundaries=bounds, schemes=schemes, force_bandwidth=None)
         self.F.init()
+
+
+    def test_run_solver(self):
+        F = FD.FiniteDifferenceEngineADI(self.G, coefficients=self.F.coefficients,
+                boundaries=self.F.boundaries, force_bandwidth=(-2,2))
+        F.init()
+        op = F.operators[1]
+        n = 100.0
+
+
+        # fp(op.D)
+        print op.D.offsets
+        print op.dirichlet
+
+        xm = foldMatFor(op.D, op.blocks)
+
+        V0 = F.solve_implicit(n, 1.0/n)
+        F.grid.reset()
+
+        orig = op.copy()
+        op.diagonalize()
+        # fp(op.D - xm.dot(orig.D))
+
+        vec = np.random.random(F.grid.shape)
+        vec[0,:] = 0
+        vec[:,-1] = op.dirichlet[1]
+
+        x0 = solveWithRes(orig.D, vec.copy().flatten(), 0, orig.blocks).reshape(vec.shape)
+        v0 = op.solve(vec)
+
+        print "op"
+        fp(v0)
+        print "mat"
+        fp(x0)
+
+        fp(v0-x0, 'e')
+
+        print op.D.offsets
+        print op.is_tridiagonal()
+        print op.top_factors
+        print op.bottom_factors
+        print x0
+        # fp(op.D)
+        V1 = F.solve_implicit(n, 1.0/n)
+        F.grid.reset()
+        # fp(op.D)
+        op.undiagonalize()
+        print op.D.offsets
+        print op.is_tridiagonal()
+        print op.top_factors
+        print op.bottom_factors
+        V2 = F.solve_implicit(n, 1.0/n)
+        fp(V0 - V1, 'e')
+        npt.assert_array_almost_equal(V0, V2)
+        npt.assert_array_almost_equal(V0, V1)
+        npt.assert_array_almost_equal(V1, V2)
+
+
+    def test_run_loops(self):
+        loops = 2
+        F = FD.FiniteDifferenceEngineADI(self.G, coefficients=self.F.coefficients,
+                boundaries=self.F.boundaries, force_bandwidth=None)
+        F.init()
+
+        op = F.operators[1] + 1
+
+        vec = np.random.random(F.grid.shape)
+
+        V0a = vec.copy()
+        V0i = vec.copy()
+        for i in range(loops):
+            V0a = op.apply(V0a)
+            V0i = op.solve(V0i)
+
+        orig = op.copy()
+        op.diagonalize()
+        # fp(op.D)
+        V1a = vec.copy()
+        V1i = vec.copy()
+        for i in range(loops):
+            V1a = op.apply(V1a)
+            V1i = op.solve(V1i)
+        # fp(op.D)
+        op.undiagonalize()
+        V2a = vec.copy()
+        V2i = vec.copy()
+        for i in range(loops):
+            V2a = op.apply(V2a)
+            V2i = op.solve(V2i)
+
+        print "normal expl"
+        fp(V2a - V0a, 'e')
+        print "normal impl"
+        fp(V2i - V0i, 'e')
+        npt.assert_array_almost_equal(V0a, V2a)
+        npt.assert_array_almost_equal(V0i, V2i)
+
+        print "folded expl"
+        fp(V1a - V0a, 'e')
+        print "folded impl"
+        fp(V1i - V0i, 'e')
+        npt.assert_array_almost_equal(V0a, V1a)
+        npt.assert_array_almost_equal(V1a, V2a)
+
+        npt.assert_array_almost_equal(V0i, V1i)
+        npt.assert_array_almost_equal(V1i, V2i)
 
 
     def test_coefficient_vector(self):
@@ -1084,23 +1231,54 @@ class BandedOperator_test(unittest.TestCase):
                         0   -1   2 -1 0;
                         0   0    -1 2 -1;
                         0   0   -1.5 0.5 2""").A
-        vec = np.random.random(mat.shape[1])
         diamat = todia(scipy.sparse.dia_matrix(mat))
         x = foldMatFor(diamat, 1)
         blockx = scipy.sparse.block_diag([x]*blocks)
+        blockxI = blockx.todense().I.A
         blockdiamat = todia(scipy.sparse.block_diag([diamat]*blocks).todense())
 
         blocktridiamat = todia(blockx.dot(blockdiamat))
         B = FD.BandedOperator((blockdiamat.data, (2, 1, 0, -1, -2)), inplace=False)
         B.blocks = blocks
 
+        vec = np.random.random(mat.shape[1]*blocks)
+
+        npt.assert_array_almost_equal(vec, blockxI.dot(blockx.dot(vec)))
+        npt.assert_array_almost_equal(blockdiamat.dot(vec), blockxI.dot(blocktridiamat.dot(vec)))
+
+
         npt.assert_array_equal(B.D.data, blockdiamat.data)
+        npt.assert_array_equal(blockdiamat.dot(vec), B.apply(vec))
 
         B.diagonalize()
-        npt.assert_array_equal(B.D.data, blocktridiamat.data)
+        npt.assert_(B.is_tridiagonal())
 
+        # Folding
+        v = np.asarray(B.fold_vector(vec.copy()))
+        npt.assert_array_equal(blockx.dot(vec), v)
+
+        # Unfolding
+        B.fold_vector(v, unfold=True)
+        npt.assert_array_almost_equal(vec, v)
+
+        # Derivative Op
+        npt.assert_array_equal(B.D.data, blocktridiamat.data)
+        npt.assert_array_equal(blockxI.dot(blocktridiamat.dot(vec)), B.apply(vec))
+
+        # Solving
+        ivec = blocktridiamat.todense().I.dot(blockx.dot(vec)).A[0]
+        npt.assert_array_almost_equal(ivec, B.solve(vec))
+
+        # Inverse
         B.undiagonalize()
-        npt.assert_array_equal(B.D.data, blockdiamat.data)
+        npt.assert_(not B.is_tridiagonal())
+        npt.assert_array_equal(blockxI.dot(blockx.dot(vec)), v)
+        npt.assert_array_almost_equal(vec, v)
+        npt.assert_array_equal(blockdiamat.data, B.D.data)
+
+        # Solving
+        ivec = blockdiamat.todense().I.dot(vec).A[0]
+        npt.assert_array_almost_equal(ivec, B.solve(vec))
 
 
 class ScalingFuncs(unittest.TestCase):
