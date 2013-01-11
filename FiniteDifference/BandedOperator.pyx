@@ -433,13 +433,6 @@ cdef class BandedOperator(object):
                                       " order 2 at boundaries. (%s)" % derivative)
         B.R = np.asarray(R)
 
-        # if upper_type == 1 or upper_type is None:
-            # print "Derivative:", derivative
-            # print "boundary:", boundary
-            # print "R:", B.R
-
-
-
     cpdef splice_with(self, begin, at, inplace=False):
         """
         Splice a second operator into this one by replacing rows after @at@.

@@ -150,7 +150,6 @@ cdef class FiniteDifferenceEngine(object):
         self.simple_operators = {}
 
 
-
     def solve(self):
         """Run all the way to the terminal condition."""
         raise NotImplementedError
@@ -423,6 +422,7 @@ cdef class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
             ret = np.repeat(<float>ret, gridsize)
         return ret
 
+
     def make_discrete_operators(self):
         templates = {}
         mixed_derivs = {}
@@ -555,12 +555,12 @@ cdef class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
                     raise NotImplementedError("Mixed derivatives can only be"
                         " done with central differencing.")
 
+
     def scale_and_combine_operators(self):
         coeffs = self.coefficients
         self.operators = {}
 
         for d, op in self.simple_operators.items():
-            print d, op
             op = op.copy()
             dim = op.axis
             if d in coeffs:
@@ -582,7 +582,6 @@ cdef class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
                     else:
                         # print col, dim, combined_ops[dim].axis, self.simple_operators[dim].axis
                         self.operators[dim] = self.operators[dim] + op
-
 
 
     def cross_term(self, V, numpy=True):
@@ -638,6 +637,7 @@ cdef class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
         utils.toc(':  \t')
         self.grid.domain.append(V.copy())
         return V
+
 
     @initialized
     def solve_explicit(self, n, dt, initial=None, callback=None, numpy=False):
