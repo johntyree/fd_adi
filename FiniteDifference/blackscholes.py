@@ -56,6 +56,7 @@ class BlackScholesOption(Option):
         d2 = d1 - vol*np.sqrt(t)
         return (N(d1)*s - N(d2)*k*np.exp(-r * t), N(d1))
 
+
 class BlackScholesBarrierOption(BarrierOption, BlackScholesOption):
     def __init__(self
                 , spot=100
@@ -137,9 +138,6 @@ class BlackScholesBarrierOption(BarrierOption, BlackScholesOption):
         d = BarrierOption.features(self)
         d[0] = "BlackScholesBarrierOption <%s>" % hex(id(self))
         return d
-
-
-
 
 
 class BlackScholesFiniteDifferenceEngine(FDE.FiniteDifferenceEngineADI):
