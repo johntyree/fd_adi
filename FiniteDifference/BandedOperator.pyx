@@ -238,12 +238,15 @@ cdef class BandedOperator(object):
         return np.asarray(v)
 
 
-    cdef inline cbool is_folded(self):
+    cdef inline cbool _is_folded(self):
         return self.top_factors is not None or self.bottom_factors is not None
 
+    def is_folded(self):
+        return self._is_folded()
+
+
     cpdef cbool is_tridiagonal(self):
-        return (self.is_folded() or
-                    self.D.offsets[0] == 1
+        return (    self.D.offsets[0] == 1
                 and self.D.offsets[1] == 0
                 and self.D.offsets[2] == -1)
 
@@ -262,7 +265,8 @@ cdef class BandedOperator(object):
             # print "Setting V[-1,:] to", self.dirichlet[-1]
             V[...,-1] = self.dirichlet[1]
 
-        if self.is_folded():
+        if self._is_folded():
+            # print "apply folded!"
             ret = self.fold_vector(self.D.dot(V.flat), unfold=True)
         else:
             ret = self.D.dot(V.flat)
@@ -296,7 +300,8 @@ cdef class BandedOperator(object):
         else:
             V0 = V.ravel()
 
-        if self.is_folded():
+        if self._is_folded():
+            # print "solve Folded"
             V0 = self.fold_vector(V0)
 
         ret = spl.solve_banded(self.solve_banded_offsets,
@@ -546,7 +551,7 @@ cdef class BandedOperator(object):
         # Verify that they are compatible
         if self.shape[1] != other.shape[1]:
             raise ValueError("Both operators must have the same length")
-        if self.is_folded() or other.is_folded():
+        if self._is_folded() or other._is_folded():
             raise ValueError("Cannot add diagonalized operators.")
         # If we're adding it directly to this one
         if inplace:

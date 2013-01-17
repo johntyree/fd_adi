@@ -17,7 +17,7 @@ cdef class BandedOperator(object):
     cdef public shape
     cdef public top_factors, bottom_factors
 
-    cdef inline cbool is_folded(self)
+    cdef inline cbool _is_folded(self)
 
     cpdef copy(self)
     cpdef diagonalize(self)
