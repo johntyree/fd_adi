@@ -332,8 +332,9 @@ class HestonFiniteDifferenceEngine(FiniteDifferenceEngineADI):
                             (None, lambda t, *dim: None)
                             # (0, lambda t, *dim: dim[0])
                             ),
-                            # # Free boundary
-                    (1,1) : ((None, lambda t, *dim: None),
+                            # We know from the PDE that this will be 0 because
+                            # the vol is 0 at the low boundary
+                    (1,1) : ((1, lambda t, *dim: 0),
                             # D intrinsic value at high variance
                             # (0, lambda t, *dim: np.exp(-option.interest_rate.value * t) * np.maximum(0.0, np.exp(dim[0])-option.strike))),
                             (None, lambda t, *dim: None)

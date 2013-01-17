@@ -184,7 +184,7 @@ class FiniteDifferenceEngineADI_test(unittest.TestCase):
                         (0 if dirichlet_v else 1, lambda t, *dim: np.maximum(0.0, dim[0]-k))
                         ),
                         # # Free boundary
-                (1,1) : ((None, lambda *x: None),
+                (1,1) : ((1, lambda *x: 0),
                         # D intrinsic value at high variance
                         # (None, lambda *x: None)
                         (0 if dirichlet_v else 1, lambda t, *dim: np.maximum(0.0, dim[0]-k))
