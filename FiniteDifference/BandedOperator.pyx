@@ -363,16 +363,20 @@ cdef class BandedOperator(object):
             # Free boundary
             # Second order forward approximation
             # XXX: This is dangerous! We can't do it if data is not wide enough
-            assert m-2 >= 0, ("Not wide enough."
-                    "\nB.D.data.shape = %s"
-                    "\nB.derivative = %s"
-                    "\nB.D.offsets = %s"
-                    "\nm = %s"
-                    "\nboundary = %s"
-                    ) % (B.D.data.shape, B.derivative, B.D.offsets, m, boundary)
-            Bdata[m - 2, 2] = -d[1] / (d[2] * (d[1] + d[2]))
-            Bdata[m - 1, 1] = (d[1] + d[2]) / (d[1] * d[2])
-            Bdata[m,     0] = (-2 * d[1] - d[2]) / (d[1] * (d[1] + d[2]))
+            # assert m-2 >= 0, ("Not wide enough."
+                    # "\nB.D.data.shape = %s"
+                    # "\nB.derivative = %s"
+                    # "\nB.D.offsets = %s"
+                    # "\nm = %s"
+                    # "\nboundary = %s"
+                    # ) % (B.D.data.shape, B.derivative, B.D.offsets, m, boundary)
+            # Bdata[m - 2, 2] = -d[1] / (d[2] * (d[1] + d[2]))
+            # Bdata[m - 1, 1] = (d[1] + d[2]) / (d[1] * d[2])
+            # Bdata[m,     0] = (-2 * d[1] - d[2]) / (d[1] * (d[1] + d[2]))
+
+            # Try first order to preserve tri-diag
+            Bdata[m - 1, 1] =  1 / d[1]
+            Bdata[m,     0] = -1 / d[1]
         elif lower_type is None and derivative == 2:
             # If we know the first derivative, Extrapolate second derivative by
             # assuming the first stays constant.
@@ -406,15 +410,15 @@ cdef class BandedOperator(object):
             # Von Neumann boundary, we specify it directly.
             R[-1] = upper_val
         elif upper_type is None and derivative == 1:
-            # Second order backward approximation
-            assert m+2 < B.D.data.shape[0]
-            # XXX: This is dangerous! We can't do it if data is not wide enough
-            Bdata[m  , -1] = (d[-2]+2*d[-1])  / (d[-1]*(d[-2]+d[-1]))
-            Bdata[m+1, -2] = (-d[-2] - d[-1]) / (d[-2]*d[-1])
-            Bdata[m+2, -3] = d[-1]             / (d[-2]*(d[-2]+d[-1]))
+            # # Second order backward approximation
+            # assert m+2 < B.D.data.shape[0]
+            # # XXX: This is dangerous! We can't do it if data is not wide enough
+            # Bdata[m  , -1] = (d[-2]+2*d[-1])  / (d[-1]*(d[-2]+d[-1]))
+            # Bdata[m+1, -2] = (-d[-2] - d[-1]) / (d[-2]*d[-1])
+            # Bdata[m+2, -3] = d[-1]             / (d[-2]*(d[-2]+d[-1]))
             # First order backward
-            # Bdata[m, -1] = 1.0 / d[-1]
-            # Bdata[m + 1, -2] = -1.0 / d[-1]
+            Bdata[m, -1]     =  1.0 / d[-1]
+            Bdata[m + 1, -2] = -1.0 / d[-1]
         elif upper_type is None and derivative == 2:
             # if B.R is None:
                 # R = np.zeros(B.D.data.shape[1])

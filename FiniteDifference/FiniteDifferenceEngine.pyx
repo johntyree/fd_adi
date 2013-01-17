@@ -339,7 +339,7 @@ cdef class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
                 low = min(-2, low)
         if b[0][0] is None:
             if d == 1:
-                h = 2
+                h = 1
             elif d == 2:
                 if b[0][1](0,0) is not None:
                     h = 1
@@ -351,7 +351,7 @@ cdef class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
             high = max(h, high)
         if b[1][0] is None:
             if d == 1:
-                l = -2
+                l = -1
             elif d == 2:
                 if b[1][1](0,0) is not None:
                     l = -1
