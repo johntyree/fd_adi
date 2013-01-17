@@ -379,14 +379,14 @@ cdef class BandedOperator(object):
             if lower_val is not None:
                 # print "%s %s Assuming first derivative is %s for second." % (B.axis, B.derivative, lower_val,)
                 fst_deriv = lower_val
-                assert m-1 >= 0
+                assert m-1 >= 0, "First derivative tried to reach diag %s" % (m-1)
                 Bdata[m-1, 1] =  2 / d[1]**2
                 Bdata[m,   0] = -2 / d[1]**2
                 R[0]         =  -fst_deriv * 2 / d[1]
             # Otherwise just compute it with forward differencing
             else:
                 # print "%s %s Computing second derivative directly." % (B.axis, B.derivative,)
-                assert m-2 >= 0
+                assert m-2 >= 0, "Second derivative tried to reach diag %s" % (m-2)
                 recip_denom = 1.0 / (0.5*(d[2]+d[1])*d[2]*d[1]);
                 Bdata[m-2,2] = d[1]         * recip_denom
                 Bdata[m-1,1] = -(d[2]+d[1]) * recip_denom
@@ -422,17 +422,17 @@ cdef class BandedOperator(object):
             # assuming the first stays constant.
             if upper_val is not None:
                 fst_deriv = upper_val
-                assert m+1 < B.D.data.shape[0]
+                assert m+1 < B.D.data.shape[0], "Second Derivative tried to reach diag %s" % (m+1)
                 Bdata[m,   -1] = -2 / d[-1]**2
                 Bdata[m+1, -2] =  2 / d[-1]**2
                 R[-1]          =  fst_deriv * 2 / d[-1]
             # Otherwise just compute it with backward differencing
             else:
-                assert m-2 >= 0
+                assert m+2 < B.D.data.shape[0], "Second Derivative tried to reach diag %s" % (m-2)
                 recip_denom = 1.0 / (0.5*(d[-2]+d[-1])*d[-2]*d[-1]);
-                Bdata[m+2,-3] = d[-1]         * recip_denom
+                Bdata[m+2,-3] = d[-1]          * recip_denom
                 Bdata[m+1,-2] = -(d[-2]+d[-1]) * recip_denom
-                Bdata[m,-1]   = d[-2]         * recip_denom
+                Bdata[m,-1]   = d[-2]          * recip_denom
         else:
             raise NotImplementedError("Can't handle derivatives higher than"
                                       " order 2 at boundaries. (%s)" % derivative)
