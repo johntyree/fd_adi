@@ -360,8 +360,9 @@ class FiniteDifferenceEngineADI_test(unittest.TestCase):
         npt.assert_array_equal(ref, vec, "Failed when focused on dim: %i", 1)
 
 
-    def test_combine_dimensional_operators(self):
-        # raise unittest.case.SkipTest
+    def test_combine_dimensional_operators_0(self):
+        if self.F.operators[0].solve_banded_offsets[1] != 2:
+            unittest.skipTest("Using first order boundary approximation. Top is tridiag.")
         oldL1 = self.L1_.copy()
         oldL1 = scipy.sparse.dia_matrix(oldL1.todense())
         oldL1.data = oldL1.data[::-1]
@@ -371,24 +372,12 @@ class FiniteDifferenceEngineADI_test(unittest.TestCase):
         # oldL1.data = oldL1.data[m-high:m-low+1]
         # oldL1.offsets = oldL1.offsets[m-high:m-low+1]
 
-        oldL2 = self.L2_.copy()
-        oldL2 = scipy.sparse.dia_matrix(oldL2.todense())
-        oldL2.data = oldL2.data[::-1]
-        oldL2.offsets = oldL2.offsets[::-1]
-        # high, low = 2, -2
-        # m = tuple(oldL2.offsets).index(0)
-        # oldL2.data = oldL2.data[m-high:m-low+1]
-        # oldL2.offsets = oldL2.offsets[m-high:m-low+1]
-
         oldR1 = self.R1_.T.flatten()
-        oldR2 = self.R2_.flatten()
 
         L1 = self.F.operators[0]
 
         # oldL1.data = oldL1.data[:-1]
         # oldL1.offsets = oldL1.offsets[:-1]
-        # oldL2.data = oldL2.data[1:]
-        # oldL2.offsets = oldL2.offsets[1:]
 
         print "offsets"
         print oldL1.offsets, L1.D.offsets
@@ -420,19 +409,34 @@ class FiniteDifferenceEngineADI_test(unittest.TestCase):
 
         L2 = self.F.operators[1]
 
-        print "old"
-        fp(oldL2.data)
-        print
-        print "new"
-        fp(L2.D.data)
-        print "old"
-        fp(oldL2.todense())
-        print
-        print "new"
-        fp(L2.D.todense())
-        print
-        print "diff"
-        fp(oldL2.todense() - L2.D.todense())
+
+    def test_combine_dimensional_operators_1(self):
+        if self.F.operators[1].solve_banded_offsets[1] != 2:
+            print self.skipTest("Using first order boundary approximation. Top is tridiag.")
+        oldL2 = self.L2_.copy()
+        oldL2 = todia(oldL2.todense())
+        # high, low = 2, -2
+        # m = tuple(oldL2.offsets).index(0)
+        # oldL2.data = oldL2.data[m-high:m-low+1]
+        # oldL2.offsets = oldL2.offsets[m-high:m-low+1]
+
+        oldR2 = self.R2_.flatten()
+
+        L2 = self.F.operators[1]
+
+        # print "old"
+        # fp(oldL2.data)
+        # print
+        # print "new"
+        # fp(L2.D.data)
+        # print "old"
+        # fp(oldL2.todense())
+        # print
+        # print "new"
+        # fp(L2.D.todense())
+        # print
+        # print "diff"
+        # fp(oldL2.todense() - L2.D.todense())
         npt.assert_allclose(L2.D.data, oldL2.data)
         # print "old"
         # print oldR2
