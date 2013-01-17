@@ -24,27 +24,6 @@ from blackscholes import BlackScholesFiniteDifferenceEngine, BlackScholesOption
 from heston import HestonOption, HestonBarrierOption
 
 
-#TODO: npt.asserts for array tests
-
-def compose(*funcs):
-    names = []
-    for f in reversed(funcs):
-        names.append(f.__name__)
-    def newf(x):
-        for f in reversed(funcs):
-            x = f(x)
-        return x
-    newf.__name__ = ' ∘ '.join(reversed(names))
-    return newf
-
-
-def todia(A):
-    d = scipy.sparse.dia_matrix(A)
-    d.data = d.data[::-1]
-    d.offsets = d.offsets[::-1]
-    return d
-
-
 def test_numpy_transpose_vs_rollaxis():
     a = np.ones((3,1,4,2,0,5))
     b = a.copy()
@@ -143,89 +122,6 @@ class BlackScholesOption_test(unittest.TestCase):
         # print "Price:", V, ans, V - ans
         npt.assert_allclose(V, ans, rtol=0.001)
 
-
-def implicit_manual(V, L1, R1x, L2, R2x, dt, n, spots, vars, coeffs, crumbs=[], callback=None):
-    V = V.copy()
-
-    # L1i = flatten_tensor(L1)
-    L1i = L1.copy()
-    R1 = np.array(R1x)
-
-    # L2i = flatten_tensor(L2)
-    L2i = L2.copy()
-    R2 = np.array(R2x)
-
-    m = 2
-
-    # L  = (As + Ass - H.interest_rate*np.eye(nspots))*-dt + np.eye(nspots)
-    L1i.data *= -dt
-    L1i.data[m, :] += 1
-    R1 *= dt
-
-    L2i.data *= -dt
-    L2i.data[m, :] += 1
-    R2 *= dt
-
-    offsets1 = (abs(min(L1i.offsets)), abs(max(L1i.offsets)))
-    offsets2 = (abs(min(L2i.offsets)), abs(max(L2i.offsets)))
-
-    dx = np.gradient(spots)[:,np.newaxis]
-    dy = np.gradient(vars)
-    X, Y = [dim.T for dim in np.meshgrid(spots, vars)]
-    gradgrid = dt * coeffs[(0,1)](0, X, Y) / (dx * dy)
-    gradgrid[:,0] = 0; gradgrid[:,-1] = 0
-    gradgrid[0,:] = 0; gradgrid[-1,:] = 0
-
-    print_step = max(1, int(n / 10))
-    to_percent = 100.0 / n
-    utils.tic("Impl:")
-    for k in xrange(n):
-        if not k % print_step:
-            if np.isnan(V).any():
-                print "Impl fail @ t = %f (%i steps)" % (dt * k, k)
-                return crumbs
-            print int(k * to_percent),
-        if callback is not None:
-            callback(V, ((n - k) * dt))
-        Vsv = np.gradient(np.gradient(V)[0])[1] * gradgrid
-        V = spl.solve_banded(offsets2, L2i.data,
-                             (V + Vsv + R2).flat, overwrite_b=True).reshape(V.shape)
-        V = spl.solve_banded(offsets1, L1i.data,
-                             (V + R1).T.flat, overwrite_b=True).reshape(V.shape[::-1]).T
-    crumbs.append(V.copy())
-    utils.toc()
-    return crumbs
-
-
-
-def foldMatFor(A, blocks):
-    l = A.shape[0] // blocks
-    data = np.zeros((3, A.shape[0]))
-    data[1, :] = 1
-    offsets = (1, 0, -1)
-    m = len(A.offsets) // 2
-    for b in range(blocks):
-        data[0, b*l+1] = -A.data[m-2,b*l+2] / A.data[m-1,b*l+2] if A.data[m-1,b*l+2] else 0
-        data[2, (b+1)*l-2] = -A.data[m+2,(b+1)*l-3] / A.data[m+1,(b+1)*l-3] if A.data[m+2,(b+1)*l-3] else 0
-        d = scipy.sparse.dia_matrix((data, offsets), shape=A.shape)
-    return d
-
-def apWithRes(A, U, R, blocks=1):
-    A = todia(A)
-    d = foldMatFor(A, blocks)
-    diagonalize = d.dot
-    undiagonalize = d.todense().I.dot
-    ret = undiagonalize(diagonalize(A).dot(U)) + R
-    return d, ret
-
-def solveWithRes(A, U, R, blocks=1):
-    A = todia(A)
-    d = foldMatFor(A, blocks)
-    diagonalize = compose(todia, d.dot)
-    undiagonalize = compose(lambda x: x.A[0], d.todense().I.dot)
-    diaA = diagonalize(A)
-    ret = diaA.todense().I.dot(d.dot(U-R)).A[0]
-    return ret
 
 class FiniteDifferenceEngineADI_test(unittest.TestCase):
 
@@ -1282,6 +1178,7 @@ class BandedOperator_test(unittest.TestCase):
 
 
 class ScalingFuncs(unittest.TestCase):
+
     def setUp(self):
         k = 3.0
         nspots = 7
@@ -1676,6 +1573,121 @@ def block_repeat(B, blocks):
     B.shape = tuple(x*blocks for x in B.shape)
     return B
 
+
+def implicit_manual(V, L1, R1x, L2, R2x, dt, n, spots, vars, coeffs, crumbs=[], callback=None):
+    V = V.copy()
+
+    # L1i = flatten_tensor(L1)
+    L1i = L1.copy()
+    R1 = np.array(R1x)
+
+    # L2i = flatten_tensor(L2)
+    L2i = L2.copy()
+    R2 = np.array(R2x)
+
+    m = 2
+
+    # L  = (As + Ass - H.interest_rate*np.eye(nspots))*-dt + np.eye(nspots)
+    L1i.data *= -dt
+    L1i.data[m, :] += 1
+    R1 *= dt
+
+    L2i.data *= -dt
+    L2i.data[m, :] += 1
+    R2 *= dt
+
+    offsets1 = (abs(min(L1i.offsets)), abs(max(L1i.offsets)))
+    offsets2 = (abs(min(L2i.offsets)), abs(max(L2i.offsets)))
+
+    dx = np.gradient(spots)[:,np.newaxis]
+    dy = np.gradient(vars)
+    X, Y = [dim.T for dim in np.meshgrid(spots, vars)]
+    gradgrid = dt * coeffs[(0,1)](0, X, Y) / (dx * dy)
+    gradgrid[:,0] = 0; gradgrid[:,-1] = 0
+    gradgrid[0,:] = 0; gradgrid[-1,:] = 0
+
+    print_step = max(1, int(n / 10))
+    to_percent = 100.0 / n
+    utils.tic("Impl:")
+    for k in xrange(n):
+        if not k % print_step:
+            if np.isnan(V).any():
+                print "Impl fail @ t = %f (%i steps)" % (dt * k, k)
+                return crumbs
+            print int(k * to_percent),
+        if callback is not None:
+            callback(V, ((n - k) * dt))
+        Vsv = np.gradient(np.gradient(V)[0])[1] * gradgrid
+        V = spl.solve_banded(offsets2, L2i.data,
+                             (V + Vsv + R2).flat, overwrite_b=True).reshape(V.shape)
+        V = spl.solve_banded(offsets1, L1i.data,
+                             (V + R1).T.flat, overwrite_b=True).reshape(V.shape[::-1]).T
+    crumbs.append(V.copy())
+    utils.toc()
+    return crumbs
+
+
+def foldMatFor(A, blocks):
+    l = A.shape[0] // blocks
+    data = np.zeros((3, A.shape[0]))
+    data[1, :] = 1
+    offsets = (1, 0, -1)
+    m = len(A.offsets) // 2
+    for b in range(blocks):
+        data[0, b*l+1] = -A.data[m-2,b*l+2] / A.data[m-1,b*l+2] if A.data[m-1,b*l+2] else 0
+        data[2, (b+1)*l-2] = -A.data[m+2,(b+1)*l-3] / A.data[m+1,(b+1)*l-3] if A.data[m+2,(b+1)*l-3] else 0
+        d = scipy.sparse.dia_matrix((data, offsets), shape=A.shape)
+    return d
+
+
+def apWithRes(A, U, R, blocks=1):
+    A = todia(A)
+    d = foldMatFor(A, blocks)
+    diagonalize = d.dot
+    undiagonalize = d.todense().I.dot
+    ret = undiagonalize(diagonalize(A).dot(U)) + R
+    return d, ret
+
+
+def solveWithRes(A, U, R, blocks=1):
+    A = todia(A)
+    d = foldMatFor(A, blocks)
+    diagonalize = compose(todia, d.dot)
+    undiagonalize = compose(lambda x: x.A[0], d.todense().I.dot)
+    diaA = diagonalize(A)
+    ret = diaA.todense().I.dot(d.dot(U-R)).A[0]
+    return ret
+
+
+def compose(*funcs):
+    names = []
+    for f in reversed(funcs):
+        names.append(f.__name__)
+    def newf(x):
+        for f in reversed(funcs):
+            x = f(x)
+        return x
+    newf.__name__ = ' ∘ '.join(reversed(names))
+    return newf
+
+def todia(A):
+    d = scipy.sparse.dia_matrix(A)
+    d.data = d.data[::-1]
+    d.offsets = d.offsets[::-1]
+    return d
+
+
+def foldMatFor(A, blocks):
+    l = A.shape[0] // blocks
+    data = np.zeros((3, A.shape[0]))
+    data[1, :] = 1
+    offsets = (1, 0, -1)
+    m = len(A.offsets) // 2
+    for b in range(blocks):
+        data[0, b*l+1] = -A.data[m-2,b*l+2] / A.data[m-1,b*l+2] if A.data[m-1,b*l+2] else 0
+        data[2, (b+1)*l-2] = -A.data[m+2,(b+1)*l-3] / A.data[m+1,(b+1)*l-3] if A.data[m+2,(b+1)*l-3] else 0
+        d = scipy.sparse.dia_matrix((data, offsets), shape=A.shape)
+    return d
 
 
 def main():
