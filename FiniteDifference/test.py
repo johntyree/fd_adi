@@ -335,112 +335,6 @@ class FiniteDifferenceEngineADI_test(unittest.TestCase):
         self.F.init()
 
 
-    def test_run_solver(self):
-        F = FD.FiniteDifferenceEngineADI(self.G, coefficients=self.F.coefficients,
-                boundaries=self.F.boundaries, force_bandwidth=(-2,2))
-        F.init()
-        op = F.operators[1]
-        n = 100.0
-
-
-        # fp(op.D)
-        # print op.D.offsets
-        # print op.dirichlet
-
-        # xm = foldMatFor(op.D, op.blocks)
-
-        V0 = F.solve_implicit(n, 1.0/n)
-        F.grid.reset()
-
-        orig = op.copy()
-        op.diagonalize()
-        # fp(op.D - xm.dot(orig.D))
-
-        # vec = np.random.random(F.grid.shape)
-        # vec[0,:] = 0
-        # vec[:,-1] = op.dirichlet[1]
-
-        # x0 = solveWithRes(orig.D, vec.copy().flatten(), 0, orig.blocks).reshape(vec.shape)
-        # v0 = op.solve(vec)
-
-        # print "op"
-        # fp(v0)
-        # print "mat"
-        # fp(x0)
-
-        # fp(v0-x0, 'e')
-
-        print op.D.offsets
-        print op.is_tridiagonal()
-        print op.top_factors
-        print op.bottom_factors
-        # print x0
-        # fp(op.D)
-        V1 = F.solve_implicit(n, 1.0/n)
-        F.grid.reset()
-        # fp(op.D)
-        op.undiagonalize()
-        print op.D.offsets
-        print op.is_tridiagonal()
-        print op.top_factors
-        print op.bottom_factors
-        V2 = F.solve_implicit(n, 1.0/n)
-        fp(V0 - V1, 'e')
-        npt.assert_array_almost_equal(V0, V2)
-        npt.assert_array_almost_equal(V0, V1)
-        npt.assert_array_almost_equal(V1, V2)
-
-
-    def test_run_loops(self):
-        loops = 2
-        F = FD.FiniteDifferenceEngineADI(self.G, coefficients=self.F.coefficients,
-                boundaries=self.F.boundaries, force_bandwidth=None)
-        F.init()
-
-        op = F.operators[1] + 1
-
-        vec = np.random.random(F.grid.shape)
-
-        V0a = vec.copy()
-        V0i = vec.copy()
-        for i in range(loops):
-            V0a = op.apply(V0a)
-            V0i = op.solve(V0i)
-
-        orig = op.copy()
-        op.diagonalize()
-        # fp(op.D)
-        V1a = vec.copy()
-        V1i = vec.copy()
-        for i in range(loops):
-            V1a = op.apply(V1a)
-            V1i = op.solve(V1i)
-        # fp(op.D)
-        op.undiagonalize()
-        V2a = vec.copy()
-        V2i = vec.copy()
-        for i in range(loops):
-            V2a = op.apply(V2a)
-            V2i = op.solve(V2i)
-
-        print "normal expl"
-        fp(V2a - V0a, 'e')
-        print "normal impl"
-        fp(V2i - V0i, 'e')
-        npt.assert_array_almost_equal(V0a, V2a)
-        npt.assert_array_almost_equal(V0i, V2i)
-
-        print "folded expl"
-        fp(V1a - V0a, 'e')
-        print "folded impl"
-        fp(V1i - V0i, 'e')
-        npt.assert_array_almost_equal(V0a, V1a)
-        npt.assert_array_almost_equal(V1a, V2a)
-
-        npt.assert_array_almost_equal(V0i, V1i)
-        npt.assert_array_almost_equal(V1i, V2i)
-
-
     def test_coefficient_vector(self):
         mesh = (np.arange(3), np.arange(10,12))
         G = Grid.Grid(mesh, initializer=lambda *x: 0.0)
@@ -1105,21 +999,16 @@ class BandedOperator_test(unittest.TestCase):
                     assert (X12.D.data == manualX12.data[::-1]).all(),  "%s+%s (dv %i) idx %i" % (sch0, sch1, dv, idx)
 
 
-    def test_diagonalize(self):
+class Operator_Folding_test(unittest.TestCase):
 
-        blocks = 3
+    def setUp(self):
+        loops = 200
+        blocks = 2
+        decimals = 12
 
-        def foldMatFor(A, blocks):
-            l = A.shape[0] // blocks
-            data = np.zeros((3, A.shape[0]))
-            data[1, :] = 1
-            offsets = (1, 0, -1)
-            m = len(A.offsets) // 2
-            for b in range(blocks):
-                data[0, b*l+1] = -A.data[m-2,b*l+2] / A.data[m-1,b*l+2] if A.data[m-1,b*l+2] else 0
-                data[2, (b+1)*l-2] = -A.data[m+2,(b+1)*l-3] / A.data[m+1,(b+1)*l-3] if A.data[m+2,(b+1)*l-3] else 0
-                d = scipy.sparse.dia_matrix((data, offsets), shape=A.shape)
-            return d
+        self.loops = loops
+        self.blocks = blocks
+        self.decimals = decimals
 
         mat = np.matrix("""
                         -1.5 0.5 2 0 0;
@@ -1128,53 +1017,245 @@ class BandedOperator_test(unittest.TestCase):
                         0   0    -1 2 -1;
                         0   0   -1.5 0.5 2""").A
         diamat = todia(scipy.sparse.dia_matrix(mat))
-        x = foldMatFor(diamat, 1)
-        blockx = scipy.sparse.block_diag([x]*blocks)
-        blockxI = blockx.todense().I.A
-        blockdiamat = todia(scipy.sparse.block_diag([diamat]*blocks).todense())
+
+        x = foldMatFor(diamat, 1).todense().A
+        topx = x.copy()
+        bottomx = x.copy()
+        topx[-1,-2] = 0
+        bottomx[0,1] = 0
+        x, topx, bottomx = map(todia, [x, topx, bottomx])
+
+
+        topblockx = scipy.sparse.block_diag([topx]*blocks)
+        bottomblockx = scipy.sparse.block_diag([bottomx]*blocks)
+        blockx = todia(scipy.sparse.block_diag([x]*blocks))
+        self.blockxI = blockx.todense().I.A
+        self.topblockxI = topblockx.todense().I.A
+        self.bottomblockxI = bottomblockx.todense().I.A
+
+        npt.assert_array_equal(todia(topblockx.dot(bottomblockx)).data, blockx.data)
+
+        blockdiamat = todia(scipy.sparse.block_diag([diamat]*blocks))
 
         blocktridiamat = todia(blockx.dot(blockdiamat))
-        B = FD.BandedOperator((blockdiamat.data, (2, 1, 0, -1, -2)), inplace=False)
-        B.blocks = blocks
+        topblocktridiamat = todia(topblockx.dot(blockdiamat))
+        bottomblocktridiamat = todia(bottomblockx.dot(blockdiamat))
 
-        vec = np.random.random(mat.shape[1]*blocks)
+        self.blockdiamat = blockdiamat
 
-        npt.assert_array_almost_equal(vec, blockxI.dot(blockx.dot(vec)))
-        npt.assert_array_almost_equal(blockdiamat.dot(vec), blockxI.dot(blocktridiamat.dot(vec)))
+        self.blockx = blockx
+        self.topblockx = topblockx
+        self.bottomblockx = bottomblockx
+
+        self.blocktridiamat = blocktridiamat
+        self.topblocktridiamat = topblocktridiamat
+        self.bottomblocktridiamat = bottomblocktridiamat
+
+        self.vec = np.random.random(mat.shape[1]*blocks)
+
+        self.B = FD.BandedOperator((blockdiamat.data, (2, 1, 0, -1, -2)), inplace=False)
+        self.B.blocks = blocks
 
 
-        npt.assert_array_equal(B.D.data, blockdiamat.data)
-        npt.assert_array_equal(blockdiamat.dot(vec), B.apply(vec))
+    def test_diag_creation(self):
+        vec = self.vec
 
+        npt.assert_array_almost_equal(vec, self.blockxI.dot(self.blockx.dot(vec)))
+        npt.assert_array_almost_equal(self.blockdiamat.dot(vec), self.blockxI.dot(self.blocktridiamat.dot(vec)))
+        npt.assert_array_almost_equal(vec, self.bottomblockxI.dot(self.bottomblockx.dot(vec)))
+        npt.assert_array_almost_equal(self.blockdiamat.dot(vec), self.bottomblockxI.dot(self.bottomblocktridiamat.dot(vec)))
+        npt.assert_array_almost_equal(vec, self.topblockxI.dot(self.topblockx.dot(vec)))
+        npt.assert_array_almost_equal(self.blockdiamat.dot(vec), self.topblockxI.dot(self.topblocktridiamat.dot(vec)))
+
+
+    def test_normal(self):
+        # Normal (no folding)
+        npt.assert_array_equal(self.B.D.data, self.blockdiamat.data)
+        npt.assert_array_equal(self.blockdiamat.dot(self.vec), self.B.apply(self.vec))
+
+
+    def test_diagonalize(self):
+        B = self.B.copy()
         B.diagonalize()
-        npt.assert_(B.is_tridiagonal())
-
-        # Folding
-        v = np.asarray(B.fold_vector(vec.copy()))
-        npt.assert_array_equal(blockx.dot(vec), v)
-
-        # Unfolding
-        B.fold_vector(v, unfold=True)
-        npt.assert_array_almost_equal(vec, v)
-
-        # Derivative Op
-        npt.assert_array_equal(B.D.data, blocktridiamat.data)
-        npt.assert_array_equal(blockxI.dot(blocktridiamat.dot(vec)), B.apply(vec))
-
-        # Solving
-        ivec = blocktridiamat.todense().I.dot(blockx.dot(vec)).A[0]
-        npt.assert_array_almost_equal(ivec, B.solve(vec))
-
-        # Inverse
         B.undiagonalize()
         npt.assert_(not B.is_tridiagonal())
-        npt.assert_array_equal(blockxI.dot(blockx.dot(vec)), v)
-        npt.assert_array_almost_equal(vec, v)
-        npt.assert_array_equal(blockdiamat.data, B.D.data)
+        npt.assert_array_equal(B.D.data, self.B.D.data, err_msg="Diagonalize roundtrip doesn't preserve operator matrix.")
+        npt.assert_(B == self.B, msg="Diagonalize roundtrip doesn't preserve operator.")
 
-        # Solving
-        ivec = blockdiamat.todense().I.dot(vec).A[0]
-        npt.assert_array_almost_equal(ivec, B.solve(vec))
+
+    def test_fold_vector(self):
+        B = self.B
+        blockx = self.blockx
+        bottomblockx = self.bottomblockx
+        topblockx = self.topblockx
+        vec = self.vec
+
+        # Folding and unfolding
+        Btop = B.copy()
+        Btop.foldtop()
+        Bbottom = B.copy()
+        Bbottom.foldbottom()
+        B.diagonalize()
+
+        v = np.asarray(Bbottom.fold_vector(vec.copy()))
+        npt.assert_array_equal(bottomblockx.dot(vec), v, err_msg="Bottom folded differs from matrix'd op.")
+        Bbottom.fold_vector(v, unfold=True)
+        npt.assert_array_almost_equal(vec, v, decimal=14, err_msg="Bottom unfolded differs from orig.")
+
+        v = np.asarray(Btop.fold_vector(vec.copy()))
+        npt.assert_array_equal(topblockx.dot(vec), v, err_msg="Top folded differs from matrix'd op.")
+        Btop.fold_vector(v, unfold=True)
+        npt.assert_array_almost_equal(vec, v, decimal=14, err_msg="Top unfolded differs from orig.")
+
+        v = np.asarray(B.fold_vector(vec.copy()))
+        npt.assert_array_equal(blockx.dot(vec), v, err_msg="Both folded differs from matrix'd op.")
+        B.fold_vector(v, unfold=True)
+        npt.assert_array_almost_equal(vec, v, decimal=14, err_msg="Both unfolded differs from orig.")
+
+        vec = self.vec.copy()
+        B = self.B
+        B.diagonalize()
+
+
+    def test_explicit(self):
+        Borig = self.B
+        vec = self.vec.copy()
+        blocktridiamat = self.blocktridiamat
+        topblocktridiamat = self.topblocktridiamat
+        bottomblocktridiamat = self.bottomblocktridiamat
+        blockxI = self.blockxI
+        topblockxI = self.topblockxI
+        bottomblockxI = self.bottomblockxI
+        loops = self.loops
+
+        # Derivative Op explicit
+        bvec = vec.copy()
+
+        # Explicit
+        Btop = Borig.copy()
+        Btop.foldtop()
+        npt.assert_array_equal(Btop.D.data[1:], topblocktridiamat.data, err_msg="Bottom op and mat not equal.")
+        assert Btop.is_folded()
+        assert not Btop.is_tridiagonal()
+        for i in range(loops):
+            bvec = topblockxI.dot(topblocktridiamat.dot(bvec))
+            vec = Btop.apply(vec)
+            npt.assert_array_almost_equal(bvec, vec, err_msg="Bottom Loop: %s" % i)
+            npt.assert_((vec == vec).all()) # for NaNs
+            npt.assert_((bvec == bvec).all()) # for NaNs
+        vec = self.vec.copy()
+        bvec = vec.copy()
+
+        Bbottom = Borig.copy()
+        Bbottom.foldbottom()
+        npt.assert_array_equal(Bbottom.D.data[:-1], bottomblocktridiamat.data, err_msg="Bottom op and mat not equal.")
+        assert Bbottom.is_folded()
+        assert not Bbottom.is_tridiagonal()
+        for i in range(loops):
+            bvec = bottomblockxI.dot(bottomblocktridiamat.dot(bvec))
+            vec = Bbottom.apply(vec)
+            npt.assert_array_almost_equal(bvec, vec, err_msg="Bottom Loop: %s" % i)
+            npt.assert_((vec == vec).all()) # for NaNs
+            npt.assert_((bvec == bvec).all()) # for NaNs
+        vec = self.vec.copy()
+        bvec = vec.copy()
+
+        B = Borig.copy()
+        B.diagonalize()
+        npt.assert_array_equal(B.D.data, blocktridiamat.data)
+        for i in range(loops):
+            bvec = blockxI.dot(blocktridiamat.dot(bvec))
+            vec = B.apply(vec)
+            npt.assert_array_equal(bvec, vec)
+            npt.assert_((vec == vec).all())
+            npt.assert_((bvec == bvec).all())
+        vec = self.vec.copy()
+        bvec = vec.copy()
+
+
+    def test_top_implicit(self):
+        inv = np.linalg.inv
+        norm = np.linalg.norm
+        Borig = self.B
+        vec = self.vec.copy()
+        loops = self.loops
+
+        blockdiamat = self.blockdiamat
+        topblocktridiamat = self.topblocktridiamat
+        topblockx = self.topblockx
+
+        ref = vec.copy()
+        ivec = vec.copy()
+        B = Borig.copy()
+        B.foldtop()
+        for i in range(loops):
+            ivec = inv(topblocktridiamat.todense()).dot(topblockx.dot(ivec)).A[0]
+            ref = scipy.linalg.solve_banded((2,2), blockdiamat.data, ref)
+            vec = B.solve(vec)
+            ref /= norm(ref)
+            vec /= norm(vec)
+            ivec /= norm(ivec)
+            # fp(ref - vec, 'e')
+            npt.assert_array_almost_equal(ref, vec, decimal=self.decimals, err_msg="Loop: %s" % i)
+            npt.assert_array_almost_equal(ref, ivec, decimal=self.decimals, err_msg="Loop: %s" % i)
+
+
+    def test_bottom_implicit(self):
+        inv = np.linalg.inv
+        norm = np.linalg.norm
+        Borig = self.B
+        vec = self.vec.copy()
+        loops = self.loops
+
+        bottomblockx = self.bottomblockx
+        bottomblocktridiamat = self.bottomblocktridiamat
+        bottomblockxI = self.bottomblockxI
+
+        blockdiamat = self.blockdiamat
+
+        ref = vec.copy()
+        ivec = vec.copy()
+        B = Borig.copy()
+        B.foldbottom()
+        for i in range(loops):
+            ivec = inv(bottomblocktridiamat.todense()).dot(bottomblockx.dot(ivec)).A[0]
+            ref = scipy.linalg.solve_banded((2,2), blockdiamat.data, ref)
+            vec = B.solve(vec)
+            ref /= norm(ref)
+            vec /= norm(vec)
+            ivec /= norm(ivec)
+            # fp(ivec - vec, 'e')
+            npt.assert_array_almost_equal(ref, vec, decimal=self.decimals, err_msg="Loop: %s" % i)
+            npt.assert_array_almost_equal(ref, ivec, decimal=self.decimals, err_msg="Loop: %s" % i)
+
+
+    def test_both_implicit(self):
+        inv = np.linalg.inv
+        norm = np.linalg.norm
+        Borig = self.B
+        vec = self.vec.copy()
+        loops = self.loops
+
+        blockx = self.blockx
+        blocktridiamat = self.blocktridiamat
+        blockxI = self.blockxI
+
+        blockdiamat = self.blockdiamat
+
+        ref = vec.copy()
+        ivec = vec.copy()
+        B = Borig.copy()
+        B.diagonalize()
+        for i in range(loops):
+            ivec = inv(blocktridiamat.todense()).dot(blockx.dot(ivec)).A[0]
+            ref = scipy.linalg.solve_banded((2,2), blockdiamat.data, ref)
+            vec = B.solve(vec)
+            ref /= norm(ref)
+            vec /= norm(vec)
+            ivec /= norm(ivec)
+            # fp(ivec - vec, 'e')
+            npt.assert_array_almost_equal(ref, vec, decimal=self.decimals, err_msg="Loop: %s" % i)
+            npt.assert_array_almost_equal(ref, ivec, decimal=self.decimals, err_msg="Loop: %s" % i)
 
 
 class ScalingFuncs(unittest.TestCase):
