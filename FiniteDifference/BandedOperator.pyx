@@ -215,7 +215,7 @@ cdef class BandedOperator(object):
 
 
     cpdef fold_vector(self, REAL_t[:] v, unfold=False):
-        cdef int direction
+        cdef int direction, u0, u1, un ,un1
         blocks = self.blocks
         block_len = self.shape[0] // blocks
 
