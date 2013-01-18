@@ -2,13 +2,9 @@
 # coding: utf8
 
 from setuptools import setup
-from Cython.Distutils import build_ext, Extension
-import Cython.Compiler.Options
 from Cython.Build import cythonize
 
-
 import numpy
-
 
 cython_modules = cythonize('FiniteDifference/*.pyx',
                            cython_include_dirs=["FiniteDifference", numpy.get_include()],
@@ -22,7 +18,6 @@ setup(
     author = "John Tyree",
     name = "FiniteDifference",
     version = 0,
-    cmdclass = {'build_ext': build_ext},
     packages = ['FiniteDifference'],
     scripts = ['benchmark.py', 'convergence.py', 'heat_eq.py', 'HestonExample.py'],
     ext_modules = cython_modules
