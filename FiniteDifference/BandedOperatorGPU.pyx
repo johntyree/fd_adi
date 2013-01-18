@@ -3,6 +3,7 @@
 # cython: infer_types = True
 # cython: profile = True
 # distutils: language = c++
+# distutils: sources = FiniteDifference/_BandedOperatorGPU.cpp
 """Description."""
 
 from bisect import bisect_left
@@ -651,50 +652,23 @@ cdef class BandedOperator(object):
         return B
 
 
-    # @cython.boundscheck(False)
     cpdef vectorized_scale(self, REAL_t[:] vector):
-        """
-        @vector@ is the correpsonding mesh vector of the current dimension.
-
-        Also applies to the residual vector self.R.
-
-        See FiniteDifferenceEngine.coefficients.
-        """
-        cdef unsigned int operator_rows = self.shape[0]
-        cdef unsigned int blocks = self.blocks
-        cdef unsigned int block_len = operator_rows / blocks
-        cdef int [:] offsets = np.array(self.D.offsets)
-        cdef REAL_t [:] R = self.R
-        cdef REAL_t[:,:] data = self.D.data
-        cdef unsigned int noffsets = len(self.D.offsets)
-        cdef signed int o
-        cdef unsigned int i, j, begin, end, vbegin
-
-        if blocks > 1 and vector.shape[0] == block_len:
-            vector = np.tile(vector, self.blocks)
-        assert vector.shape[0] == operator_rows
-
+        cdef int[:] npoffsets = self.D.offsets
+        cdef pair[Py_ssize_t, int*] offsets
+        offsets.first = npoffsets.shape[0]
+        offsets.second = &npoffsets[0]
         cdef cbool low_dirichlet = self.dirichlet[0] is not None
         cdef cbool high_dirichlet = self.dirichlet[1] is not None
 
-        if low_dirichlet:
-            for b in range(blocks):
-                vector[b*block_len] = 1
-        if high_dirichlet:
-            for b in range(blocks):
-                vector[(b+1)*block_len - 1] = 1
-
-        for row in range(noffsets):
-            o = offsets[row]
-            if o >= 0: # upper diags
-                for i in range(operator_rows - o):
-                    data[row, i+o] *= vector[i]
-            else: # lower diags
-                for i in range(-o, operator_rows):
-                    data[row, i+o] *= vector[i]
-
-        for i in range(operator_rows):
-            R[i] *= vector[i]
+        vectorized_scale(
+              to_pair(vector)
+            , to_pair2D(self.D.data)
+            , to_pair(self.R)
+            , offsets
+            , self.shape[0]
+            , self.blocks
+            , low_dirichlet
+            , high_dirichlet)
         return
 
 
@@ -966,5 +940,25 @@ cpdef backwardcoeffs(deltas, derivative=1, order=2, force_bandwidth=None):
         raise NotImplementedError, ("Derivative must be 1 or 2")
 
     return (data, offsets)
+
+
+cdef inline pair[Py_ssize_t, double *] to_pair2D(REAL_t [:,:] v):
+    cdef pair[Py_ssize_t, double *] p
+    p.first = v.shape[0]
+    p.second = &v[0,0]
+    return p
+
+cdef inline pair[Py_ssize_t, double *] to_pair(REAL_t [:] v):
+    cdef pair[Py_ssize_t, double *] p
+    p.first = v.shape[0]
+    p.second = &v[0]
+    return p
+
+
+class CPU(object):
+
+    @classmethod
+    def print_array(cls, REAL_t[:] v, shp):
+        print_array(v, shp)
 
 

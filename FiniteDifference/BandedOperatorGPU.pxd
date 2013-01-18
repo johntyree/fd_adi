@@ -1,14 +1,33 @@
 # coding: utf8
 
+import sys
+import os
+import itertools as it
 
-# cimport cython
+import numpy as np
+cimport numpy as np
+
 from cpython cimport bool
 from libcpp cimport bool as cbool
-
-cimport numpy as np
+from libcpp.pair cimport pair
 
 REAL = np.float64
 ctypedef np.float64_t REAL_t
+
+cdef extern from "_BandedOperatorGPU.cuh" namespace "CPU":
+
+    void print_array(double *, Py_ssize_t)
+
+    void vectorized_scale(
+          pair[Py_ssize_t, double*] vector
+        , pair[Py_ssize_t, double*] data
+        , pair[Py_ssize_t, double*] R
+        , pair[Py_ssize_t, int*] offsets
+        , Py_ssize_t operator_rows
+        , Py_ssize_t blocks
+        , cbool low_dirichlet
+        , cbool high_dirichlet
+    )
 
 
 cdef class BandedOperator(object):
