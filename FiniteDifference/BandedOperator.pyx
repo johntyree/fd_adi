@@ -1,12 +1,10 @@
 # coding: utf8
-# cython: annotate=True
-# cython: infer_types=True
-# cython: profile=True
+# cython: annotate = True
+# cython: infer_types = True
+# cython: profile = True
+# distutils: language = c++
+# distutils: sources = FiniteDifference/BandedOperatorCPU.cpp
 """Description."""
-
-# import sys
-# import os
-# import itertools as it
 
 from bisect import bisect_left
 
@@ -19,8 +17,6 @@ import scipy.linalg as spl
 
 cimport cython
 
-from cpython cimport bool
-from libcpp cimport bool as cbool
 
 cdef class BandedOperator(object):
 
@@ -790,7 +786,6 @@ cpdef check_order(order):
         raise NotImplementedError, ("Order must be 2")
 
 
-
 cpdef for_vector(vector, scheme="center", derivative=1, order=2,
         residual=None, force_bandwidth=None, axis=0):
     """
@@ -821,8 +816,6 @@ cpdef for_vector(vector, scheme="center", derivative=1, order=2,
     B.deltas = deltas
     B.axis = axis
     return B
-
-
 
 
 cpdef forwardcoeffs(deltas, derivative=1, order=2, force_bandwidth=None):
