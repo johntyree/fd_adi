@@ -1,38 +1,22 @@
+#!/usr/bin/env python
+# coding: utf8
 
-import glob
-import os
-import sys
-
-# from distutils.core import setup
 from setuptools import setup
-# from distutils.extension import Extension
 from Cython.Distutils import build_ext, Extension
 import Cython.Compiler.Options
+from Cython.Build import cythonize
 
-Cython.Compiler.Options.annotate = True
 
 import numpy
 
-cython_sources = glob.glob(os.path.join("FiniteDifference", "*.pyx"))
-cython_modules = []
 
-for fn in cython_sources:
-    extname = "FiniteDifference." + os.path.splitext(os.path.basename(fn))[0]
-    cython_modules.append(
-        Extension(extname,
-            sources=[fn],
-            extra_compile_args=["-O3"],
-            include_dirs=["FiniteDifference", numpy.get_include()],
-            cython_include_dirs=["FiniteDifference", numpy.get_include()],
-            cython_c_in_temp=True,
-            cython_cplus=True,
-            # cython_directives={'annotate': True},
-            # language="c++",
-            # libraries=["m"],
-            # extra_objects=["libsomelib.so"],
-            # runtime_library_dirs=["FiniteDifference"]
-        )
-    )
+cython_modules = cythonize('FiniteDifference/*.pyx',
+                           cython_include_dirs=["FiniteDifference", numpy.get_include()],
+                           nthreads=4
+                           )
+for m in cython_modules:
+    m.include_dirs += ["FiniteDifference", numpy.get_include()]
+    m.extra_compile_args += ["-std=c++0x", "-fpermissive"]
 
 setup(
     author = "John Tyree",

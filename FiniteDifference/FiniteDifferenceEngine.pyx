@@ -2,6 +2,7 @@
 # cython: annotate=True
 # cython: infer_types=True
 # cython: profile=True
+# distutils: language = c++
 """<+Module Description.+>"""
 
 # import sys
