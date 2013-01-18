@@ -236,9 +236,12 @@ cdef class BandedOperator(object):
 
     cdef inline cbool _is_folded(self):
         return self.top_factors is not None or self.bottom_factors is not None
-
     def is_folded(self):
         return self._is_folded()
+
+
+    cpdef print_array(self, REAL_t[:] arr):
+        c_print_array(&arr[0], arr.shape[0])
 
 
     cpdef cbool is_tridiagonal(self):
@@ -652,9 +655,31 @@ cdef class BandedOperator(object):
         # Don't touch the residual.
         return B
 
+
+    cpdef vectorized_scale(self, REAL_t[:] vector):
+        # return self.py_vectorized_scale(vector)
+        cdef int[:] npoffsets = self.D.offsets
+        cdef pair[Py_ssize_t, int*] offsets
+        offsets.first = npoffsets.shape[0]
+        offsets.second = &npoffsets[0]
+        cdef cbool low_dirichlet = self.dirichlet[0] is not None
+        cdef cbool high_dirichlet = self.dirichlet[1] is not None
+
+        cpu_vectorized_scale(
+              to_pair(vector)
+            , to_pair2D(self.D.data)
+            , to_pair(self.R)
+            , offsets
+            , self.shape[0]
+            , self.blocks
+            , low_dirichlet
+            , high_dirichlet)
+        return
+
+
     #TODO
     # @cython.boundscheck(False)
-    cpdef vectorized_scale(self, REAL_t[:] vector):
+    cdef py_vectorized_scale(self, REAL_t[:] vector):
         """
         @vector@ is the correpsonding mesh vector of the current dimension.
 
@@ -968,5 +993,18 @@ cpdef backwardcoeffs(deltas, derivative=1, order=2, force_bandwidth=None):
         raise NotImplementedError, ("Derivative must be 1 or 2")
 
     return (data, offsets)
+
+
+cdef inline pair[Py_ssize_t, double *] to_pair2D(REAL_t [:,:] v):
+    cdef pair[Py_ssize_t, double *] p
+    p.first = v.shape[0]
+    p.second = &v[0,0]
+    return p
+
+cdef inline pair[Py_ssize_t, double *] to_pair(REAL_t [:] v):
+    cdef pair[Py_ssize_t, double *] p
+    p.first = v.shape[0]
+    p.second = &v[0]
+    return p
 
 

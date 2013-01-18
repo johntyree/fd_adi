@@ -4,11 +4,27 @@
 # cimport cython
 from cpython cimport bool
 from libcpp cimport bool as cbool
+from libcpp.pair cimport pair
 
 cimport numpy as np
 
 REAL = np.float64
 ctypedef np.float64_t REAL_t
+
+
+cdef extern from "BandedOperatorCPU.hpp":
+    void c_print_array(double *, Py_ssize_t)
+    void cpu_vectorized_scale(
+        pair[Py_ssize_t, double*] vector
+        , pair[Py_ssize_t, double*] data
+        , pair[Py_ssize_t, double*] R
+        , pair[Py_ssize_t, int*] offsets
+        , Py_ssize_t operator_rows
+        , Py_ssize_t blocks
+        , cbool low_dirichlet
+        , cbool high_dirichlet
+    )
+
 
 cdef class BandedOperator(object):
     cdef public attrs
@@ -32,8 +48,11 @@ cdef class BandedOperator(object):
     cpdef splice_with(self, begin, at, inplace=*)
     cpdef add_operator(BandedOperator self, BandedOperator other, cbool inplace=*)
     cpdef add_scalar(self, float other, cbool inplace=*)
-    cpdef vectorized_scale(self, REAL_t[:] vector)
+    cpdef vectorized_scale(self, REAL_t[:] arr)
+    cdef  py_vectorized_scale(self, REAL_t[:] arr)
     cpdef scale(self, func)
+
+    cpdef print_array(self, REAL_t[:] arr)
 
     cpdef mul(self, val, inplace=*)
     cpdef add(self, val, inplace=*)
