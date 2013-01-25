@@ -12,7 +12,7 @@ from libcpp cimport bool as cbool
 from libcpp.pair cimport pair
 
 REAL = np.float64
-ctypedef double double
+# ctypedef double double
 
 cdef extern from "_BandedOperatorGPU.cuh" namespace "CPU":
 
@@ -23,8 +23,8 @@ cdef extern from "_BandedOperatorGPU.cuh" namespace "CPU":
         Py_ssize_t ndim
         Py_ssize_t[8] shape
         SizedArray(T*, Py_ssize_t, Py_ssize_t*)
-        T &operator()(int i)
-        T &operator()(int i, int j)
+        T &operator()(long i)
+        T &operator()(long i, long j)
 
     void cout(SizedArray[int] *a)
 
