@@ -112,12 +112,10 @@ struct periodic_from_to_mask : thrust::unary_function<int, bool> {
 
     periodic_from_to_mask(int begin, int end, int period)
         : begin(begin-1), end(end+1), period(period) {
-            printf("Begin %i, End %i, Period %i.\n", begin, end, period);
         }
 
     __host__ __device__
     bool operator()(int idx) {
-        printf("%i, ", idx);
         return (idx % period != begin && idx % period != end);
     }
 };
