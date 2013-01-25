@@ -1,45 +1,95 @@
-#undef _GLIBCXX_ATOMIC_BUILTINS
-#undef _GLIBCXX_USE_INT128
 
 #include <thrust/host_vector.h>
-#include <thrust/device_vector.h>
-#include <thrust/generate.h>
-#include <thrust/version.h>
-#include <thrust/sort.h>
-#include <thrust/copy.h>
-#include <algorithm>
-#include <cstdlib>
 
-template <typename T> using SizedArray = std::pair<size_t, T*>;
-
-typedef Vector thrust::host_vector
-
-template <typename T>
-class NDArray {
-    public:
-        Vector<T> data;
-}
+typedef long int Py_ssize_t;
 
 namespace CPU {
 
-void print_array(double *a, size_t len);
-
-void vectorized_scale(
-          SizedArray<double> vector
-        , SizedArray<double> data
-        , SizedArray<double> R
-        , SizedArray<int> offsets
-        , size_t operator_rows
-        , size_t blocks
-        , bool low_dirichlet
-        , bool high_dirichlet
-        );
-
-
-
-class BandedOperator {
-    public:
-        Vector
-
-
+template <typename T>
+void cout(T a) {
+    std::cout << a;
 }
+
+
+template<typename T>
+struct SizedArray {
+    T *data;
+    Py_ssize_t size;
+    const Py_ssize_t ndim;
+    Py_ssize_t shape[8];
+    SizedArray(T *d, Py_ssize_t ndim, Py_ssize_t *s)
+        : data(d), ndim(ndim), size(1) {
+            for (Py_ssize_t i = 0; i < ndim; ++i) {
+                shape[i] = s[i];
+                size *= shape[i];
+            }
+    }
+
+    inline T &operator()(long i) {
+        assert (ndim == 1);
+        long idx = i;
+        assert (0 <= idx && idx < size);
+        return this->data[idx];
+    }
+
+    inline T &operator()(long i, long j) {
+        assert (ndim == 2);
+        long idx = i * shape[1] + j;
+        assert (0 <= idx && idx < size);
+        return this->data[idx];
+    }
+
+};
+
+template <typename T>
+std::ostream & operator<<(std::ostream & os, SizedArray<T> const &sa) {
+    os << "addr(" << &sa << ") size(" << sa.size << ") ndim(" << sa.ndim << ")";
+}
+
+class _BandedOperator {
+
+    private:
+        Py_ssize_t blocks;
+        Py_ssize_t operator_rows;
+        Py_ssize_t block_len;
+        Py_ssize_t main_diag;
+        bool has_high_dirichlet;
+        bool has_low_dirichlet;
+        bool has_residual;
+        unsigned int axis;
+
+    public:
+        SizedArray<double> data;
+        SizedArray<double> R;
+        SizedArray<double> high_dirichlet;
+        SizedArray<double> low_dirichlet;
+        SizedArray<double> top_factors;
+        SizedArray<double> bottom_factors;
+        SizedArray<int> offsets;
+
+        void view();
+        void status();
+        bool is_folded();
+        void apply(SizedArray<double>, bool);
+        void add_scalar(double val);
+        void vectorized_scale(SizedArray<double> &vector);
+
+        _BandedOperator(
+            SizedArray<double> &data,
+            SizedArray<double> &R,
+            SizedArray<int> &offsets,
+            SizedArray<double> &high_dirichlet,
+            SizedArray<double> &low_dirichlet,
+            SizedArray<double> &top_factors,
+            SizedArray<double> &bottom_factors,
+            unsigned int axis,
+            Py_ssize_t operator_rows,
+            Py_ssize_t blocks,
+            bool has_high_dirichlet,
+            bool has_low_dirichlet,
+            bool has_residual
+            );
+};
+
+
+} // namespace CPU

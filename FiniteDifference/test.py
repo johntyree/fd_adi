@@ -712,6 +712,16 @@ class BandedOperator_test(unittest.TestCase):
         self.vec = spots
 
 
+    def test_migrate(self):
+        vec = self.vec
+        idx = self.flip_idx
+        C1 = FD.BO.for_vector(vec, scheme='center', derivative=1, order=2)
+        C0 = C1.copy()
+        C1.emigrate()
+        C1.immigrate()
+        assert C1 == C0
+
+
     def test_addself(self):
         vec = self.vec
         idx = self.flip_idx
@@ -1278,8 +1288,8 @@ class ScalingFuncs(unittest.TestCase):
             return np.linspace(0, 1, len(vec))[low:high]
         def fcoeff(i):
             return np.linspace(0, 1, len(vec))[i]
-        def f0(x): return x*0
-        def fx(x): return x+2
+        def f0(x): return x*0.0
+        def fx(x): return x+2.0
 
         data = np.ones((5,len(vec)))
         data[0][:2] = 0
@@ -1332,7 +1342,7 @@ class ScalingFuncs(unittest.TestCase):
         npt.assert_array_equal(no_nan(newB.D.data), 0)
         npt.assert_array_equal(no_nan(vecB.D.data), 0)
 
-        for dchlet in itertools.product([1, None], repeat=2):
+        for dchlet in itertools.product([1.0, None], repeat=2):
             oldB = FD.BandedOperator((data.copy(), offsets), res.copy())
             oldB.dirichlet = dchlet
             veczeroB = oldB.copy()
@@ -1447,7 +1457,7 @@ class ScalingFuncs(unittest.TestCase):
         npt.assert_array_equal(no_nan(newB.D.data), 0)
         npt.assert_array_equal(no_nan(vecB.D.data), 0)
 
-        for dchlet in itertools.product([1, None], repeat=2):
+        for dchlet in itertools.product([1., None], repeat=2):
             oldB = FD.BandedOperator((data.copy(), offsets), res.copy())
             oldB.dirichlet = dchlet
 
@@ -1551,7 +1561,7 @@ class ScalingFuncs(unittest.TestCase):
         offsets = [2,1,0,-1,-2]
         res = np.ones_like(vec)
 
-        for dchlet in itertools.product([1, None], repeat=2):
+        for dchlet in itertools.product([1., None], repeat=2):
             oldB = FD.BandedOperator((data.copy(), offsets), res.copy())
             oldB.dirichlet = dchlet
             zeroB = oldB.copy()

@@ -3,7 +3,7 @@
 # cython: infer_types = True
 # cython: profile = True
 # distutils: language = c++
-# distutils: sources = FiniteDifference/_BandedOperatorGPU.cpp
+# distutils: sources = FiniteDifference/_BandedOperatorGPU.cu
 """Description."""
 
 from bisect import bisect_left
@@ -16,7 +16,11 @@ import utils
 import scipy.linalg as spl
 
 cimport cython
+from cython.operator import dereference as deref
 
+cdef enum LOCATION:
+    LOCATION_PYTHON
+    LOCATION_GPU
 
 cdef class BandedOperator(object):
 
@@ -31,7 +35,7 @@ cdef class BandedOperator(object):
             U2 = L.I * (U1 - R) --> U2 = B.solve(U1)
         """
 
-        self.attrs = ('derivative', 'order', 'axis', 'deltas', 'dirichlet', 'blocks', 'top_factors', 'bottom_factors')
+        self.attrs = ('derivative', 'location', 'order', 'axis', 'deltas', 'dirichlet', 'blocks', 'top_factors', 'bottom_factors')
         data, offsets = data_offsets
         assert data.shape[1] > 3, "Vector too short to use finite differencing."
         if not inplace:
@@ -50,7 +54,7 @@ cdef class BandedOperator(object):
             raise ValueError("Residual vector has wrong shape: got %i,"
                              "expected %i." % (residual.shape[0], size))
 
-        # NB: When adding something here, also add to BandedOperator.attrs
+        # XXX: When adding something here, also add to BandedOperator.attrs
         self.blocks = 1
         self.derivative = derivative
         self.order = order
@@ -60,6 +64,11 @@ cdef class BandedOperator(object):
         self.top_factors = None
         self.bottom_factors = None
         self.axis = axis
+        self.location = LOCATION_PYTHON
+
+
+    def __dealloc__(self):
+        del self.thisptr
 
     def copy_meta_data(self, other, **kwargs):
         for attr in self.attrs:
@@ -109,6 +118,48 @@ cdef class BandedOperator(object):
         B = BandedOperator((self.D.data, self.D.offsets), residual=self.R, inplace=False)
         B.copy_meta_data(self)
         return B
+
+    cpdef immigrate(self):
+        cdef:
+            double [:,:] v = self.D.data
+            int i, j
+        for i in range(v.shape[0]):
+            for j in range(v.shape[1]):
+                v[i, j] = self.thisptr.data(i, j)
+
+        self.location = LOCATION_PYTHON
+
+
+    cpdef emigrate(self):
+        cdef:
+            SizedArray[double] *diags = to_SizedArray_2(self.D.data)
+            SizedArray[double] *R = to_SizedArray(self.R)
+            SizedArray[int] *offsets = to_SizedArray_i(np.asarray(self.D.offsets))
+            SizedArray[double] *low_dirichlet = to_SizedArray(np.atleast_1d(self.dirichlet[0] or [0.0]))
+            SizedArray[double] *high_dirichlet = to_SizedArray(np.atleast_1d(self.dirichlet[1] or [0.0]))
+            SizedArray[double] *top_factors = to_SizedArray(np.atleast_1d(self.top_factors or [0.0]))
+            SizedArray[double] *bottom_factors = to_SizedArray(np.atleast_1d(self.bottom_factors or [0.0]))
+
+        self.thisptr = new _BandedOperator(
+                  deref(diags)
+                , deref(R)
+                , deref(offsets)
+                , deref(high_dirichlet)
+                , deref(low_dirichlet)
+                , deref(top_factors)
+                , deref(bottom_factors)
+                , self.axis
+                , self.shape[0]
+                , self.blocks
+                , self.dirichlet[0] is not None
+                , self.dirichlet[1] is not None
+                , self.R is not None
+                )
+
+
+        self.location = LOCATION_GPU
+
+        del diags, offsets, R, high_dirichlet, low_dirichlet, top_factors, bottom_factors
 
 
     cpdef diagonalize(self):
@@ -214,7 +265,7 @@ cdef class BandedOperator(object):
             self.top_factors = None
 
 
-    cpdef fold_vector(self, REAL_t[:] v, unfold=False):
+    cpdef fold_vector(self, double[:] v, unfold=False):
         cdef int direction, u0, u1, un ,un1
         blocks = self.blocks
         block_len = self.shape[0] // blocks
@@ -318,16 +369,16 @@ cdef class BandedOperator(object):
         data are the packed diagonals and residual is the residual vector.
         """
         B = self
-        cdef REAL_t[:,:] Bdata = B.D.data
-        cdef REAL_t[:] R
+        cdef double[:,:] Bdata = B.D.data
+        cdef double[:] R
         if B.R is None:
             R = np.zeros(B.shape[0])
         else:
             R = B.R
         # cdef int lower_type, upper_type
-        # cdef REAL_t lower_val, upper_val
+        # cdef double lower_val, upper_val
         cdef int m = get_int_index(B.D.offsets, 0)
-        cdef REAL_t [:] d = B.deltas
+        cdef double [:] d = B.deltas
         cdef double recip_denom
         cdef double fst_deriv
         derivative = B.derivative
@@ -533,11 +584,11 @@ cdef class BandedOperator(object):
         Add a second BandedOperator to this one.
         Does not alter self.R, the residual vector.
         """
-        cdef REAL_t[:,:] data = self.D.data
+        cdef double[:,:] data = self.D.data
         cdef int[:] selfoffsets = np.array(self.D.offsets)
         cdef int[:] otheroffsets = np.array(other.D.offsets)
         cdef unsigned int num_otheroffsets = otheroffsets.shape[0]
-        cdef np.ndarray[REAL_t, ndim=2] newdata
+        cdef np.ndarray[double, ndim=2] newdata
         cdef int[:] Boffsets
         cdef int o
         cdef unsigned int i
@@ -652,23 +703,31 @@ cdef class BandedOperator(object):
         return B
 
 
-    cpdef vectorized_scale(self, REAL_t[:] vector):
-        cdef int[:] npoffsets = self.D.offsets
-        cdef pair[Py_ssize_t, int*] offsets
-        offsets.first = npoffsets.shape[0]
-        offsets.second = &npoffsets[0]
-        cdef cbool low_dirichlet = self.dirichlet[0] is not None
-        cdef cbool high_dirichlet = self.dirichlet[1] is not None
+    cpdef vectorized_scale(self, double[:] vector):
+        cdef:
+            # cbool low_dirichlet = self.dirichlet[0] is not None
+            # cbool high_dirichlet = self.dirichlet[1] is not None
+            SizedArray[double] *v = to_SizedArray(vector)
+            # SizedArray[double] *data = to_SizedArray_2(self.D.data)
+            # SizedArray[double] *R = to_SizedArray(self.R)
+            # SizedArray[int] *offsets = to_SizedArray_i(self.D.offsets)
 
-        vectorized_scale(
-              to_pair(vector)
-            , to_pair2D(self.D.data)
-            , to_pair(self.R)
-            , offsets
-            , self.shape[0]
-            , self.blocks
-            , low_dirichlet
-            , high_dirichlet)
+        if True or self.location != LOCATION_GPU:
+            self.emigrate()
+
+        self.thisptr.vectorized_scale(deref(v))
+
+        self.immigrate()
+        # self.thisptr.is_folded()
+            # , deref(data)
+            # , deref(R)
+            # , deref(offsets)
+            # , self.shape[0]
+            # , self.blocks
+            # , low_dirichlet
+            # , high_dirichlet)
+
+        del v#, data, R, offsets
         return
 
 
@@ -716,7 +775,7 @@ cdef inline int sign(int i):
         return 1
 
 # @cython.boundscheck(False)
-cdef inline unsigned int get_real_index(REAL_t[:] haystack, REAL_t needle):
+cdef inline unsigned int get_real_index(double[:] haystack, double needle):
     cdef unsigned int length = haystack.shape[0]
     for i in range(length):
         if needle == haystack[i]:
@@ -942,23 +1001,32 @@ cpdef backwardcoeffs(deltas, derivative=1, order=2, force_bandwidth=None):
     return (data, offsets)
 
 
-cdef inline pair[Py_ssize_t, double *] to_pair2D(REAL_t [:,:] v):
-    cdef pair[Py_ssize_t, double *] p
-    p.first = v.shape[0]
-    p.second = &v[0,0]
-    return p
+cdef inline SizedArray[double]* to_SizedArray_2(double[:,:] v):
+    cdef SizedArray[double] *s = new SizedArray[double](&v[0,0], v.ndim, v.shape)
+    return s
 
-cdef inline pair[Py_ssize_t, double *] to_pair(REAL_t [:] v):
-    cdef pair[Py_ssize_t, double *] p
-    p.first = v.shape[0]
-    p.second = &v[0]
-    return p
+cdef inline SizedArray[double]* to_SizedArray(double[:] v):
+    cdef SizedArray[double] *s = new SizedArray[double](&v[0], v.ndim, v.shape)
+    return s
+
+cdef inline SizedArray[int]* to_SizedArray_i(int[:] v):
+    cdef SizedArray[int] *s = new SizedArray[int](&v[0], v.ndim, v.shape)
+    return s
+
+cdef inline from_SizedArray(SizedArray[double] v):
+    sz = v.size
+    cdef np.ndarray[double, ndim=1] s = np.empty(sz, dtype=float)
+    for i in range(sz):
+        s[i] = v.data[i]
+    return s
 
 
-class CPU(object):
-
-    @classmethod
-    def print_array(cls, REAL_t[:] v, shp):
-        print_array(v, shp)
-
+cdef inline from_SizedArray_2(SizedArray[double] v):
+    sz = v.size
+    cdef np.ndarray[double, ndim=2] s = np.empty(sz, dtype=float)
+    for i in range(v.shape[0]):
+        for j in range(v.shape[1]):
+            s[i*v.shape[1] + j] = v.data[i*v.shape[1] + j]
+    s.reshape((v.shape[0], v.shape[1]))
+    return s
 

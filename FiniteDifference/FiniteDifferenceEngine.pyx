@@ -378,7 +378,13 @@ cdef class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
         x.insert(dim, None)
         def newf(i):
             x[dim] = self.grid.mesh[dim][i]
-            return f(self.t, *x)
+            vec = f(self.t, *x)
+            if np.isscalar(vec):
+                vec = float(vec)
+            elif vec is not None and vec.dtype != 'float64':
+                vec = vec.astype('float64')
+            return vec
+        newf.__name__ = f.__name__
         return newf
 
     # Here we do the same except we go ahead and evalutate the function for
@@ -389,7 +395,9 @@ cdef class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
         x.insert(dim, self.grid.mesh[dim])
         vec = f(self.t, *x)
         if np.isscalar(vec):
-            vec += np.zeros_like(self.grid.mesh[dim])
+            vec += np.zeros_like(self.grid.mesh[dim]).astype(float)
+        if vec.dtype != 'float64':
+            vec = vec.astype('float64')
         return vec
 
 
