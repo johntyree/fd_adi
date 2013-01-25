@@ -151,8 +151,8 @@ cdef class BandedOperator(object):
                 , self.axis
                 , self.shape[0]
                 , self.blocks
-                , self.dirichlet[0] is not None
                 , self.dirichlet[1] is not None
+                , self.dirichlet[0] is not None
                 , self.R is not None
                 )
 
@@ -704,13 +704,8 @@ cdef class BandedOperator(object):
 
 
     cpdef vectorized_scale(self, double[:] vector):
-        cdef:
-            # cbool low_dirichlet = self.dirichlet[0] is not None
-            # cbool high_dirichlet = self.dirichlet[1] is not None
-            SizedArray[double] *v = to_SizedArray(vector)
-            # SizedArray[double] *data = to_SizedArray_2(self.D.data)
-            # SizedArray[double] *R = to_SizedArray(self.R)
-            # SizedArray[int] *offsets = to_SizedArray_i(self.D.offsets)
+
+        cdef SizedArray[double] *v = to_SizedArray(vector)
 
         if True or self.location != LOCATION_GPU:
             self.emigrate()
@@ -718,16 +713,8 @@ cdef class BandedOperator(object):
         self.thisptr.vectorized_scale(deref(v))
 
         self.immigrate()
-        # self.thisptr.is_folded()
-            # , deref(data)
-            # , deref(R)
-            # , deref(offsets)
-            # , self.shape[0]
-            # , self.blocks
-            # , low_dirichlet
-            # , high_dirichlet)
 
-        del v#, data, R, offsets
+        del v
         return
 
 

@@ -54,18 +54,6 @@ cdef extern from "_BandedOperatorGPU.cuh" namespace "CPU":
             )
 
 
-    # void vectorized_scale(
-          # SizedArray[double] vector
-        # , SizedArray[double] data
-        # , SizedArray[double] R
-        # , SizedArray[int] offsets
-        # , Py_ssize_t operator_rows
-        # , Py_ssize_t blocks
-        # , cbool low_dirichlet
-        # , cbool high_dirichlet
-    # )
-
-
 cdef class BandedOperator(object):
     cdef public:
         attrs
