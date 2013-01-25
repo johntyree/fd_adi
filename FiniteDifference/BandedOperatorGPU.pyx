@@ -692,16 +692,14 @@ cdef class BandedOperator(object):
 
     cpdef vectorized_scale(self, double[:] vector):
 
-        cdef SizedArray[double] *v = to_SizedArray(vector)
-
-        if True or self.location != LOCATION_GPU:
+        if self.location != LOCATION_GPU:
             self.emigrate()
 
+        cdef SizedArray[double] *v = to_SizedArray(vector)
         self.thisptr.vectorized_scale(deref(v))
+        del v
 
         self.immigrate()
-
-        del v
         return
 
 
