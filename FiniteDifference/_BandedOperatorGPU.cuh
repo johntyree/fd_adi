@@ -28,14 +28,14 @@ struct SizedArray {
             thrust::copy(d, d+size, data.begin());
     }
 
-    T &operator()(long i) {
+    inline T &operator()(long i) {
         assert (ndim == 1);
         long idx = i;
         assert (0 <= idx && idx < size);
         return data[idx];
     }
 
-    T &operator()(long i, long j) {
+    inline T &operator()(long i, long j) {
         assert (ndim == 2);
         long idx = i * shape[1] + j;
         assert (0 <= idx && idx < size);
