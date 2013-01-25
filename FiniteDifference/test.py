@@ -102,8 +102,8 @@ class BlackScholesOption_test(unittest.TestCase):
         t, dt = self.F.option.tenor, self.dt
         V = self.F.solve_implicit(t/dt, dt)[self.F.idx]
         ans = self.F.option.analytical
-        print "Spot:", self.F.option.spot
-        print "Price:", V, ans, V - ans
+        # print "Spot:", self.F.option.spot
+        # print "Price:", V, ans, V - ans
         npt.assert_allclose(V, ans, rtol=0.001)
 
     def test_douglas(self):
@@ -338,7 +338,7 @@ class FiniteDifferenceEngineADI_test(unittest.TestCase):
     def test_coefficient_vector(self):
         mesh = (np.arange(3), np.arange(10,12))
         G = Grid.Grid(mesh, initializer=lambda *x: 0.0)
-        print G
+        # print G
         F = FD.FiniteDifferenceEngineADI(G, coefficients={(0,1): lambda t, *x: 1})
 
         op = self.F.operators[(0,1)]
@@ -379,27 +379,27 @@ class FiniteDifferenceEngineADI_test(unittest.TestCase):
         # oldL1.data = oldL1.data[:-1]
         # oldL1.offsets = oldL1.offsets[:-1]
 
-        print "offsets"
-        print oldL1.offsets, L1.D.offsets
-        print "old"
-        fp(oldL1.data)
-        print
-        print "new"
-        fp(L1.D.data)
-        print
-        print "diff"
-        fp(L1.D.data - oldL1.data)
-        print
-        print "old"
-        fp(oldL1.todense())
-        print
-        print "new"
-        fp(L1.D.todense())
-        print
-        print "diff"
-        fp(oldL1.todense() - L1.D.todense())
-        npt.assert_allclose(L1.D.todense(), oldL1.todense())
-        npt.assert_allclose(L1.D.data, oldL1.data)
+        # print "offsets"
+        # print oldL1.offsets, L1.D.offsets
+        # print "old"
+        # fp(oldL1.data)
+        # print
+        # print "new"
+        # fp(L1.D.data)
+        # print
+        # print "diff"
+        # fp(L1.D.data - oldL1.data)
+        # print
+        # print "old"
+        # fp(oldL1.todense())
+        # print
+        # print "new"
+        # fp(L1.D.todense())
+        # print
+        # print "diff"
+        # fp(oldL1.todense() - L1.D.todense())
+        # npt.assert_allclose(L1.D.todense(), oldL1.todense())
+        # npt.assert_allclose(L1.D.data, oldL1.data)
         # print "old"
         # print oldR1
         # print
@@ -569,7 +569,6 @@ class FiniteDifferenceEngineADI_test(unittest.TestCase):
             l = [[1] * F.grid.shape[(o.axis + 1) % 2]] * 2
             npt.assert_array_equal(o.dirichlet, l, err_msg="Dim: %s, dirichlet: %s, expected: %s" % (d, o.dirichlet, l))
 
-
         for d in bounds.keys():
             B = F.simple_operators[d]
             # print "Derivative", d, "Dirichlets", B.dirichlet
@@ -581,7 +580,6 @@ class FiniteDifferenceEngineADI_test(unittest.TestCase):
             if B.dirichlet[1] is not None:
                 npt.assert_array_equal(g[-1,:], 1)
 
-        print
         for d in bounds.keys():
             B = F.simple_operators[d]
             # print "Derivative", d, "Dirichlets", B.dirichlet
@@ -594,7 +592,6 @@ class FiniteDifferenceEngineADI_test(unittest.TestCase):
             if B.dirichlet[1] is not None:
                 npt.assert_array_equal(g[-1,:], 1)
 
-        print
         for d in bounds.keys():
             B = F.simple_operators[d]
             # print "Derivative", d, "Dirichlets", B.dirichlet
@@ -646,7 +643,7 @@ class FiniteDifferenceEngineADI_test(unittest.TestCase):
 
         crossOp
 
-        print "Scaling CrossOp (%s)" % scale
+        # print "Scaling CrossOp (%s)" % scale
         crossOp *= scale
 
         d2gdxdy_scaled = crossOp.apply(g)
@@ -1384,32 +1381,32 @@ class ScalingFuncs(unittest.TestCase):
             manualB.R[bottom:top]       *= vec[bottom:top]+2
             vecB.vectorized_scale(self.fx(vec))
             newB.scale(lambda i: vec[i]+2)
-            print "vec"
-            fp(vec)
-            print
-            print "manual"
-            fp(manualB.D.data)
-            print
-            print "newB"
-            fp(newB.D.data)
-            print
-            print "vecB"
-            fp(vecB.D.data)
-            print
-            print "manualR"
-            print manualB.R
-            print
-            print "vecR"
-            print vecB.R
-            print
-            print "newR"
-            print newB.R
-            print
-            print "manual"
-            fp(manualB.D)
-            print
-            print "newB"
-            fp(newB.D)
+            # print "vec"
+            # fp(vec)
+            # print
+            # print "manual"
+            # fp(manualB.D.data)
+            # print
+            # print "newB"
+            # fp(newB.D.data)
+            # print
+            # print "vecB"
+            # fp(vecB.D.data)
+            # print
+            # print "manualR"
+            # print manualB.R
+            # print
+            # print "vecR"
+            # print vecB.R
+            # print
+            # print "newR"
+            # print newB.R
+            # print
+            # print "manual"
+            # fp(manualB.D)
+            # print
+            # print "newB"
+            # fp(newB.D)
             npt.assert_array_equal(veczeroB.D.data, manualzeroB)
             npt.assert_(newB == vecB)
             npt.assert_array_equal(manualB, newB)
@@ -1503,32 +1500,32 @@ class ScalingFuncs(unittest.TestCase):
 
             newB = block_repeat(oldB, blocks)
             newB.scale(lambda i: blockvec[i]+2)
-            print "vec"
-            fp(vec)
-            print
-            print "manual"
-            fp(manualB.D.data)
-            print
-            print "newB"
-            fp(newB.D.data)
-            print
-            print "vecB"
-            fp(vecB.D.data)
-            print
-            print "manualR"
-            print manualB.R
-            print
-            print "vecR"
-            print vecB.R
-            print
-            print "newR"
-            print newB.R
-            print
-            print "manual"
-            fp(manualB.D)
-            print
-            print "newB"
-            fp(newB.D)
+            # print "vec"
+            # fp(vec)
+            # print
+            # print "manual"
+            # fp(manualB.D.data)
+            # print
+            # print "newB"
+            # fp(newB.D.data)
+            # print
+            # print "vecB"
+            # fp(vecB.D.data)
+            # print
+            # print "manualR"
+            # print manualB.R
+            # print
+            # print "vecR"
+            # print vecB.R
+            # print
+            # print "newR"
+            # print newB.R
+            # print
+            # print "manual"
+            # fp(manualB.D)
+            # print
+            # print "newB"
+            # fp(newB.D)
             npt.assert_array_equal(veczeroB.D.data, manualzeroB)
             npt.assert_(newB == vecB)
             npt.assert_array_equal(manualB, newB)
@@ -1577,7 +1574,7 @@ class ScalingFuncs(unittest.TestCase):
                 manualzeroB[3, -2] = flag
                 manualzeroB[4, -3] = flag
 
-            print "Dirichlet", dchlet
+            # print "Dirichlet", dchlet
             # print
             # print "zeroB"
             # fp(zeroB.D.data)
@@ -1634,7 +1631,7 @@ class ScalingFuncs(unittest.TestCase):
 
         newB = oldB.copy()
         newB.scale(f0)
-        fp(newB.D.data)
+        # fp(newB.D.data)
         npt.assert_array_equal(no_nan(newB.D.data), 0)
 
         manualB = oldB.copy()
