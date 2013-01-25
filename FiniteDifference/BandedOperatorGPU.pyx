@@ -667,34 +667,26 @@ cdef class BandedOperator(object):
 
     cpdef add_scalar(self, float other, cbool inplace=False):
         """
-        Add a scalar to the main diagonal or
+        Add a scalar to the main diagonal
         Does not alter self.R, the residual vector.
         """
+        cdef BandedOperator B
+
+        if self.location != LOCATION_PYTHON:
+            self.immigrate()
+
         if inplace:
             B = self
         else:
             B = self.copy()
-        # We add it to the main diagonal.
-        cdef np.ndarray[int, ndim=1] selfoffsets = np.array(self.D.offsets)
-        cdef unsigned int m = get_int_index(selfoffsets, 0)
-        cdef unsigned int blocks = B.blocks
-        cdef unsigned int block_len
 
-        if m > len(selfoffsets)-1:
-            raise NotImplementedError("Cannot (yet) add scalar to operator"
-                                        " without main diagonal.")
-        block_len = B.shape[0] / blocks
-        data = B.D.data
-        for i in range(blocks):
-            end = i*block_len
-            if B.dirichlet[0] is not None:
-                end += 1
-            begin = i*block_len + block_len
-            if B.dirichlet[1] is not None:
-                begin -= 1
-            data[m,end:begin] += other
+        if self.location != LOCATION_GPU:
+            B.emigrate()
 
-        # Don't touch the residual.
+        B.thisptr.add_scalar(other)
+
+        B.immigrate()
+
         return B
 
 
