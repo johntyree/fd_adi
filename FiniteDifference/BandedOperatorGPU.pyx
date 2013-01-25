@@ -644,17 +644,17 @@ cdef class BandedOperator(object):
                 block_len = B.shape[0] / float(B.blocks)
                 assert block_len == int(block_len)
                 for i in range(B.blocks):
-                    end = i*block_len
+                    begin = i*block_len
                     if B.dirichlet[0] is not None:
-                        end += 1
-                    begin = i*block_len + block_len
+                        begin += 1
+                    end = i*block_len + block_len
                     if B.dirichlet[1] is not None:
-                        begin -= 1
-                    B.D.data[to,end:begin] += other.D.data[fro,end:begin]
+                        end -= 1
+                    B.D.data[to,begin:end] += other.D.data[fro,begin:end]
             else:
-                end = 0
-                begin = B.D.data.shape[1]
-                B.D.data[to,end:begin] += other.D.data[fro,end:begin]
+                begin = 0
+                end = B.D.data.shape[1]
+                B.D.data[to,begin:end] += other.D.data[fro,begin:end]
         # Now the residual vector from the other one
         if other.R is not None:
             if B.R is None:
