@@ -23,9 +23,11 @@
 #include "_BandedOperatorGPU.cuh"
 
 template <typename T>
-int find_zero(T *x) {
-    int idx = -1;
-    while (x[++idx]);
+int find_zero(T x, int max) {
+    int idx;
+    for (idx = 0; idx < max; ++idx) {
+        if (!x[idx]) break;
+    }
     return idx;
 }
 
@@ -54,7 +56,7 @@ _BandedOperator::_BandedOperator(
     top_factors(top_factors),
     bottom_factors(bottom_factors),
     axis(axis),
-    main_diag(find_zero(offsets.data)),
+    main_diag(find_zero(offsets.data, offsets.size)),
     operator_rows(operator_rows),
     blocks(blocks),
     block_len(operator_rows / blocks),
