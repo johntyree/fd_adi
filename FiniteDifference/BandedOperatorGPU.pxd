@@ -37,6 +37,7 @@ cdef extern from "_BandedOperatorGPU.cuh" namespace "CPU":
         void status()
         SizedArray[int] offsets
         SizedArray[double] data
+        SizedArray[double] R
         _BandedOperator(
             SizedArray[double] data,
             SizedArray[double] R,

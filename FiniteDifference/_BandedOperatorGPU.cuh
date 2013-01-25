@@ -13,30 +13,33 @@ void cout(T a) {
 
 template<typename T>
 struct SizedArray {
-    T *data;
+    /* T *data; */
+    thrust::host_vector<T> data;
     Py_ssize_t size;
     const Py_ssize_t ndim;
     Py_ssize_t shape[8];
     SizedArray(T *d, Py_ssize_t ndim, Py_ssize_t *s)
-        : data(d), ndim(ndim), size(1) {
+        : ndim(ndim), size(1) {
             for (Py_ssize_t i = 0; i < ndim; ++i) {
                 shape[i] = s[i];
                 size *= shape[i];
             }
+            data = thrust::host_vector<T>(size);
+            thrust::copy(d, d+size, data.begin());
     }
 
-    inline T &operator()(long i) {
+    T &operator()(long i) {
         assert (ndim == 1);
         long idx = i;
         assert (0 <= idx && idx < size);
-        return this->data[idx];
+        return data[idx];
     }
 
-    inline T &operator()(long i, long j) {
+    T &operator()(long i, long j) {
         assert (ndim == 2);
         long idx = i * shape[1] + j;
         assert (0 <= idx && idx < size);
-        return this->data[idx];
+        return data[idx];
     }
 
 };

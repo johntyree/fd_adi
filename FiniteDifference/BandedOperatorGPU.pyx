@@ -120,13 +120,8 @@ cdef class BandedOperator(object):
         return B
 
     cpdef immigrate(self):
-        cdef:
-            double [:,:] v = self.D.data
-            int i, j
-        for i in range(v.shape[0]):
-            for j in range(v.shape[1]):
-                v[i, j] = self.thisptr.data(i, j)
-
+        self.D.data = from_SizedArray_2(self.thisptr.data)
+        self.R = from_SizedArray(self.thisptr.R)
         self.location = LOCATION_PYTHON
 
 
@@ -1009,11 +1004,10 @@ cdef inline from_SizedArray(SizedArray[double] v):
 
 
 cdef inline from_SizedArray_2(SizedArray[double] v):
-    sz = v.size
-    cdef np.ndarray[double, ndim=2] s = np.empty(sz, dtype=float)
+    cdef np.ndarray[double, ndim=2] s = np.empty((v.shape[0], v.shape[1]), dtype=float)
+    cdef long i, j
     for i in range(v.shape[0]):
         for j in range(v.shape[1]):
-            s[i*v.shape[1] + j] = v.data[i*v.shape[1] + j]
-    s.reshape((v.shape[0], v.shape[1]))
+            s[i, j] = v.data[i * v.shape[1] + j]
     return s
 
