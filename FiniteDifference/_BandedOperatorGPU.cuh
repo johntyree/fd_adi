@@ -43,7 +43,7 @@ struct SizedArray {
 
 template <typename T>
 std::ostream & operator<<(std::ostream & os, SizedArray<T> const &sa) {
-    os << "addr(" << &sa << ") size(" << sa.size << ") ndim(" << sa.ndim << ")";
+    return os << "addr(" << &sa << ") size(" << sa.size << ") ndim(" << sa.ndim << ")";
 }
 
 class _BandedOperator {
