@@ -26,7 +26,6 @@ cdef extern from "_BandedOperatorGPU.cuh" namespace "CPU":
         T &operator()(long i)
         T &operator()(long i, long j)
 
-    void cout(SizedArray[int] *a)
 
     cdef cppclass _BandedOperator:
         void view()
@@ -53,6 +52,10 @@ cdef extern from "_BandedOperatorGPU.cuh" namespace "CPU":
             cbool has_low_dirichlet,
             cbool has_residual
             )
+
+
+    void cout(SizedArray[int] *a)
+    void cout(_BandedOperator *a)
 
 
 cdef class BandedOperator(object):

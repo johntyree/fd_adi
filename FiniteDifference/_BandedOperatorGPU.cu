@@ -1,5 +1,8 @@
+
 #undef _GLIBCXX_ATOMIC_BUILTINS
 #undef _GLIBCXX_USE_INT128
+
+#define ENDL std::cout << std::endl
 
 #include <thrust/device_ptr.h>
 #include <thrust/host_vector.h>
