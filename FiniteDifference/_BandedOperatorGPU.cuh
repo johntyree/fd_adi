@@ -28,17 +28,21 @@ struct SizedArray {
             thrust::copy(d, d+size, data.begin());
     }
 
-    inline T &operator()(long i) {
+    inline T &operator()(int i) {
         assert (ndim == 1);
-        long idx = i;
+        int idx = i;
         assert (0 <= idx && idx < size);
         return data[idx];
     }
 
-    inline T &operator()(long i, long j) {
+    inline T &operator()(int i, int j) {
         assert (ndim == 2);
-        long idx = i * shape[1] + j;
-        assert (0 <= idx && idx < size);
+        int idx = i * shape[1] + j;
+        if (idx < 0 || size <= idx) {
+            std::cout << "Index: " << idx << " larger than size: " << size <<
+                "." << std::endl;
+            assert(0);
+        }
         return data[idx];
     }
 
