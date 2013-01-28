@@ -33,6 +33,7 @@ cdef extern from "_BandedOperatorGPU.cuh" namespace "CPU":
         void apply(SizedArray[double], bool)
         void add_scalar(double val)
         void vectorized_scale(SizedArray[double] vector)
+        void add_operator(_BandedOperator &other)
         void status()
         SizedArray[int] offsets
         SizedArray[double] data

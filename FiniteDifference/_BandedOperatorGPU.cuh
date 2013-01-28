@@ -76,6 +76,7 @@ class _BandedOperator {
         void apply(SizedArray<double>, bool);
         void add_scalar(double val);
         void vectorized_scale(SizedArray<double> &vector);
+        void add_operator(_BandedOperator &other);
 
         _BandedOperator(
             SizedArray<double> &data,

@@ -23,14 +23,24 @@
 #include <ctime>
 #include <stdexcept>
 
+#include <sys/select.h>
+#include <sys/time.h>
+
 #include "_BandedOperatorGPU.cuh"
 
 template <typename T>
-int find_zero(T x, int max) {
+void print_array(T *a, Py_ssize_t len) {
+    std::ostream_iterator<T> out = std::ostream_iterator<T>(std::cout, " ");
+    std::copy(a, a+len, out);
+}
+
+template <typename T, typename U>
+int find_index(T haystack, U needle, int max) {
     int idx;
     for (idx = 0; idx < max; ++idx) {
-        if (!x[idx]) break;
+        if (haystack[idx] == needle) break;
     }
+    if (idx >= max) idx = -1;
     return idx;
 }
 
@@ -59,7 +69,7 @@ _BandedOperator::_BandedOperator(
     top_factors(top_factors),
     bottom_factors(bottom_factors),
     axis(axis),
-    main_diag(find_zero(offsets.data, offsets.size)),
+    main_diag(find_index(offsets.data, 0, offsets.size)),
     operator_rows(operator_rows),
     blocks(blocks),
     block_len(operator_rows / blocks),
@@ -122,6 +132,104 @@ struct periodic_from_to_mask : thrust::unary_function<int, bool> {
         return (idx % period != begin && idx % period != end);
     }
 };
+
+void _BandedOperator::add_operator(_BandedOperator &other) {
+        /*
+         * Add a second BandedOperator to this one.
+         * Does not alter self.R, the residual vector.
+         */
+        /* cdef double[:,:] data = self.D.data */
+        /* cdef int[:] selfoffsets = np.array(self.D.offsets) */
+        /* cdef int[:] otheroffsets = np.array(other.D.offsets) */
+        /* cdef unsigned int num_otheroffsets = otheroffsets.shape[0] */
+        /* cdef np.ndarray[double, ndim=2] newdata */
+        /* cdef int[:] Boffsets */
+        /* cdef int o */
+        /* cdef unsigned int i */
+        /* cdef BandedOperator B */
+        /* cdef cbool fail */
+
+        timeval sleeptime = {1, 0};
+
+        int begin = has_low_dirichlet;
+        int end = block_len-1 - has_high_dirichlet;
+        int to, fro;
+        for (int row = 0; row < other.offsets.size; row++) {
+            fro = row;
+            to = find_index(offsets.data, other.offsets(row), offsets.size);
+            if (offsets(to) != other.offsets(fro)) {
+                std::cout << std::endl;
+                std::cout << "to: " << to << "(";
+                print_array(&offsets(0), offsets.size);
+                std::cout << ")";
+                std::cout << "fro: " << fro << "(";
+                print_array(&other.offsets(0), other.offsets.size);
+                std::cout << ")" << std::endl;
+                select(1, NULL, NULL, NULL, &sleeptime);
+                assert (offsets(to) == other.offsets(fro));
+            }
+
+            if (offsets(fro) == 0) {
+                thrust::transform_if(
+                        &data(to, 0),
+                        &data(to, 0) + operator_rows,
+                        &other.data(fro, 0),
+                        thrust::make_counting_iterator(0),
+                        &data(to, 0),
+                        thrust::plus<double>(),
+                        periodic_from_to_mask(begin, end, block_len));
+            } else {
+                thrust::transform(
+                        &other.data(fro, 0),
+                        &other.data(fro, 0) + operator_rows,
+                        &data(to, 0),
+                        &data(to, 0),
+                        thrust::plus<double>());
+            }
+        }
+        thrust::transform(
+                R.data.begin(),
+                R.data.end(),
+                other.R.data.begin(),
+                R.data.begin(),
+                thrust::plus<double>());
+
+
+
+
+
+        /* for i in range(num_otheroffsets): */
+            /* fro = i */
+            /* o = otheroffsets[i] */
+            /* to = get_int_index(Boffsets, o) */
+            /* if o == 0: */
+                /* # We have to do the main diagonal block_wise because of the */
+                /* # dirichlet boundary */
+                /* block_len = B.shape[0] / float(B.blocks) */
+                /* assert block_len == int(block_len) */
+                /* for i in range(B.blocks): */
+                    /* begin = i*block_len */
+                    /* if B.dirichlet[0] is not None: */
+                        /* begin += 1 */
+                    /* end = i*block_len + block_len */
+                    /* if B.dirichlet[1] is not None: */
+                        /* end -= 1 */
+                    /* B.D.data[to,begin:end] += other.D.data[fro,begin:end] */
+            /* else: */
+                /* begin = 0 */
+                /* end = B.D.data.shape[1] */
+                /* B.D.data[to,begin:end] += other.D.data[fro,begin:end] */
+        /* # Now the residual vector from the other one */
+        /* if other.R is not None: */
+            /* if B.R is None: */
+                /* B.R = other.R.copy() */
+            /* else: */
+                /* B.R += other.R */
+
+        /* return B */
+}
+
+
 
 void _BandedOperator::add_scalar(double val) {
     /* Add a scalar to the main diagonal.
@@ -217,14 +325,6 @@ void _BandedOperator::vectorized_scale(SizedArray<double> &vector) {
 }
 
 } // namespace CPU
-
-template <typename T>
-void print_array(T *a, Py_ssize_t len) {
-    std::ostream_iterator<T> out = std::ostream_iterator<T>(std::cout, " ");
-    std::copy(a, a+len, out);
-    std::cout << std::endl;
-}
-
 
 int main () {
 

@@ -649,34 +649,15 @@ cdef class BandedOperator(object):
             B.copy_meta_data(self)
         # Copy the data from the other operator over
         # Don't double the dirichlet boundaries!
-        for i in range(num_otheroffsets):
-            fro = i
-            o = otheroffsets[i]
-            to = get_int_index(Boffsets, o)
-            if o == 0:
-                # We have to do the main diagonal block_wise because of the
-                # dirichlet boundary
-                block_len = B.shape[0] / float(B.blocks)
-                assert block_len == int(block_len)
-                for i in range(B.blocks):
-                    begin = i*block_len
-                    if B.dirichlet[0] is not None:
-                        begin += 1
-                    end = i*block_len + block_len
-                    if B.dirichlet[1] is not None:
-                        end -= 1
-                    B.D.data[to,begin:end] += other.D.data[fro,begin:end]
-            else:
-                begin = 0
-                end = B.D.data.shape[1]
-                B.D.data[to,begin:end] += other.D.data[fro,begin:end]
-        # Now the residual vector from the other one
-        if other.R is not None:
-            if B.R is None:
-                B.R = other.R.copy()
-            else:
-                B.R += other.R
-
+        # The actual operation starts here.
+        if B.location != LOCATION_GPU:
+            B.emigrate("add op B 0")
+        if other.location != LOCATION_GPU:
+            other.emigrate("add op other 0")
+        assert (other.thisptr)
+        B.thisptr.add_operator(deref(other.thisptr))
+        B.immigrate("add op B 0")
+        other.immigrate("add op other 0")
         return B
 
 
