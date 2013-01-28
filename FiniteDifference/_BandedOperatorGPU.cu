@@ -240,9 +240,11 @@ void _BandedOperator::add_scalar(double val) {
     int begin = has_low_dirichlet;
     int end = block_len-1 - has_high_dirichlet;
 
+    assert(main_diag < offsets.size);
+
     thrust::transform_if(
             &data(main_diag, 0),
-            &data(main_diag, 0) + operator_rows,
+            &data(main_diag, operator_rows),
             thrust::make_constant_iterator(val),
             thrust::make_counting_iterator(0),
             &data(main_diag, 0),
