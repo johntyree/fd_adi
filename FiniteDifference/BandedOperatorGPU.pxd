@@ -79,8 +79,8 @@ cdef class BandedOperator(object):
     cdef inline cbool _is_folded(self)
 
     cpdef copy(self)
-    cpdef emigrate(self)
-    cpdef immigrate(self)
+    cpdef emigrate(self, tag=*)
+    cpdef immigrate(self, tag=*)
     cpdef diagonalize(self)
     cpdef undiagonalize(self)
     cpdef foldbottom(self, unfold=*)

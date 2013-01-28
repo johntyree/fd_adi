@@ -67,8 +67,9 @@ cdef class BandedOperator(object):
         self.location = LOCATION_PYTHON
 
 
-    def __dealloc__(self):
-        del self.thisptr
+    # def __dealloc__(self):
+        # if (self.thisptr):
+            # del self.thisptr
 
     def copy_meta_data(self, other, **kwargs):
         for attr in self.attrs:
@@ -119,13 +120,22 @@ cdef class BandedOperator(object):
         B.copy_meta_data(self)
         return B
 
-    cpdef immigrate(self):
+
+    cpdef immigrate(self, tag=""):
+        if tag and False:
+            print id(self), "Immigrate:", tag
+        assert (self.thisptr)
         self.D.data = from_SizedArray_2(self.thisptr.data)
         self.R = from_SizedArray(self.thisptr.R)
+        del self.thisptr
+        self.thisptr = <_BandedOperator *>0
         self.location = LOCATION_PYTHON
 
 
-    cpdef emigrate(self):
+    cpdef emigrate(self, tag=""):
+        if tag and False:
+            print id(self), "Emigrate: ", tag
+        assert not (self.thisptr)
         cdef:
             SizedArray[double] *diags = to_SizedArray_2(self.D.data)
             SizedArray[double] *R = to_SizedArray(self.R)
@@ -587,8 +597,13 @@ cdef class BandedOperator(object):
         cdef int[:] Boffsets
         cdef int o
         cdef unsigned int i
-        cdef BandedOperator B
+        cdef BandedOperator B, C
         cdef cbool fail
+
+        if self.location != LOCATION_PYTHON:
+            self.immigrate("add op self 0")
+        if other.location != LOCATION_PYTHON:
+            other.immigrate("add op other 0")
 
         if self.axis != other.axis:
             raise ValueError("Both operators must operate on the same axis."
@@ -672,8 +687,8 @@ cdef class BandedOperator(object):
         """
         cdef BandedOperator B
 
-        if self.location != LOCATION_PYTHON:
-            self.immigrate()
+        # if self.location != LOCATION_PYTHON:
+            # self.immigrate("addscalar self 0")
 
         if inplace:
             B = self
@@ -681,19 +696,19 @@ cdef class BandedOperator(object):
             B = self.copy()
 
         if self.location != LOCATION_GPU:
-            B.emigrate()
+            B.emigrate("addscalar B 0")
 
         B.thisptr.add_scalar(other)
 
-        B.immigrate()
+        B.immigrate("addscalar B 0")
 
         return B
 
 
     cpdef vectorized_scale(self, double[:] vector):
 
-        if self.location != LOCATION_GPU:
-            self.emigrate()
+        # if self.location != LOCATION_GPU:
+        self.emigrate()
 
         cdef SizedArray[double] *v = to_SizedArray(vector)
         self.thisptr.vectorized_scale(deref(v))
