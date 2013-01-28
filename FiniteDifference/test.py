@@ -526,7 +526,7 @@ class FiniteDifferenceEngineADI_test(unittest.TestCase):
                     npt.assert_array_almost_equal(op_[x][dim], np_[x][dim], decimal=7, err_msg=msg)
                 except AssertionError:
                     print msg, op_['grid_delta'][dim].axis
-                    fp((op_['grid_delta'][dim]))
+                    fp((op_['grid_delta'][dim]).D.data)
                     fp((op_[x][dim]), fmt='f')
                     fp((np_[x][dim]), fmt='f')
                     fp((op_[x][dim] - np_[x][dim]), fmt='f')
