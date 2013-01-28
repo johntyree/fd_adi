@@ -161,9 +161,7 @@ cdef class BandedOperator(object):
                 , self.R is not None
                 )
 
-
         self.location = LOCATION_GPU
-
         del diags, offsets, R, high_dirichlet, low_dirichlet, top_factors, bottom_factors
 
 
@@ -583,7 +581,6 @@ cdef class BandedOperator(object):
             return self.add_scalar(val, True)
 
 
-    # TODO: This needs to be faster
     cpdef add_operator(BandedOperator self, BandedOperator other, cbool inplace=False):
         """
         Add a second BandedOperator to this one.
