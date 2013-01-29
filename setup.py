@@ -70,7 +70,7 @@ for m in cython_modules:
     m.runtime_library_dirs = [CUDA['lib64']]
     m.extra_compile_args = {}
     m.extra_compile_args['gcc'] = ["-std=c++0x", "-fpermissive"]#, "-Wall", "-Wextra", "-pedantic"]
-    m.extra_compile_args['nvcc'] = ['-arch=sm_20', '--ptxas-options=-v', '-c', '--compiler-options', '-fPIC']
+    m.extra_compile_args['nvcc'] = ['-arch=sm_35', '--ptxas-options=-v', '-c', '--compiler-options', '-fPIC']
 
 
 def customize_compiler_for_nvcc(self):
