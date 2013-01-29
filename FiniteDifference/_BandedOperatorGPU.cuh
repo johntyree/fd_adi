@@ -1,6 +1,10 @@
 
 #include <thrust/host_vector.h>
 
+#define TILE_DIM 32
+#define BLOCK_ROWS 8
+
+typedef double REAL_t;
 typedef long int Py_ssize_t;
 
 namespace CPU {
@@ -10,6 +14,13 @@ void cout(T a) {
     std::cout << a;
 }
 
+
+void transposeDiagonal(REAL_t *odata, REAL_t *idata, int width, int height);
+
+template<typename T>
+T *raw(thrust::host_vector<T> &v) {
+   return thrust::raw_pointer_cast(v.data());
+}
 
 template<typename T>
 struct SizedArray {
@@ -27,6 +38,12 @@ struct SizedArray {
             data = thrust::host_vector<T>(size);
             thrust::copy(d, d+size, data.begin());
     }
+
+    void transpose() {
+        assert (ndim == 2);
+        transposeDiagonal(raw(data), raw(data), shape[0], shape[1]);
+    }
+
 
     inline T &operator()(int i) {
         assert (ndim == 1);
