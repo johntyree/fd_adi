@@ -138,26 +138,17 @@ void _BandedOperator::add_operator(_BandedOperator &other) {
          * Add a second BandedOperator to this one.
          * Does not alter self.R, the residual vector.
          */
-        /* cdef double[:,:] data = self.D.data */
-        /* cdef int[:] selfoffsets = np.array(self.D.offsets) */
-        /* cdef int[:] otheroffsets = np.array(other.D.offsets) */
-        /* cdef unsigned int num_otheroffsets = otheroffsets.shape[0] */
-        /* cdef np.ndarray[double, ndim=2] newdata */
-        /* cdef int[:] Boffsets */
-        /* cdef int o */
-        /* cdef unsigned int i */
-        /* cdef BandedOperator B */
-        /* cdef cbool fail */
 
         timeval sleeptime = {1, 0};
 
         int begin = has_low_dirichlet;
         int end = block_len-1 - has_high_dirichlet;
-        int to, fro;
-        for (int row = 0; row < other.offsets.size; row++) {
-            fro = row;
-            to = find_index(offsets.data, other.offsets(row), offsets.size);
-            if (offsets(to) != other.offsets(fro)) {
+        int o, to, fro;
+        for (int i = 0; i < other.offsets.size; i++) {
+            fro = i;
+            o = other.offsets(i);
+            to = find_index(offsets.data, o, offsets.size);
+            if (offsets(to) != o) {
                 std::cout << std::endl;
                 std::cout << "to: " << to << "(";
                 print_array(&offsets(0), offsets.size);
@@ -166,10 +157,9 @@ void _BandedOperator::add_operator(_BandedOperator &other) {
                 print_array(&other.offsets(0), other.offsets.size);
                 std::cout << ")" << std::endl;
                 select(1, NULL, NULL, NULL, &sleeptime);
-                assert (offsets(to) == other.offsets(fro));
+                assert (offsets(to) == o);
             }
-
-            if (offsets(fro) == 0) {
+            if (o == 0) {
                 thrust::transform_if(
                         &data(to, 0),
                         &data(to, 0) + operator_rows,
@@ -181,7 +171,7 @@ void _BandedOperator::add_operator(_BandedOperator &other) {
             } else {
                 thrust::transform(
                         &other.data(fro, 0),
-                        &other.data(fro, 0) + operator_rows,
+                        &other.data(fro, 0) + other.data.shape[1],
                         &data(to, 0),
                         &data(to, 0),
                         thrust::plus<double>());
@@ -193,40 +183,6 @@ void _BandedOperator::add_operator(_BandedOperator &other) {
                 other.R.data.begin(),
                 R.data.begin(),
                 thrust::plus<double>());
-
-
-
-
-
-        /* for i in range(num_otheroffsets): */
-            /* fro = i */
-            /* o = otheroffsets[i] */
-            /* to = get_int_index(Boffsets, o) */
-            /* if o == 0: */
-                /* # We have to do the main diagonal block_wise because of the */
-                /* # dirichlet boundary */
-                /* block_len = B.shape[0] / float(B.blocks) */
-                /* assert block_len == int(block_len) */
-                /* for i in range(B.blocks): */
-                    /* begin = i*block_len */
-                    /* if B.dirichlet[0] is not None: */
-                        /* begin += 1 */
-                    /* end = i*block_len + block_len */
-                    /* if B.dirichlet[1] is not None: */
-                        /* end -= 1 */
-                    /* B.D.data[to,begin:end] += other.D.data[fro,begin:end] */
-            /* else: */
-                /* begin = 0 */
-                /* end = B.D.data.shape[1] */
-                /* B.D.data[to,begin:end] += other.D.data[fro,begin:end] */
-        /* # Now the residual vector from the other one */
-        /* if other.R is not None: */
-            /* if B.R is None: */
-                /* B.R = other.R.copy() */
-            /* else: */
-                /* B.R += other.R */
-
-        /* return B */
 }
 
 
