@@ -18,7 +18,7 @@ struct SizedArray {
     Py_ssize_t size;
     const Py_ssize_t ndim;
     Py_ssize_t shape[8];
-    SizedArray(T *d, Py_ssize_t ndim, Py_ssize_t *s)
+    SizedArray(T *d, int ndim, intptr_t *s)
         : ndim(ndim), size(1) {
             for (Py_ssize_t i = 0; i < ndim; ++i) {
                 shape[i] = s[i];

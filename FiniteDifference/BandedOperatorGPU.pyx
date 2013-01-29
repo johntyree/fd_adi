@@ -137,7 +137,7 @@ cdef class BandedOperator(object):
             print id(self), "Emigrate: ", tag
         assert not (self.thisptr)
         cdef:
-            SizedArray[double] *diags = to_SizedArray_2(self.D.data)
+            SizedArray[double] *diags = to_SizedArray(self.D.data)
             SizedArray[double] *R = to_SizedArray(self.R)
             SizedArray[int] *offsets = to_SizedArray_i(np.asarray(self.D.offsets))
             SizedArray[double] *low_dirichlet = to_SizedArray(np.atleast_1d(self.dirichlet[0] or [0.0]))
@@ -683,7 +683,7 @@ cdef class BandedOperator(object):
         return B
 
 
-    cpdef vectorized_scale(self, double[:] vector):
+    cpdef vectorized_scale(self, np.ndarray vector):
 
         # if self.location != LOCATION_GPU:
         self.emigrate()
@@ -966,17 +966,15 @@ cpdef backwardcoeffs(deltas, derivative=1, order=2, force_bandwidth=None):
     return (data, offsets)
 
 
-cdef inline SizedArray[double]* to_SizedArray_2(double[:,:] v):
-    cdef SizedArray[double] *s = new SizedArray[double](&v[0,0], v.ndim, v.shape)
-    return s
+cdef inline SizedArray[double]* to_SizedArray(np.ndarray v):
+    if not v.flags.c_contiguous:
+        v = v.copy("C")
+    return new SizedArray[double](<double *>v.data, v.ndim, v.shape)
 
-cdef inline SizedArray[double]* to_SizedArray(double[:] v):
-    cdef SizedArray[double] *s = new SizedArray[double](&v[0], v.ndim, v.shape)
-    return s
-
-cdef inline SizedArray[int]* to_SizedArray_i(int[:] v):
-    cdef SizedArray[int] *s = new SizedArray[int](&v[0], v.ndim, v.shape)
-    return s
+cdef inline SizedArray[int]* to_SizedArray_i(np.ndarray v):
+    if not v.flags.c_contiguous:
+        v = v.copy("C")
+    return new SizedArray[int](<int *>v.data, v.ndim, v.shape)
 
 cdef inline from_SizedArray(SizedArray[double] v):
     sz = v.size

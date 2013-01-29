@@ -22,7 +22,7 @@ cdef extern from "_BandedOperatorGPU.cuh" namespace "CPU":
         Py_ssize_t size
         Py_ssize_t ndim
         Py_ssize_t[8] shape
-        SizedArray(T*, Py_ssize_t, Py_ssize_t*)
+        SizedArray(T*, int, np.npy_intp*)
         T &operator()(long i)
         T &operator()(long i, long j)
 
@@ -94,7 +94,7 @@ cdef class BandedOperator(object):
     cpdef splice_with(self, begin, at, inplace=*)
     cpdef add_operator(BandedOperator self, BandedOperator other, cbool inplace=*)
     cpdef add_scalar(self, float other, cbool inplace=*)
-    cpdef vectorized_scale(self, double[:] arr)
+    cpdef vectorized_scale(self, np.ndarray arr)
     cpdef scale(self, func)
 
     cpdef mul(self, val, inplace=*)
