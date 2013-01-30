@@ -1,5 +1,9 @@
 
 #include <thrust/host_vector.h>
+#include <thrust/device_vector.h>
+
+#include <iostream>
+#include <sstream>
 
 #define TILE_DIM 32
 #define BLOCK_ROWS 8
@@ -10,8 +14,15 @@ typedef long int Py_ssize_t;
 namespace CPU {
 
 template <typename T>
-void cout(T a) {
+void cout(T const &a) {
     std::cout << a;
+}
+
+template <typename T>
+std::string to_string(T const &a) {
+    std::ostringstream s;
+    s << a;
+    return s.str();
 }
 
 

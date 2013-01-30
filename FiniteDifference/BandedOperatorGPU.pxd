@@ -10,6 +10,7 @@ cimport numpy as np
 from cpython cimport bool
 from libcpp cimport bool as cbool
 from libcpp.pair cimport pair
+from libcpp.string cimport string as cpp_string
 
 REAL = np.float64
 # ctypedef double double
@@ -56,7 +57,13 @@ cdef extern from "_BandedOperatorGPU.cuh" namespace "CPU":
 
 
     void cout(SizedArray[int] *a)
+    void cout(SizedArray[double] *a)
+    void cout(SizedArray[double] a)
     void cout(_BandedOperator *a)
+    cpp_string to_string(SizedArray[int] *a)
+    cpp_string to_string(SizedArray[double] *a)
+    cpp_string to_string(SizedArray[double] a)
+    cpp_string to_string(_BandedOperator *a)
 
 
 cdef class BandedOperator(object):
