@@ -26,6 +26,8 @@ cdef extern from "_BandedOperatorGPU.cuh" namespace "CPU":
         SizedArray(T*, int, np.npy_intp*)
         T &operator()(long i)
         T &operator()(long i, long j)
+        void reshape(Py_ssize_t h, Py_ssize_t w)
+        void reshape(Py_ssize_t l)
 
 
     cdef cppclass _BandedOperator:

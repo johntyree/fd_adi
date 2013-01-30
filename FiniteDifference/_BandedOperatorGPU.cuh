@@ -38,7 +38,7 @@ struct SizedArray {
     /* T *data; */
     thrust::host_vector<T> data;
     Py_ssize_t size;
-    const Py_ssize_t ndim;
+    Py_ssize_t ndim;
     Py_ssize_t shape[8];
     SizedArray(T *d, int ndim, intptr_t *s)
         : ndim(ndim), size(1) {
@@ -48,6 +48,20 @@ struct SizedArray {
             }
             data = thrust::host_vector<T>(size);
             thrust::copy(d, d+size, data.begin());
+    }
+
+    void reshape(Py_ssize_t h, Py_ssize_t w) {
+        assert (h*w == size);
+        shape[0] = h;
+        shape[1] = w;
+        ndim = 2;
+    }
+
+    void reshape(Py_ssize_t l) {
+        assert (l == size);
+        shape[0] = l;
+        shape[1] = 0;
+        ndim = 1;
     }
 
     void transpose() {
