@@ -112,6 +112,8 @@ class BlackScholesOption_test(unittest.TestCase):
 
     def test_implicit(self):
         t, dt = self.F.option.tenor, self.dt
+        for o in self.F.operators.values():
+            assert o.is_tridiagonal()
         V = self.F.solve_implicit(t/dt, dt)[self.F.idx]
         ans = self.F.option.analytical
         # print "Spot:", self.F.option.spot
@@ -128,6 +130,8 @@ class BlackScholesOption_test(unittest.TestCase):
 
     def test_smooth(self):
         t, dt = self.F.option.tenor, self.dt
+        for o in self.F.operators.values():
+            assert o.is_tridiagonal()
         V = self.F.solve_smooth(t/dt, dt)[self.F.idx]
         ans = self.F.option.analytical
         # print "Spot:", self.F.option.spot
