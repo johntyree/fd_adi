@@ -1008,6 +1008,16 @@ cpdef backwardcoeffs(deltas, derivative=1, order=2, force_bandwidth=None):
     return (data, offsets)
 
 
+def SizedArray1_roundtrip(np.ndarray[ndim=1, dtype=double] v):
+    cdef SizedArray[double]* s = to_SizedArray(v)
+    v[:] = 0
+    return from_SizedArray(deref(s))
+
+def SizedArray2_roundtrip(np.ndarray[ndim=2, dtype=double] v):
+    cdef SizedArray[double]* s = to_SizedArray(v)
+    v[:,:] = 0
+    return from_SizedArray_2(deref(s))
+
 cdef inline SizedArray[double]* to_SizedArray(np.ndarray v):
     if not v.flags.c_contiguous:
         v = v.copy("C")

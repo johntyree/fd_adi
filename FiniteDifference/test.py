@@ -77,6 +77,18 @@ class BarrierOption_test(unittest.TestCase):
         self.option.monte_carlo_callback(self.s, self.state)
         npt.assert_array_equal(self.state, res)
 
+class Cpp_test(unittest.TestCase):
+
+    def setUp(self):
+        self.v1 = np.arange(10, dtype=float)
+        self.v2 = np.arange(10, dtype=float)
+        self.v2.resize((2,5))
+
+    def test_SizedArray1(self):
+        npt.assert_array_equal(FD.BO.SizedArray1_roundtrip(self.v1.copy()), self.v1)
+
+    def test_SizedArray2(self):
+        npt.assert_array_equal(FD.BO.SizedArray2_roundtrip(self.v2.copy()), self.v2)
 
 class BlackScholesOption_test(unittest.TestCase):
 
@@ -707,7 +719,15 @@ class BandedOperator_test(unittest.TestCase):
         spots = utils.sinh_space(k, spot_max, spotdensity, nspots)
         self.flip_idx = 4
         self.vec = spots
+        self.C1 = FD.BO.for_vector(self.vec, scheme='center', derivative=1, order=2)
 
+    def test_GPUSolve(self):
+        B = self.C1 + 1
+        ref = B.solve(self.vec)
+        tst = B.solve2(self.vec.copy())
+        fp(ref, 4)
+        fp(test, 4)
+        assert 0
 
     def test_migrate(self):
         vec = self.vec
