@@ -34,6 +34,11 @@ T *raw(thrust::host_vector<T> &v) {
 }
 
 template<typename T>
+T *raw(thrust::device_vector<T> &v) {
+   return thrust::raw_pointer_cast(v.data());
+}
+
+template<typename T>
 struct SizedArray {
     /* T *data; */
     thrust::host_vector<T> data;
@@ -106,6 +111,7 @@ class _BandedOperator {
         bool has_low_dirichlet;
         bool has_residual;
         unsigned int axis;
+        double *sub_p, *mid_p, *sup_p;
 
     public:
         SizedArray<double> data;
@@ -116,10 +122,11 @@ class _BandedOperator {
         SizedArray<double> bottom_factors;
         SizedArray<int> offsets;
 
-        void view();
         void status();
+        void verify_diag_ptrs();
         bool is_folded();
-        void apply(SizedArray<double>, bool);
+        int apply(SizedArray<double> &, bool);
+        int solve(SizedArray<double> &);
         void add_scalar(double val);
         void vectorized_scale(SizedArray<double> &vector);
         void add_operator(_BandedOperator &other);

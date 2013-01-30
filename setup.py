@@ -65,7 +65,7 @@ cython_modules = cythonize('FiniteDifference/*.pyx',
 
 for m in cython_modules:
     m.library_dirs = [CUDA['lib64']]
-    m.libraries = ['cudart']
+    m.libraries = ['cudart', 'cusparse']
     m.include_dirs += ["FiniteDifference", numpy_include, CUDA['include']]
     m.runtime_library_dirs = [CUDA['lib64']]
     m.extra_compile_args = {}

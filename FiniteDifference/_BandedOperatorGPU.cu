@@ -25,8 +25,9 @@
 #include <sys/select.h>
 #include <sys/time.h>
 
-#include "_BandedOperatorGPU.cuh"
+#include <cusparse_v2.h>
 
+#include "_BandedOperatorGPU.cuh"
 
 __global__
 void d_transposeDiagonal(
@@ -112,13 +113,40 @@ _BandedOperator::_BandedOperator(
     operator_rows(operator_rows),
     blocks(blocks),
     block_len(operator_rows / blocks),
+    sup_p(raw(data.data)),
+    mid_p(raw(data.data) + operator_rows),
+    sub_p(raw(data.data) + 2*operator_rows),
     has_high_dirichlet(has_high_dirichlet),
     has_low_dirichlet(has_low_dirichlet),
     has_residual(has_residual)
     { }
 
-void _BandedOperator::apply(
-        SizedArray<double> V,
+void _BandedOperator::verify_diag_ptrs() {
+    std::cout << "Operator Rows: " << operator_rows << "\tdata.size: " <<
+        data.size;
+    ENDL;
+    for (int i = 0; i < operator_rows; i++) {
+        if (sup_p[i] != data(main_diag-1, i)) {
+            std::cout << "sup_p @ " << i << " = " << sup_p[i] << " !=  " << data(main_diag-1,i);
+            ENDL;
+            assert(0);
+        }
+        if (mid_p[i] != data(main_diag, i)) {
+            std::cout << "mid_p @ " << i << " = " << mid_p[i] << " !=  " << data(main_diag,i);
+            ENDL;
+            assert(0);
+        }
+        if (sub_p[i] != data(main_diag+1, i)) {
+            std::cout << "sub_p @ " << i << " = " << sub_p[i] << " !=  " << data(main_diag+1,i);
+            ENDL;
+            assert(0);
+        }
+    }
+}
+
+
+int _BandedOperator::apply(
+        SizedArray<double> &V,
         bool overwrite) {
     assert(overwrite);
 
@@ -154,6 +182,7 @@ void _BandedOperator::apply(
 
     // Transpose back
     /* return ret; */
+    return 0;
 }
 
 
@@ -248,10 +277,43 @@ void _BandedOperator::add_scalar(double val) {
 
 }
 
-
-
 bool _BandedOperator::is_folded() {
     return false;
+}
+
+int _BandedOperator::solve(SizedArray<double> &V) {
+    std::cout << "Begin C Solve\n";
+    cusparseStatus_t status;
+    cusparseHandle_t handle;
+    status = cusparseCreate(&handle);
+
+    if (status != CUSPARSE_STATUS_SUCCESS) {
+        std::cerr << "CUSPARSE Library initialization failed." << std::endl;
+        return 1;
+    }
+
+
+    thrust::device_vector<double> d_V(V.size);
+    std::cout << "Copy Host->Dev... ";
+    thrust::copy(V.data.begin(), V.data.end(), d_V.begin());
+    std::cout << "OK\n";
+    /* verify_diag_ptrs(); */
+    std::cout << "CUSPARSE... ";
+    /* status = cusparseDgtsvStridedBatch(handle, V.size, */
+            /* sub_p, mid_p, sup_p, */
+            /* raw(d_V), */
+            /* 1, V.size); */
+    std::cout << "OK\n";
+    /* cudaDeviceSynchronize(); */
+    /* if (status != CUSPARSE_STATUS_SUCCESS) { */
+        /* std::cerr << "CUSPARSE tridiag system solve failed." << std::endl; */
+        /* return 1; */
+    /* } */
+    std::cout << "Copy Dev->Host... ";
+    thrust::copy(d_V.begin(), d_V.end(), V.data.begin());
+    std::cout << "OK\n";
+    std::cout << "End C Solve\n";
+    return 0;
 }
 
 void _BandedOperator::status() {

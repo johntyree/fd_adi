@@ -332,6 +332,48 @@ cdef class BandedOperator(object):
         return ret
 
 
+    cpdef solve2(self, np.ndarray V, overwrite=False):
+        print
+        print "Solve 2 Begin"
+        if not overwrite:
+            V = V.copy()
+        t = range(V.ndim)
+        utils.rolllist(t, self.axis, V.ndim-1)
+        V = np.transpose(V, axes=t)
+
+        if self.dirichlet[0] is not None:
+            V[...,0] = self.dirichlet[0]
+        if self.dirichlet[1] is not None:
+            V[...,-1] = self.dirichlet[1]
+
+        if self.R is not None:
+            V0 = V.flat - self.R
+        else:
+            V0 = V.ravel()
+
+        if self._is_folded():
+            # print "solve Folded"
+            V0 = self.fold_vector(V0)
+
+        cdef SizedArray[double] *d_V = to_SizedArray(V0)
+        print "Device array ptr: ", to_string(d_V)
+        print
+        print "Device array: ", to_string(deref(d_V))
+        print
+        self.thisptr.solve(deref(d_V))
+        ret = from_SizedArray_2(deref(d_V))
+        del d_V
+
+        print V
+        print ret
+
+        t = range(V.ndim)
+        utils.rolllist(t, V.ndim-1, self.axis)
+        ret = np.transpose(ret, axes=t)
+
+        return ret
+
+
     cpdef solve(self, V, overwrite=False):
         if not overwrite:
             V = V.copy()
