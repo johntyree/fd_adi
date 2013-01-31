@@ -68,9 +68,10 @@ for m in cython_modules:
     m.libraries = ['cudart', 'cusparse']
     m.include_dirs += ["FiniteDifference", numpy_include, CUDA['include']]
     m.runtime_library_dirs = [CUDA['lib64']]
+    both_args = ["-Wall", "-fPIC"]
     m.extra_compile_args = {}
-    m.extra_compile_args['gcc'] = ["-std=c++0x", "-fpermissive"]#, "-Wall", "-Wextra", "-pedantic"]
-    m.extra_compile_args['nvcc'] = ['-arch=sm_35', '--ptxas-options=-v', '-c', '--compiler-options', '-fPIC']
+    m.extra_compile_args['gcc'] = ["-Wextra", "-pedantic", "-std=c++0x"] + both_args
+    m.extra_compile_args['nvcc'] = ['-arch=sm_35', '--ptxas-options=-v', '-c', '--compiler-options="%s"' % ' '.join(both_args)]
 
 
 def customize_compiler_for_nvcc(self):
