@@ -13,21 +13,22 @@ from libcpp.pair cimport pair
 from libcpp.string cimport string as cpp_string
 
 REAL = np.float64
-# ctypedef double double
 
 cdef extern from "_BandedOperatorGPU.cuh" namespace "CPU":
 
-
     cdef cppclass SizedArray [T]:
-        T *data
+        # T *data
         Py_ssize_t size
         Py_ssize_t ndim
         Py_ssize_t[8] shape
         SizedArray(T*, int, np.npy_intp*)
-        T &operator()(long i)
-        T &operator()(long i, long j)
+        T &operator()(int i)
+        T &operator()(int i, int j)
+        T &idx(int i)
         void reshape(Py_ssize_t h, Py_ssize_t w)
-        void reshape(Py_ssize_t l)
+        void flatten()
+        void transpose(int)
+        cpp_string to_string()
 
 
     cdef cppclass _BandedOperator:
@@ -40,7 +41,7 @@ cdef extern from "_BandedOperatorGPU.cuh" namespace "CPU":
         void status()
         int solve(SizedArray[double] &)
         SizedArray[int] offsets
-        SizedArray[double] data
+        SizedArray[double] diags
         SizedArray[double] R
         _BandedOperator(
             SizedArray[double] data,

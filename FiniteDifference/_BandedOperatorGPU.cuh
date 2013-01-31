@@ -1,17 +1,48 @@
 
+#ifndef _BandedOperatorGPU_cuh
+#define _BandedOperatorGPU_cuh
+
 #include <thrust/host_vector.h>
 #include <thrust/device_vector.h>
 
 #include <iostream>
 #include <sstream>
+#include <algorithm>
 
-#define TILE_DIM 32
-#define BLOCK_ROWS 8
+#define ENDL std::cout << std::endl
 
 typedef double REAL_t;
 typedef long int Py_ssize_t;
 
+template <typename T>
+void print_array(T *a, Py_ssize_t len) {
+    std::ostream_iterator<T> out = std::ostream_iterator<T>(std::cout, " ");
+    std::copy(a, a+len, out);
+}
+
+void transposeDiagonal(REAL_t *odata, REAL_t *idata, int width, int height);
+void transposeNoBankConflicts(REAL_t *odata, REAL_t *idata, int width, int height);
+void transposeNaive(REAL_t *odata, REAL_t *idata, int width, int height);
+
 namespace CPU {
+
+template <typename T>
+std::ostream & operator<<(std::ostream &os, thrust::host_vector<T> const &v) {
+    os << "addr(" << &v << ") size(" << v.size() << ")  [ ";
+    std::ostream_iterator<T> out = std::ostream_iterator<T>(os, " ");
+    std::copy(v.begin(), v.end(), out);
+    return os << "]";
+}
+
+template <typename T>
+std::ostream & operator<<(std::ostream &os, thrust::device_vector<T> const &v) {
+    os << "addr(" << &v << ") size(" << v.size() << ")  [ ";
+    std::ostream_iterator<T> out = std::ostream_iterator<T>(os, " ");
+    std::copy(v.begin(), v.end(), out);
+    return os << "]";
+}
+
+
 
 template <typename T>
 void cout(T const &a) {
@@ -25,8 +56,6 @@ std::string to_string(T const &a) {
     return s.str();
 }
 
-
-void transposeDiagonal(REAL_t *odata, REAL_t *idata, int width, int height);
 
 template<typename T>
 T *raw(thrust::host_vector<T> &v) {
@@ -42,8 +71,8 @@ template<typename T>
 struct SizedArray {
     /* T *data; */
     thrust::host_vector<T> data;
-    Py_ssize_t size;
     Py_ssize_t ndim;
+    Py_ssize_t size;
     Py_ssize_t shape[8];
     SizedArray(T *d, int ndim, intptr_t *s)
         : ndim(ndim), size(1) {
@@ -51,32 +80,63 @@ struct SizedArray {
                 shape[i] = s[i];
                 size *= shape[i];
             }
-            data = thrust::host_vector<T>(size);
-            thrust::copy(d, d+size, data.begin());
+            data = thrust::host_vector<T>(d, d+size);
     }
 
     void reshape(Py_ssize_t h, Py_ssize_t w) {
-        assert (h*w == size);
+        if (h*w != size) {
+            std::cout << "Height("<<h<<") x Width("<<w<<") != Size("<<size<<")\n";
+            assert(0);
+        }
         shape[0] = h;
         shape[1] = w;
         ndim = 2;
     }
 
-    void reshape(Py_ssize_t l) {
-        assert (l == size);
-        shape[0] = l;
+    void flatten() {
+        shape[0] = size;
         shape[1] = 0;
         ndim = 1;
     }
 
-    void transpose() {
+    void transpose(int strategy) {
         assert (ndim == 2);
-        transposeDiagonal(raw(data), raw(data), shape[0], shape[1]);
+        //XXX
+        thrust::device_vector<T> in(data);
+        thrust::fill(data.begin(), data.end(), 0);
+        thrust::device_vector<T> out(data);
+        assert(in.size() == static_cast<size_t>(shape[0]*shape[1]));
+        assert(out.size() == static_cast<size_t>(shape[0]*shape[1]));
+        ENDL;
+        std::cout << in << " " << shape[0] << ' ' << shape[1]; ENDL;
+        switch (strategy) {
+            case 0:
+                transposeDiagonal(raw(out), raw(in), shape[0], shape[1]);
+                break;
+            case 1:
+                transposeNoBankConflicts(raw(out), raw(in), shape[0], shape[1]);
+                break;
+            case 2:
+                transposeNaive(raw(out), raw(in), shape[0], shape[1]);
+                break;
+            default:
+                std::cerr << "\nUnknown Transpose Strategy.\n";
+                assert(0);
+        }
+        std::swap(shape[0], shape[1]);
+        std::cout << out << " " << shape[0] << ' ' << shape[1]; ENDL;
+        thrust::copy(out.begin(), out.end(), data.begin());
+    }
+
+    std::string to_string() {
+        std::string s0 = CPU::to_string(*this);
+        std::string s1 = CPU::to_string(data);
+        return s0 + " (" + s1 + ")";
     }
 
 
     inline T &operator()(int i) {
-        assert (ndim == 1);
+        assert (ndim >= 1);
         int idx = i;
         assert (0 <= idx && idx < size);
         return data[idx];
@@ -93,6 +153,10 @@ struct SizedArray {
         return data[idx];
     }
 
+    inline T &idx(int i) {
+        return operator()(i);
+    }
+
 };
 
 template <typename T>
@@ -100,21 +164,11 @@ std::ostream & operator<<(std::ostream & os, SizedArray<T> const &sa) {
     return os << "addr(" << &sa << ") size(" << sa.size << ") ndim(" << sa.ndim << ")";
 }
 
+
 class _BandedOperator {
 
-    private:
-        Py_ssize_t blocks;
-        Py_ssize_t operator_rows;
-        Py_ssize_t block_len;
-        Py_ssize_t main_diag;
-        bool has_high_dirichlet;
-        bool has_low_dirichlet;
-        bool has_residual;
-        unsigned int axis;
-        double *sub_p, *mid_p, *sup_p;
-
     public:
-        SizedArray<double> data;
+        SizedArray<double> diags;
         SizedArray<double> R;
         SizedArray<double> high_dirichlet;
         SizedArray<double> low_dirichlet;
@@ -146,7 +200,20 @@ class _BandedOperator {
             bool has_low_dirichlet,
             bool has_residual
             );
+
+    private:
+        Py_ssize_t blocks;
+        Py_ssize_t operator_rows;
+        Py_ssize_t block_len;
+        Py_ssize_t main_diag;
+        bool has_high_dirichlet;
+        bool has_low_dirichlet;
+        bool has_residual;
+        unsigned int axis;
+        double *sub_p, *mid_p, *sup_p;
 };
 
 
 } // namespace CPU
+
+#endif

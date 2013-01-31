@@ -77,18 +77,50 @@ class BarrierOption_test(unittest.TestCase):
         self.option.monte_carlo_callback(self.s, self.state)
         npt.assert_array_equal(self.state, res)
 
+
+class Transpose_test(unittest.TestCase):
+    class XYtuple(object):
+        def __init__(self, x=0, y=0):
+            self.x = x
+            self.y = y
+
+    def setUp(self):
+        m1 = np.arange(12)
+        m1.reshape((3,4))
+        self.m1 = m1
+
+    # def test_naive(self):
+        # xIndex = blockIdx.x*TILE_DIM + threadIdx.x;
+        # yIndex = blockIdx.y*TILE_DIM + threadIdx.y;
+        # index_in = xIndex + width * yIndex;
+        # index_out = yIndex + height * xIndex;
+        # for (int r=0; r < nreps; r++) {
+            # for (int i=0; i<TILE_DIM; i+=BLOCK_ROWS) {
+                # odata[index_out+i] = idata[index_in+i*width];
+            # }
+        # }
+
+
 class Cpp_test(unittest.TestCase):
 
     def setUp(self):
-        self.v1 = np.arange(10, dtype=float)
-        self.v2 = np.arange(10, dtype=float)
-        self.v2.resize((2,5))
+        shape = (3,4)
+        self.v1 = np.arange(2**4, dtype=float)
+        self.v2 = np.arange(shape[0]*shape[1], dtype=float)
+        self.v2.resize(shape)
 
     def test_SizedArray1(self):
-        npt.assert_array_equal(FD.BO.SizedArray1_roundtrip(self.v1.copy()), self.v1)
+        npt.assert_array_equal(self.v1, FD.BO.test_SizedArray1_roundtrip(self.v1.copy()))
 
     def test_SizedArray2(self):
-        npt.assert_array_equal(FD.BO.SizedArray2_roundtrip(self.v2.copy()), self.v2)
+        npt.assert_array_equal(self.v2, FD.BO.test_SizedArray2_roundtrip(self.v2.copy()))
+
+    def test_SizedArray_transpose(self):
+        ntests = 100
+        for i in range(ntests):
+            shape = tuple(np.random.random_integers(1, 100, 2))
+            v = np.arange(shape[0]*shape[1]
+        npt.assert_array_equal(self.v2.T, FD.BO.test_SizedArray_transpose(self.v2.copy()))
 
 class BlackScholesOption_test(unittest.TestCase):
 
@@ -717,7 +749,7 @@ class BandedOperator_test(unittest.TestCase):
 
     def setUp(self):
         k = 3.0
-        nspots = 7
+        nspots = 8
         spot_max = 1500.0
         spotdensity = 7.0  # infinity is linear?
         spots = utils.sinh_space(k, spot_max, spotdensity, nspots)
@@ -729,9 +761,8 @@ class BandedOperator_test(unittest.TestCase):
         B = self.C1 + 1
         ref = B.solve(self.vec)
         tst = B.solve2(self.vec.copy())
-        fp(ref, 4)
-        fp(test, 4)
-        assert 0
+        fp(ref - tst, 3, 'e')
+        npt.assert_array_almost_equal(ref, tst, decimal=12)
 
     def test_migrate(self):
         vec = self.vec

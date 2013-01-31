@@ -125,7 +125,7 @@ cdef class BandedOperator(object):
         if tag and False:
             print id(self), "Immigrate:", tag
         assert (self.thisptr)
-        self.D.data = from_SizedArray_2(self.thisptr.data)
+        self.D.data = from_SizedArray_2(self.thisptr.diags)
         self.R = from_SizedArray(self.thisptr.R)
         del self.thisptr
         self.thisptr = <_BandedOperator *>0
@@ -333,6 +333,7 @@ cdef class BandedOperator(object):
 
 
     cpdef solve2(self, np.ndarray V, overwrite=False):
+        cdef np.ndarray ret
         print
         print "Solve 2 Begin"
         if not overwrite:
@@ -356,16 +357,26 @@ cdef class BandedOperator(object):
             V0 = self.fold_vector(V0)
 
         cdef SizedArray[double] *d_V = to_SizedArray(V0)
+        print "Host array size:", V0.size, V0.shape
+        print "Orig array size:", V.size, V.shape[0], V.shape[1]
         print "Device array ptr: ", to_string(d_V)
         print
-        print "Device array: ", to_string(deref(d_V))
+        print "Device array: ", d_V.to_string()
         print
+        self.D.data[0,:-1] = self.D.data[0,1:]
+        self.D.data[2,1:] = self.D.data[2,:-1]
+        self.emigrate("solve2 0")
         self.thisptr.solve(deref(d_V))
-        ret = from_SizedArray_2(deref(d_V))
+        self.immigrate("solve2 0")
+        self.D.data[0,1:] = self.D.data[0,:-1]
+        self.D.data[2,:-1] = self.D.data[2,1:]
+        if V.ndim == 2:
+            d_V.reshape(V.shape[0], V.shape[1])
+            ret = from_SizedArray_2(deref(d_V))
+        else:
+            ret = from_SizedArray(deref(d_V))
+        print "After solve Device array: ", d_V.to_string()
         del d_V
-
-        print V
-        print ret
 
         t = range(V.ndim)
         utils.rolllist(t, V.ndim-1, self.axis)
@@ -1008,12 +1019,24 @@ cpdef backwardcoeffs(deltas, derivative=1, order=2, force_bandwidth=None):
     return (data, offsets)
 
 
-def SizedArray1_roundtrip(np.ndarray[ndim=1, dtype=double] v):
+def test_SizedArray_transpose(np.ndarray[ndim=2, dtype=double] v):
+    from visualize import fp
+    fp(v, fmt='i')
+    cdef SizedArray[double]* s = to_SizedArray(v)
+    v[:] = 0
+    s.transpose(2)
+    print
+    v = from_SizedArray_2(deref(s))
+    fp(v, fmt='i')
+    return v
+
+
+def test_SizedArray1_roundtrip(np.ndarray[ndim=1, dtype=double] v):
     cdef SizedArray[double]* s = to_SizedArray(v)
     v[:] = 0
     return from_SizedArray(deref(s))
 
-def SizedArray2_roundtrip(np.ndarray[ndim=2, dtype=double] v):
+def test_SizedArray2_roundtrip(np.ndarray[ndim=2, dtype=double] v):
     cdef SizedArray[double]* s = to_SizedArray(v)
     v[:,:] = 0
     return from_SizedArray_2(deref(s))
@@ -1032,7 +1055,7 @@ cdef inline from_SizedArray(SizedArray[double] v):
     sz = v.size
     cdef np.ndarray[double, ndim=1] s = np.empty(sz, dtype=float)
     for i in range(sz):
-        s[i] = v.data[i]
+        s[i] = v.idx(i)
     return s
 
 
@@ -1041,6 +1064,6 @@ cdef inline from_SizedArray_2(SizedArray[double] v):
     cdef long i, j
     for i in range(v.shape[0]):
         for j in range(v.shape[1]):
-            s[i, j] = v.data[i * v.shape[1] + j]
+            s[i, j] = v.idx(i * v.shape[1] + j)
     return s
 
