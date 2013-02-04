@@ -8,10 +8,13 @@
 #include <iostream>
 #include <sstream>
 #include <algorithm>
+#include <cassert>
+#include <thrust/tuple.h>
 
 #define ENDL std::cout << std::endl
 
 typedef double REAL_t;
+typedef thrust::tuple<REAL_t,REAL_t,REAL_t> Triple;
 typedef long int Py_ssize_t;
 
 template <typename T>
@@ -74,6 +77,20 @@ struct SizedArray {
     Py_ssize_t ndim;
     Py_ssize_t size;
     Py_ssize_t shape[8];
+    SizedArray(thrust::device_vector<T> d, int ndim, intptr_t *s)
+        : data(d), ndim(ndim), size(1) {
+            for (Py_ssize_t i = 0; i < ndim; ++i) {
+                shape[i] = s[i];
+                size *= shape[i];
+            }
+    }
+    SizedArray(thrust::host_vector<T> d, int ndim, intptr_t *s)
+        : data(d), ndim(ndim), size(1) {
+            for (Py_ssize_t i = 0; i < ndim; ++i) {
+                shape[i] = s[i];
+                size *= shape[i];
+            }
+    }
     SizedArray(T *d, int ndim, intptr_t *s)
         : ndim(ndim), size(1) {
             for (Py_ssize_t i = 0; i < ndim; ++i) {
@@ -179,7 +196,7 @@ class _BandedOperator {
         void status();
         void verify_diag_ptrs();
         bool is_folded();
-        int apply(SizedArray<double> &, bool);
+        SizedArray<double> *apply(SizedArray<double> &);
         int solve(SizedArray<double> &);
         void add_scalar(double val);
         void vectorized_scale(SizedArray<double> &vector);

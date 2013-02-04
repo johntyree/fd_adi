@@ -10,6 +10,8 @@
 #include <thrust/copy.h>
 #include <thrust/iterator/constant_iterator.h>
 #include <thrust/iterator/counting_iterator.h>
+#include <thrust/iterator/zip_iterator.h>
+
 #include <algorithm>
 #include <cstdlib>
 
@@ -211,10 +213,30 @@ void _BandedOperator::verify_diag_ptrs() {
 }
 
 
-int _BandedOperator::apply(
-        SizedArray<double> &V,
-        bool overwrite) {
-    assert(overwrite);
+struct zipdot : thrust::binary_function<const Triple &, const Triple &, REAL_t> {
+    __host__ __device__
+    REAL_t operator()(const Triple &diags, const Triple &x) {
+        using thrust::get;
+        const REAL_t a = get<0>(diags);
+        const REAL_t b = get<1>(diags);
+        const REAL_t c = get<2>(diags);
+        const REAL_t x0 = get<0>(x);
+        const REAL_t x1 = get<1>(x);
+        const REAL_t x2 = get<2>(x);
+        return a*x0 + b*x1 + c*x2;
+    }
+};
+SizedArray<double> *_BandedOperator::apply(SizedArray<double> &V) {
+    using std::cout;
+    using std::endl;
+    const unsigned N = V.size;
+    thrust::device_vector<double> in(V.data);
+    thrust::device_vector<double> out(N);
+
+    thrust::device_vector<double> a(sub, sub+N);
+    thrust::device_vector<double> b(mid, mid+N);
+    thrust::device_vector<double> c(sup, sup+N);
+
 
     if (axis == 0) {
         // Transpose somehow
@@ -237,6 +259,17 @@ int _BandedOperator::apply(
         /* ret = self.D.dot(V.flat) */
     }
 
+    out[0] = b[0]*in[0] + c[0]*in[1];
+    thrust::transform(
+        thrust::make_zip_iterator(thrust::make_tuple(a.begin()+1, b.begin()+1, c.begin()+1)),
+        thrust::make_zip_iterator(thrust::make_tuple(a.end()-1, b.end()-1, c.end()-1)),
+        thrust::make_zip_iterator(thrust::make_tuple(in.begin(), in.begin()+1, in.begin()+2)),
+        out.begin()+1,
+        zipdot()
+    );
+    out[N-1] = a[N-1]*in[N-2] + b[N-1]*in[N-1];
+    SizedArray<double> *U = new SizedArray<double>(out, V.ndim, V.shape);
+
     if (has_residual) {
         /* ret += self.R; */
     }
@@ -248,7 +281,7 @@ int _BandedOperator::apply(
 
     // Transpose back
     /* return ret; */
-    return 0;
+    return U;
 }
 
 
