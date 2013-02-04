@@ -4,7 +4,7 @@
 # import sys
 # import os
 import itertools
-from bisect import bisect_left
+# from bisect import bisect_left
 import unittest
 
 import numpy as np
@@ -21,12 +21,11 @@ import Grid
 import FiniteDifferenceEngine as FD
 
 from blackscholes import BlackScholesFiniteDifferenceEngine, BlackScholesOption
-from heston import HestonOption, HestonBarrierOption
+from heston import HestonBarrierOption
 
 
 def test_numpy_transpose_vs_rollaxis():
     a = np.ones((3,1,4,2,0,5))
-    b = a.copy()
     for axis in range(len(a.shape)):
         t = range(len(a.shape))
         utils.rolllist(t, axis, 0)
@@ -392,11 +391,11 @@ class FiniteDifferenceEngineADI_test(unittest.TestCase):
         op = self.F.operators[(0,1)]
         op.D.data[op.D.data != 0] = op.D.data[op.D.data != 0]**0
         op.D = todia(op.D)
-        diamat = op.D
-        densemat = diamat.todense()
+        # diamat = op.D
+        # densemat = diamat.todense()
 
-        f0 = lambda t, *x: x[0]
-        f1 = lambda t, *x: x[1]
+        # f0 = lambda t, *x: x[0]
+        # f1 = lambda t, *x: x[1]
         f = lambda t, *x: x
 
         vec = F.coefficient_vector(f, 0, 0)
@@ -455,7 +454,7 @@ class FiniteDifferenceEngineADI_test(unittest.TestCase):
         # print L1.R
         npt.assert_allclose(L1.R, oldR1)
 
-        L2 = self.F.operators[1]
+        # L2 = self.F.operators[1]
 
 
     def test_combine_dimensional_operators_1(self):
@@ -766,7 +765,7 @@ class BandedOperator_test(unittest.TestCase):
 
     def test_migrate(self):
         vec = self.vec
-        idx = self.flip_idx
+        # idx = self.flip_idx
         C1 = FD.BO.for_vector(vec, scheme='center', derivative=1, order=2)
         C0 = C1.copy()
         C1.emigrate("C1 0")
@@ -775,8 +774,8 @@ class BandedOperator_test(unittest.TestCase):
 
     def test_addself(self):
         vec = self.vec
-        idx = self.flip_idx
-        d = np.hstack((np.nan, np.diff(vec)))
+        # idx = self.flip_idx
+        # d = np.hstack((np.nan, np.diff(vec)))
         for scheme in ["center", "forward", "backward"]:
             C1 = FD.BO.for_vector(vec, scheme=scheme, derivative=1, order=2)
             C2 = C1.add(C1)
@@ -791,8 +790,8 @@ class BandedOperator_test(unittest.TestCase):
 
     def test_addoperator(self):
         vec = self.vec
-        idx = self.flip_idx
-        d = np.hstack((np.nan, np.diff(vec)))
+        # idx = self.flip_idx
+        # d = np.hstack((np.nan, np.diff(vec)))
         C1 = FD.BO.for_vector(vec, scheme='center', derivative=1, order=2)
         F1 = FD.BO.for_vector(vec, scheme='forward', derivative=1, order=2)
         oldCF1 = np.zeros((len(set(F1.D.offsets) | set(C1.D.offsets)), C1.D.shape[1]))
@@ -814,8 +813,8 @@ class BandedOperator_test(unittest.TestCase):
 
     def test_addoperator_inplace(self):
         vec = self.vec
-        idx = self.flip_idx
-        d = np.hstack((np.nan, np.diff(vec)))
+        # idx = self.flip_idx
+        # d = np.hstack((np.nan, np.diff(vec)))
         B2 = FD.BO.for_vector(vec, scheme='backward', derivative=2, order=2, force_bandwidth=(-2,2))
         C2 = FD.BO.for_vector(vec, scheme='center', derivative=2, order=2, force_bandwidth=(-2,2))
         oldCB2 = np.zeros((len(set(B2.D.offsets) | set(C2.D.offsets)), C2.D.shape[1]))
@@ -839,8 +838,8 @@ class BandedOperator_test(unittest.TestCase):
 
     def test_mul(self):
         vec = self.vec
-        idx = self.flip_idx
-        d = np.hstack((np.nan, np.diff(vec)))
+        # idx = self.flip_idx
+        # d = np.hstack((np.nan, np.diff(vec)))
         B2 = FD.BO.for_vector(vec, scheme='backward', derivative=2, order=2, force_bandwidth=(-2,2))
         B2.R += 1
         BB2 = B2
@@ -873,8 +872,8 @@ class BandedOperator_test(unittest.TestCase):
 
     def test_eq(self):
         vec = self.vec
-        idx = self.flip_idx
-        d = np.hstack((np.nan, np.diff(vec)))
+        # idx = self.flip_idx
+        # d = np.hstack((np.nan, np.diff(vec)))
         B2 = FD.BO.for_vector(vec, scheme='backward', derivative=2, order=2, force_bandwidth=(-2,2))
         assert B2 == B2
         C2 = FD.BO.for_vector(vec, scheme='center', derivative=2, order=2, force_bandwidth=(-2,2))
@@ -886,8 +885,8 @@ class BandedOperator_test(unittest.TestCase):
 
     def test_addscalar(self):
         vec = self.vec
-        idx = self.flip_idx
-        d = np.hstack((np.nan, np.diff(vec)))
+        # idx = self.flip_idx
+        # d = np.hstack((np.nan, np.diff(vec)))
         B2 = FD.BO.for_vector(vec, scheme='backward', derivative=2, order=2, force_bandwidth=(-2,2))
         origB2 = B2.copy()
         oldB2 = B2.copy()
@@ -904,8 +903,8 @@ class BandedOperator_test(unittest.TestCase):
 
     def test_addscalar_inplace(self):
         vec = self.vec
-        idx = self.flip_idx
-        d = np.hstack((np.nan, np.diff(vec)))
+        # idx = self.flip_idx
+        # d = np.hstack((np.nan, np.diff(vec)))
         B2 = FD.BO.for_vector(vec, scheme='backward', derivative=2, order=2, force_bandwidth=(-2,2))
         origB2 = B2.copy()
         oldB2 = B2.copy()
@@ -920,8 +919,8 @@ class BandedOperator_test(unittest.TestCase):
 
     def test_copy(self):
         vec = self.vec
-        idx = self.flip_idx
-        d = np.hstack((np.nan, np.diff(vec)))
+        # idx = self.flip_idx
+        # d = np.hstack((np.nan, np.diff(vec)))
         C1 = FD.BO.for_vector(vec, scheme='center', derivative=1, order=2, force_bandwidth=(-2,2))
         CC1 = C1.copy()
         CCC1 = CC1.copy()
@@ -978,7 +977,7 @@ class BandedOperator_test(unittest.TestCase):
     def test_splice_same(self):
         vec = self.vec
         last = len(vec)-1
-        deltas = np.hstack((np.nan, np.diff(vec)))
+        # deltas = np.hstack((np.nan, np.diff(vec)))
 
         # When bandwidth is the same
         # print "Splicing operators of the same width."
@@ -1023,7 +1022,7 @@ class BandedOperator_test(unittest.TestCase):
     def test_splice_different(self):
         vec = self.vec
         last = len(vec)-1
-        deltas = np.hstack((np.nan, np.diff(vec)))
+        # deltas = np.hstack((np.nan, np.diff(vec)))
 
         # When bandwidth is possibly different
         # print "Splicing operators of the different width."
@@ -1274,7 +1273,7 @@ class Operator_Folding_test(unittest.TestCase):
 
         bottomblockx = self.bottomblockx
         bottomblocktridiamat = self.bottomblocktridiamat
-        bottomblockxI = self.bottomblockxI
+        # bottomblockxI = self.bottomblockxI
 
         blockdiamat = self.blockdiamat
 
@@ -1303,7 +1302,7 @@ class Operator_Folding_test(unittest.TestCase):
 
         blockx = self.blockx
         blocktridiamat = self.blocktridiamat
-        blockxI = self.blockxI
+        # blockxI = self.blockxI
 
         blockdiamat = self.blockdiamat
 
@@ -1353,8 +1352,8 @@ class ScalingFuncs(unittest.TestCase):
         self.oldB = oldB
 
         manualB = oldB.copy()
-        newB = oldB.copy()
-        vecB = oldB.copy()
+        # newB = oldB.copy()
+        # vecB = oldB.copy()
         manualB.D.data[0][2:] *= coeff(len(vec)-2)
         manualB.D.data[1][1:] *= coeff(len(vec)-1)
         manualB.D.data[2] *= coeff(len(vec))
@@ -1601,7 +1600,7 @@ class ScalingFuncs(unittest.TestCase):
 
 
     def test_scale_dirichlet(self):
-        no_nan = np.nan_to_num
+        # no_nan = np.nan_to_num
         vec = self.vec
         flag = int(1)
         data = np.ones((5,len(vec)), dtype=int)*flag
@@ -1773,19 +1772,6 @@ def implicit_manual(V, L1, R1x, L2, R2x, dt, n, spots, vars, coeffs, crumbs=[], 
     return crumbs
 
 
-def foldMatFor(A, blocks):
-    l = A.shape[0] // blocks
-    data = np.zeros((3, A.shape[0]))
-    data[1, :] = 1
-    offsets = (1, 0, -1)
-    m = len(A.offsets) // 2
-    for b in range(blocks):
-        data[0, b*l+1] = -A.data[m-2,b*l+2] / A.data[m-1,b*l+2] if A.data[m-1,b*l+2] else 0
-        data[2, (b+1)*l-2] = -A.data[m+2,(b+1)*l-3] / A.data[m+1,(b+1)*l-3] if A.data[m+2,(b+1)*l-3] else 0
-        d = scipy.sparse.dia_matrix((data, offsets), shape=A.shape)
-    return d
-
-
 def apWithRes(A, U, R, blocks=1):
     A = todia(A)
     d = foldMatFor(A, blocks)
@@ -1799,7 +1785,7 @@ def solveWithRes(A, U, R, blocks=1):
     A = todia(A)
     d = foldMatFor(A, blocks)
     diagonalize = compose(todia, d.dot)
-    undiagonalize = compose(lambda x: x.A[0], d.todense().I.dot)
+    # undiagonalize = compose(lambda x: x.A[0], d.todense().I.dot)
     diaA = diagonalize(A)
     ret = diaA.todense().I.dot(d.dot(U-R)).A[0]
     return ret
