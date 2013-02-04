@@ -403,7 +403,7 @@ int _BandedOperator::solve(SizedArray<double> &V) {
     thrust::device_vector<double> d_sup(sup, sup+V.size);
     thrust::device_vector<double> d_mid(mid, mid+V.size);
     thrust::device_vector<double> d_sub(sub, sub+V.size);
-    std::cout << "OK\n";
+    /* std::cout << "OK\n"; */
 
     /* std::cout << "CUSPARSE... "; */
     status = cusparseDgtsvStridedBatch(handle, V.size,
