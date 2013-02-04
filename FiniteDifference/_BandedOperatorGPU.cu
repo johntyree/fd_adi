@@ -68,7 +68,7 @@ void d_transposeNoBankConflicts(
     int index_out = xIndex + (yIndex)*height;
     for (int i = 0; i < TILE_DIM; i += BLOCK_ROWS) {
         if (index_in + i * width < width*height) {
-            printf("Thread %i ((%i, %i) -> %i)\n", index_in, threadIdx.y+i, threadIdx.x, index_in+i*width);
+            // printf("Thread %i ((%i, %i) -> %i)\n", index_in, threadIdx.y+i, threadIdx.x, index_in+i*width);
             tile[threadIdx.y+i][threadIdx.x] = idata[index_in+i*width];
         }
     }
@@ -86,7 +86,7 @@ void transposeNoBankConflicts(REAL_t *odata, REAL_t *idata,
         int height, int width) {
     dim3 grid(ceil((float)width/TILE_DIM), ceil((float)height/TILE_DIM));
     dim3 threads(TILE_DIM,BLOCK_ROWS);
-    printf("Grid: %i %i  Threads: %i %i", grid.x, grid.y, threads.x, threads.y);
+    // printf("Grid: %i %i  Threads: %i %i", grid.x, grid.y, threads.x, threads.y);
     /* std::cout << "Grid: "<<grid.y<<", "<<grid.x */
         /* << " Threads: "<<threads.x<<", "<<threads.y<<"\n"; */
     cudaDeviceSynchronize();
