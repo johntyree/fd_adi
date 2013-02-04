@@ -757,11 +757,20 @@ class BandedOperator_test(unittest.TestCase):
         self.C1 = FD.BO.for_vector(self.vec, scheme='center', derivative=1, order=2)
 
     def test_GPUSolve(self):
-        B = self.C1 + 1
+        # B = self.C1 + 1
+        B = self.C1
+        B.D.data = np.random.random((B.D.data.shape))
+        B.D.data[0,0] = 0
+        B.D.data[-1,-1] = 0
+        origdata = B.D.data.copy()
+        fp(B.D.data)
+        fp(B.D.offsets)
         ref = B.solve(self.vec)
         tst = B.solve2(self.vec.copy())
         fp(ref - tst, 3, 'e')
-        npt.assert_array_almost_equal(ref, tst, decimal=12)
+        npt.assert_array_almost_equal(ref, tst, decimal=8)
+        npt.assert_array_equal(origdata, B.D.data)
+        # assert 0
 
     def test_migrate(self):
         vec = self.vec
