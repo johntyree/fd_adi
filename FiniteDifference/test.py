@@ -103,10 +103,33 @@ class Transpose_test(unittest.TestCase):
 class Cpp_test(unittest.TestCase):
 
     def setUp(self):
-        shape = (3,4)
-        self.v1 = np.arange(2**4, dtype=float)
-        self.v2 = np.arange(shape[0]*shape[1], dtype=float)
+        shape = (4,4)
+        self.v1 = np.arange(shape[0]*shape[1], dtype=float)**2
+        self.v2 = self.v1.copy()
         self.v2.resize(shape)
+
+        coeffs = {(0,) : lambda *x: 1,
+                  (0,0): lambda *x: 1,
+                  (1,) : lambda *x: 1,
+                  (1,1): lambda *x: 1,
+                  }
+        bounds = {
+                (0,)  : ((0, lambda *args: 0), (1, lambda *args: 1)),
+                (0,0)  : ((0, lambda *args: 0), (None, lambda *args: 1)),
+                (1,)  : ((None, lambda *args: None), (None, lambda *args: None)),
+                (1,1)  : ((1, lambda *args: 0.0), (None, lambda *args: None)),
+                }
+
+        schemes = {}
+
+        self.G = Grid.Grid([np.arange(shape[0]), np.arange(shape[1])], lambda x, y: (x*shape[1]+y)**2)
+        print self.G
+        self.F = FD.FiniteDifferenceEngineADI(self.G, coefficients=coeffs,
+                boundaries=bounds, schemes=schemes, force_bandwidth=None)
+        self.F.init()
+        self.F.operators[0].R = np.arange(self.G.size)
+        self.F.operators[1].R = np.arange(self.G.size)
+        self.F.operators[1].diagonalize()
 
     def test_SizedArray1(self):
         npt.assert_array_equal(self.v1, FD.BO.test_SizedArray1_roundtrip(self.v1.copy()))
@@ -118,8 +141,20 @@ class Cpp_test(unittest.TestCase):
         ntests = 100
         for i in range(ntests):
             shape = tuple(np.random.random_integers(1, 100, 2))
-            v = np.arange(shape[0]*shape[1]
-        npt.assert_array_equal(self.v2.T, FD.BO.test_SizedArray_transpose(self.v2.copy()))
+            v2 = np.arange(shape[0]*shape[1], dtype=float).reshape(shape)
+            npt.assert_array_equal(v2.T, FD.BO.test_SizedArray_transpose(v2.copy()))
+
+    def test_apply_axis_0(self):
+        B0  = self.F.operators[0]
+        fp(B0.D)
+        npt.assert_array_equal(B0.apply(self.v2), B0.apply2(self.v2.copy()))
+
+    def test_apply_axis_1(self):
+        B1  = self.F.operators[1]
+        fp(B1.D)
+        npt.assert_array_equal(B1.apply(self.v2), B1.apply2(self.v2.copy()))
+        assert 0
+
 
 class BlackScholesOption_test(unittest.TestCase):
 
