@@ -370,7 +370,7 @@ void _BandedOperator::add_scalar(double val) {
 
     thrust::transform_if(
             &diags(main_diag, 0),
-            &diags(main_diag, operator_rows),
+            &diags(main_diag, 0) + operator_rows,
             thrust::make_constant_iterator(val),
             thrust::make_counting_iterator(0),
             &diags(main_diag, 0),
