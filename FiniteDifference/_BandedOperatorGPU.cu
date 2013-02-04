@@ -171,13 +171,13 @@ _BandedOperator::_BandedOperator(
         bool has_low_dirichlet,
         bool has_residual
         ) :
-    diags(data, "diags"),
-    R(R, "R"),
-    offsets(offsets, "offsets"),
-    high_dirichlet(high_dirichlet, "high_dirichlet"),
-    low_dirichlet(low_dirichlet, "low_dirichlet"),
-    top_factors(top_factors, "top_factors"),
-    bottom_factors(bottom_factors, "bottom_factors"),
+    diags(data),
+    R(R),
+    offsets(offsets),
+    high_dirichlet(high_dirichlet),
+    low_dirichlet(low_dirichlet),
+    top_factors(top_factors),
+    bottom_factors(bottom_factors),
     axis(axis),
     main_diag(find_index(offsets.data, 0, offsets.size)),
     operator_rows(operator_rows),
@@ -268,7 +268,8 @@ SizedArray<double> *_BandedOperator::apply(SizedArray<double> &V) {
         zipdot()
     );
     out[N-1] = a[N-1]*in[N-2] + b[N-1]*in[N-1];
-    SizedArray<double> *U = new SizedArray<double>(out, V.ndim, V.shape);
+    SizedArray<double> *U = new SizedArray<double>(out,
+            V.ndim, V.shape, "CPP Solve U from V");
 
     if (has_residual) {
         /* ret += self.R; */

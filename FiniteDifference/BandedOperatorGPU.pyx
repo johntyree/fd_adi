@@ -138,13 +138,13 @@ cdef class BandedOperator(object):
             print id(self), "Emigrate: ", tag
         assert not (self.thisptr)
         cdef:
-            SizedArray[double] *diags = to_SizedArray(self.D.data)
-            SizedArray[double] *R = to_SizedArray(self.R)
-            SizedArray[int] *offsets = to_SizedArray_i(np.asarray(self.D.offsets))
-            SizedArray[double] *low_dirichlet = to_SizedArray(np.atleast_1d(self.dirichlet[0] or [0.0]))
-            SizedArray[double] *high_dirichlet = to_SizedArray(np.atleast_1d(self.dirichlet[1] or [0.0]))
-            SizedArray[double] *top_factors = to_SizedArray(np.atleast_1d(self.top_factors if self.top_factors is not None else [0.0]))
-            SizedArray[double] *bottom_factors = to_SizedArray(np.atleast_1d(self.bottom_factors if self.bottom_factors is not None else [0.0]))
+            SizedArray[double] *diags = to_SizedArray(self.D.data, "data")
+            SizedArray[double] *R = to_SizedArray(self.R, "R")
+            SizedArray[int] *offsets = to_SizedArray_i(np.asarray(self.D.offsets), "Offsets")
+            SizedArray[double] *low_dirichlet = to_SizedArray(np.atleast_1d(self.dirichlet[0] or [0.0]), "low_dirichlet")
+            SizedArray[double] *high_dirichlet = to_SizedArray(np.atleast_1d(self.dirichlet[1] or [0.0]), "high_dirichlet")
+            SizedArray[double] *top_factors = to_SizedArray(np.atleast_1d(self.top_factors if self.top_factors is not None else [0.0]), "top_factors")
+            SizedArray[double] *bottom_factors = to_SizedArray(np.atleast_1d(self.bottom_factors if self.bottom_factors is not None else [0.0]), "bottom_factors")
 
         self.thisptr = new _BandedOperator(
                   deref(diags)
@@ -315,7 +315,8 @@ cdef class BandedOperator(object):
             # print "Setting V[-1,:] to", self.dirichlet[-1]
             V[...,-1] = self.dirichlet[1]
 
-        cdef SizedArray[double] *sa_V = to_SizedArray(V)
+        cdef SizedArray[double] *sa_V = to_SizedArray(V.copy(order='C'), "apply2 sa_V(V)")
+        print to_string(deref(sa_V))
         self.D.data[0,:-1] = self.D.data[0,1:]
         self.D.data[2,1:] = self.D.data[2,:-1]
         self.D.data[0,-1] = 0
@@ -403,9 +404,9 @@ cdef class BandedOperator(object):
             # print "solve Folded"
             V0 = self.fold_vector(V0)
 
-        cdef SizedArray[double] *d_V = to_SizedArray(V0)
         print "Host array size:", V0.size, V0.shape
         print "Orig array size:", V.size, V.shape[0], V.shape[1]
+        cdef SizedArray[double] *d_V = to_SizedArray(V0, "solve2 domain V0")
         print "Device array ptr: ", to_string(d_V)
         print
         print "Device array: ", d_V.to_string()
@@ -792,7 +793,7 @@ cdef class BandedOperator(object):
         # if self.location != LOCATION_GPU:
         self.emigrate()
 
-        cdef SizedArray[double] *v = to_SizedArray(vector)
+        cdef SizedArray[double] *v = to_SizedArray(vector, "Vectorized scale v")
         self.thisptr.vectorized_scale(deref(v))
         del v
 
@@ -1073,7 +1074,7 @@ cpdef backwardcoeffs(deltas, derivative=1, order=2, force_bandwidth=None):
 def test_SizedArray_transpose(np.ndarray[ndim=2, dtype=double] v):
     from visualize import fp
     # fp(v, fmt='i')
-    cdef SizedArray[double]* s = to_SizedArray(v)
+    cdef SizedArray[double]* s = to_SizedArray(v, "transpose s")
     v[:] = 0
     s.transpose(1)
     # print
@@ -1083,24 +1084,24 @@ def test_SizedArray_transpose(np.ndarray[ndim=2, dtype=double] v):
 
 
 def test_SizedArray1_roundtrip(np.ndarray[ndim=1, dtype=double] v):
-    cdef SizedArray[double]* s = to_SizedArray(v)
+    cdef SizedArray[double]* s = to_SizedArray(v, "Round Trip")
     v[:] = 0
     return from_SizedArray(deref(s))
 
 def test_SizedArray2_roundtrip(np.ndarray[ndim=2, dtype=double] v):
-    cdef SizedArray[double]* s = to_SizedArray(v)
+    cdef SizedArray[double]* s = to_SizedArray(v, "Round trip 2")
     v[:,:] = 0
     return from_SizedArray_2(deref(s))
 
-cdef inline SizedArray[double]* to_SizedArray(np.ndarray v):
+cdef inline SizedArray[double]* to_SizedArray(np.ndarray v, cpp_string name):
     if not v.flags.c_contiguous:
         v = v.copy("C")
-    return new SizedArray[double](<double *>v.data, v.ndim, v.shape)
+    return new SizedArray[double](<double *>v.data, v.ndim, v.shape, name)
 
-cdef inline SizedArray[int]* to_SizedArray_i(np.ndarray v):
+cdef inline SizedArray[int]* to_SizedArray_i(np.ndarray v, cpp_string name):
     if not v.flags.c_contiguous:
         v = v.copy("C")
-    return new SizedArray[int](<int *>v.data, v.ndim, v.shape)
+    return new SizedArray[int](<int *>v.data, v.ndim, v.shape, name)
 
 cdef inline from_SizedArray(SizedArray[double] &v):
     sz = v.size

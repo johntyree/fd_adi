@@ -79,21 +79,16 @@ struct SizedArray {
     Py_ssize_t shape[8];
     std::string name;
 
-    SizedArray(SizedArray<T> const &S) {
-        std::cout << "\n\nNO. GIVE IT A NAME.\n\n";
-        assert(0);
-    }
-
-    SizedArray(SizedArray<T> const &S, std::string name)
-        : data(S.data), ndim(S.ndim), size(S.size), name(name) {
+    SizedArray(SizedArray<T> const &S)
+        : data(S.data), ndim(S.ndim), size(S.size), name(S.name) {
             for (Py_ssize_t i = 0; i < ndim; ++i) {
                 shape[i] = S.shape[i];
             }
             sanity_check();
     }
 
-    SizedArray(thrust::host_vector<T> d, int ndim, intptr_t *s)
-        : data(d), ndim(ndim), size(1) {
+    SizedArray(thrust::host_vector<T> d, int ndim, intptr_t *s, std::string name)
+        : data(d), ndim(ndim), size(1), name(name) {
             for (Py_ssize_t i = 0; i < ndim; ++i) {
                 shape[i] = s[i];
                 size *= shape[i];
@@ -101,8 +96,8 @@ struct SizedArray {
             sanity_check();
     }
 
-    SizedArray(T *d, int ndim, intptr_t *s)
-        : ndim(ndim), size(1) {
+    SizedArray(T *d, int ndim, intptr_t *s, std::string name)
+        : ndim(ndim), size(1), name(name) {
             for (Py_ssize_t i = 0; i < ndim; ++i) {
                 shape[i] = s[i];
                 size *= shape[i];
@@ -222,12 +217,11 @@ struct SizedArray {
 
 template <typename T>
 std::ostream & operator<<(std::ostream & os, SizedArray<T> const &sa) {
-    return os << "addr(" << &sa << ") size(" << sa.size << ") ndim(" << sa.ndim << ")";
+    return os << sa.name << ": addr("<<&sa<<") size("<<sa.size<<") ndim("<<sa.ndim<< ")";
 }
 
 
 class _BandedOperator {
-
     public:
         SizedArray<double> diags;
         SizedArray<double> R;

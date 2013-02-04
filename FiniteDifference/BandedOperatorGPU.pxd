@@ -21,7 +21,8 @@ cdef extern from "_BandedOperatorGPU.cuh" namespace "CPU":
         Py_ssize_t size
         Py_ssize_t ndim
         Py_ssize_t[8] shape
-        SizedArray(T*, int, np.npy_intp*)
+        cpp_string name
+        SizedArray(T*, int, np.npy_intp*, cpp_string name)
         T &operator()(int i)
         T &operator()(int i, int j)
         T &idx(int i)
