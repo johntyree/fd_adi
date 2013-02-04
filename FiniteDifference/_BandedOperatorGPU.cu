@@ -181,9 +181,9 @@ _BandedOperator::_BandedOperator(
     operator_rows(operator_rows),
     blocks(blocks),
     block_len(operator_rows / blocks),
-    sup_p(raw(diags.data)),
-    mid_p(raw(diags.data) + operator_rows),
-    sub_p(raw(diags.data) + 2*operator_rows),
+    sup(raw(diags.data)),
+    mid(raw(diags.data) + operator_rows),
+    sub(raw(diags.data) + 2*operator_rows),
     has_high_dirichlet(has_high_dirichlet),
     has_low_dirichlet(has_low_dirichlet),
     has_residual(has_residual)
@@ -191,19 +191,19 @@ _BandedOperator::_BandedOperator(
 
 void _BandedOperator::verify_diag_ptrs() {
     for (int i = 0; i < operator_rows; i++) {
-        if (sup_p[i] != diags(main_diag-1, i)) {
-            std::cout << "sup_p @ " << i << " = " << sup_p[i] << " !=  " <<
+        if (sup[i] != diags(main_diag-1, i)) {
+            std::cout << "sup @ " << i << " = " << sup[i] << " !=  " <<
                 diags(main_diag-1,i);
             ENDL;
             assert(0);
         }
-        if (mid_p[i] != diags(main_diag, i)) {
-            std::cout << "mid_p @ " << i << " = " << mid_p[i] << " !=  " << diags(main_diag,i);
+        if (mid[i] != diags(main_diag, i)) {
+            std::cout << "mid @ " << i << " = " << mid[i] << " !=  " << diags(main_diag,i);
             ENDL;
             assert(0);
         }
-        if (sub_p[i] != diags(main_diag+1, i)) {
-            std::cout << "sub_p @ " << i << " = " << sub_p[i] << " !=  " << diags(main_diag+1,i);
+        if (sub[i] != diags(main_diag+1, i)) {
+            std::cout << "sub @ " << i << " = " << sub[i] << " !=  " << diags(main_diag+1,i);
             ENDL;
             assert(0);
         }
@@ -366,14 +366,14 @@ int _BandedOperator::solve(SizedArray<double> &V) {
 
     /* std::cout << "Copy Host->Dev... " << V.data << ' '; */
     thrust::device_vector<double> d_V(V.data);
-    thrust::device_vector<double> d_sup_p(sup_p, sup_p+V.size);
-    thrust::device_vector<double> d_mid_p(mid_p, mid_p+V.size);
-    thrust::device_vector<double> d_sub_p(sub_p, sub_p+V.size);
+    thrust::device_vector<double> d_sup(sup, sup+V.size);
+    thrust::device_vector<double> d_mid(mid, mid+V.size);
+    thrust::device_vector<double> d_sub(sub, sub+V.size);
     std::cout << "OK\n";
 
     /* std::cout << "CUSPARSE... "; */
     status = cusparseDgtsvStridedBatch(handle, V.size,
-            raw(d_sub_p), raw(d_mid_p), raw(d_sup_p),
+            raw(d_sub), raw(d_mid), raw(d_sup),
             raw(d_V),
             1, V.size);
     cudaDeviceSynchronize();

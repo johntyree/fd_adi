@@ -210,7 +210,7 @@ class _BandedOperator {
         bool has_low_dirichlet;
         bool has_residual;
         unsigned int axis;
-        double *sub_p, *mid_p, *sup_p;
+        double *sub, *mid, *sup;
 };
 
 
