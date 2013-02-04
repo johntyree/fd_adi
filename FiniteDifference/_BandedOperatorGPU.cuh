@@ -212,6 +212,9 @@ struct SizedArray {
     inline T &idx(int i) {
         return operator()(i);
     }
+    inline T &idx(int i, int j) {
+        return operator()(i, j);
+    }
 
 };
 

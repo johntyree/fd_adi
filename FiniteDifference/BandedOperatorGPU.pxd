@@ -26,6 +26,7 @@ cdef extern from "_BandedOperatorGPU.cuh" namespace "CPU":
         T &operator()(int i)
         T &operator()(int i, int j)
         T &idx(int i)
+        T &idx(int i, int j)
         void reshape(Py_ssize_t h, Py_ssize_t w)
         void flatten()
         void transpose(int)

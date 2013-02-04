@@ -1106,6 +1106,7 @@ cdef inline SizedArray[int]* to_SizedArray_i(np.ndarray v, cpp_string name):
 cdef inline from_SizedArray(SizedArray[double] &v):
     sz = v.size
     cdef np.ndarray[double, ndim=1] s = np.empty(sz, dtype=float)
+    cdef int i
     for i in range(sz):
         s[i] = v.idx(i)
     return s
@@ -1113,9 +1114,9 @@ cdef inline from_SizedArray(SizedArray[double] &v):
 
 cdef inline from_SizedArray_2(SizedArray[double] &v):
     cdef np.ndarray[double, ndim=2] s = np.empty((v.shape[0], v.shape[1]), dtype=float)
-    cdef long i, j
+    cdef int i, j
     for i in range(v.shape[0]):
         for j in range(v.shape[1]):
-            s[i, j] = v.idx(i * v.shape[1] + j)
+            s[i, j] = v.idx(i, j)
     return s
 
