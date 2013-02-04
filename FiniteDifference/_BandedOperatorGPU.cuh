@@ -14,6 +14,51 @@
 #define ENDL std::cout << std::endl
 
 typedef double REAL_t;
+
+template <typename T>
+struct GPUVec : thrust::device_vector<T> {
+
+    GPUVec() : thrust::device_vector<T>() {}
+
+    template<typename X>
+    GPUVec(const X &x)
+        : thrust::device_vector<T>(x) {}
+
+    template<typename X, typename Y>
+    GPUVec(const X &x, const Y &y)
+        : thrust::device_vector<T>(x, y) {}
+
+    template<typename X, typename Y, typename Z>
+    GPUVec(const X &x, const Y &y, const Z &z)
+        : thrust::device_vector<T>(x, y, z) {}
+
+    T *raw() {
+        return thrust::raw_pointer_cast(this->data());
+    }
+};
+
+template <typename T>
+struct HostVec : thrust::host_vector<T> {
+
+    HostVec() : thrust::host_vector<T>() {}
+
+    template<typename X>
+    HostVec(const X &x)
+        : thrust::host_vector<T>(x) {}
+
+    template<typename X, typename Y>
+    HostVec(const X &x, const Y &y)
+        : thrust::host_vector<T>(x, y) {}
+
+    template<typename X, typename Y, typename Z>
+    HostVec(const X &x, const Y &y, const Z &z)
+        : thrust::host_vector<T>(x, y, z) {}
+
+    T *raw() {
+        return thrust::raw_pointer_cast(this->data());
+    }
+};
+
 typedef thrust::tuple<REAL_t,REAL_t,REAL_t> Triple;
 typedef long int Py_ssize_t;
 
@@ -60,20 +105,10 @@ std::string to_string(T const &a) {
 }
 
 
-template<typename T>
-T *raw(thrust::host_vector<T> &v) {
-   return thrust::raw_pointer_cast(v.data());
-}
-
-template<typename T>
-T *raw(thrust::device_vector<T> &v) {
-   return thrust::raw_pointer_cast(v.data());
-}
 
 template<typename T>
 struct SizedArray {
-    /* T *data; */
-    thrust::host_vector<T> data;
+    HostVec<T> data;
     Py_ssize_t ndim;
     Py_ssize_t size;
     Py_ssize_t shape[8];
@@ -126,6 +161,10 @@ struct SizedArray {
         ndim = 2;
     }
 
+    T *raw() {
+        return thrust::raw_pointer_cast(data.data());
+    }
+
     void flatten() {
         shape[0] = size;
         shape[1] = 0;
@@ -135,9 +174,9 @@ struct SizedArray {
     void transpose(int strategy) {
         assert (ndim == 2);
         //XXX
-        thrust::device_vector<T> in(data);
+        GPUVec<T> in(data);
         thrust::fill(data.begin(), data.end(), 0);
-        thrust::device_vector<T> out(data);
+        GPUVec<T> out(data);
         assert(in.size() == static_cast<size_t>(shape[0]*shape[1]));
         assert(out.size() == static_cast<size_t>(shape[0]*shape[1]));
         // ENDL;
@@ -148,13 +187,13 @@ struct SizedArray {
         }
         switch (strategy) {
             case 0:
-                transposeDiagonal(raw(out), raw(in), shape[0], shape[1]);
+                transposeDiagonal(out.raw(), in.raw(), shape[0], shape[1]);
                 break;
             case 1:
-                transposeNoBankConflicts(raw(out), raw(in), shape[0], shape[1]);
+                transposeNoBankConflicts(out.raw(), in.raw(), shape[0], shape[1]);
                 break;
             case 2:
-                transposeNaive(raw(out), raw(in), shape[0], shape[1]);
+                transposeNaive(out.raw(), in.raw(), shape[0], shape[1]);
                 break;
             default:
                 std::cerr << "\nUnknown Transpose Strategy.\n";

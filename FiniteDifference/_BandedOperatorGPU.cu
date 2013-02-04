@@ -183,9 +183,9 @@ _BandedOperator::_BandedOperator(
     operator_rows(operator_rows),
     blocks(blocks),
     block_len(operator_rows / blocks),
-    sup(raw(diags.data)),
-    mid(raw(diags.data) + operator_rows),
-    sub(raw(diags.data) + 2*operator_rows),
+    sup(diags.raw()),
+    mid(diags.raw() + operator_rows),
+    sub(diags.raw() + 2*operator_rows),
     has_high_dirichlet(has_high_dirichlet),
     has_low_dirichlet(has_low_dirichlet),
     has_residual(has_residual)
@@ -399,16 +399,16 @@ int _BandedOperator::solve(SizedArray<double> &V) {
     }
 
     /* std::cout << "Copy Host->Dev... " << V.data << ' '; */
-    thrust::device_vector<double> d_V(V.data);
-    thrust::device_vector<double> d_sup(sup, sup+V.size);
-    thrust::device_vector<double> d_mid(mid, mid+V.size);
-    thrust::device_vector<double> d_sub(sub, sub+V.size);
+    GPUVec<double> d_V(V.data);
+    GPUVec<double> d_sup(sup, sup+V.size);
+    GPUVec<double> d_mid(mid, mid+V.size);
+    GPUVec<double> d_sub(sub, sub+V.size);
     /* std::cout << "OK\n"; */
 
     /* std::cout << "CUSPARSE... "; */
     status = cusparseDgtsvStridedBatch(handle, V.size,
-            raw(d_sub), raw(d_mid), raw(d_sup),
-            raw(d_V),
+            d_sub.raw(), d_mid.raw(), d_sup.raw(),
+            d_V.raw(),
             1, V.size);
     cudaDeviceSynchronize();
     if (status != CUSPARSE_STATUS_SUCCESS) {
