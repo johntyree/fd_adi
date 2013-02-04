@@ -77,20 +77,30 @@ struct SizedArray {
     Py_ssize_t ndim;
     Py_ssize_t size;
     Py_ssize_t shape[8];
-    SizedArray(thrust::device_vector<T> d, int ndim, intptr_t *s)
-        : data(d), ndim(ndim), size(1) {
-            for (Py_ssize_t i = 0; i < ndim; ++i) {
-                shape[i] = s[i];
-                size *= shape[i];
-            }
+    std::string name;
+
+    SizedArray(SizedArray<T> const &S) {
+        std::cout << "\n\nNO. GIVE IT A NAME.\n\n";
+        assert(0);
     }
+
+    SizedArray(SizedArray<T> const &S, std::string name)
+        : data(S.data), ndim(S.ndim), size(S.size), name(name) {
+            for (Py_ssize_t i = 0; i < ndim; ++i) {
+                shape[i] = S.shape[i];
+            }
+            sanity_check();
+    }
+
     SizedArray(thrust::host_vector<T> d, int ndim, intptr_t *s)
         : data(d), ndim(ndim), size(1) {
             for (Py_ssize_t i = 0; i < ndim; ++i) {
                 shape[i] = s[i];
                 size *= shape[i];
             }
+            sanity_check();
     }
+
     SizedArray(T *d, int ndim, intptr_t *s)
         : ndim(ndim), size(1) {
             for (Py_ssize_t i = 0; i < ndim; ++i) {
@@ -98,6 +108,17 @@ struct SizedArray {
                 size *= shape[i];
             }
             data = thrust::host_vector<T>(d, d+size);
+            sanity_check();
+    }
+
+    void sanity_check() {
+        if (static_cast<int>(data.size()) != size) {
+            std::cout << "\ndata.size()("<<data.size()<<") != size("<<size<<")\n";
+            assert(0);
+        }
+        for (int i = 0; i < ndim; ++i) {
+            assert(shape[i] != 0);
+        }
     }
 
     void reshape(Py_ssize_t h, Py_ssize_t w) {
@@ -159,16 +180,35 @@ struct SizedArray {
     inline T &operator()(int i) {
         assert (ndim >= 1);
         int idx = i;
-        assert (0 <= idx && idx < size);
+        if (idx < 0 || size <= idx) {
+            std::cout << std::endl;
+            std::cout << name  << " idx("<<idx<<") not in range [0, Size("<<size<<"))\n";
+            assert(0);
+        }
         return data[idx];
     }
 
     inline T &operator()(int i, int j) {
         assert (ndim == 2);
         int idx = i * shape[1] + j;
-        if (idx < 0 || size <= idx) {
-            std::cout << "Index: " << idx << " larger than size: " << size <<
-                "." << std::endl;
+        if (i >= shape[0]) {
+            std::cout << std::endl;
+            std::cout << std::endl;
+            std::cout << name  << " i("<<i<<")"
+                << "not in range [0, shape[0]("<<shape[0]<<")).\n";
+            assert(0);
+        } else if (j >= shape[1]) {
+            std::cout << std::endl;
+            std::cout << std::endl;
+            std::cout << name  << " j("<<j<<")"
+                << "not in range [0, shape[1]("<<shape[1]<<")).\n";
+            assert(0);
+        } else if (idx < 0 || size <= idx) {
+            std::cout << std::endl;
+            std::cout << "\nNot only are we out of range, but you wrote the"
+                << " single-dimension tests wrong, obviously.\n";
+            std::cout << name  << " idx("<<idx<<") not in range [0, Size("<<size<<"))\n";
+            std::cout << std::endl;
             assert(0);
         }
         return data[idx];
@@ -223,15 +263,15 @@ class _BandedOperator {
             );
 
     private:
-        Py_ssize_t blocks;
-        Py_ssize_t operator_rows;
-        Py_ssize_t block_len;
+        unsigned int axis;
         Py_ssize_t main_diag;
+        Py_ssize_t operator_rows;
+        Py_ssize_t blocks;
+        Py_ssize_t block_len;
+        double *sup, *mid, *sub;
         bool has_high_dirichlet;
         bool has_low_dirichlet;
         bool has_residual;
-        unsigned int axis;
-        double *sub, *mid, *sup;
 };
 
 
