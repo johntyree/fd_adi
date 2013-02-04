@@ -77,28 +77,6 @@ class BarrierOption_test(unittest.TestCase):
         npt.assert_array_equal(self.state, res)
 
 
-class Transpose_test(unittest.TestCase):
-    class XYtuple(object):
-        def __init__(self, x=0, y=0):
-            self.x = x
-            self.y = y
-
-    def setUp(self):
-        m1 = np.arange(12)
-        m1.reshape((3,4))
-        self.m1 = m1
-
-    # def test_naive(self):
-        # xIndex = blockIdx.x*TILE_DIM + threadIdx.x;
-        # yIndex = blockIdx.y*TILE_DIM + threadIdx.y;
-        # index_in = xIndex + width * yIndex;
-        # index_out = yIndex + height * xIndex;
-        # for (int r=0; r < nreps; r++) {
-            # for (int i=0; i<TILE_DIM; i+=BLOCK_ROWS) {
-                # odata[index_out+i] = idata[index_in+i*width];
-            # }
-        # }
-
 
 class Cpp_test(unittest.TestCase):
 
