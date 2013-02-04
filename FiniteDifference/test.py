@@ -773,6 +773,7 @@ class BandedOperator_test(unittest.TestCase):
         # B = self.C1 + 1
         B = self.C1
         B.D.data = np.random.random((B.D.data.shape))
+        B.R = np.random.random(B.D.data.shape[1])
         B.D.data[0,0] = 0
         B.D.data[-1,-1] = 0
         origdata = B.D.data.copy()
