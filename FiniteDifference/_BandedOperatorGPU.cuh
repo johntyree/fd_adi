@@ -124,8 +124,12 @@ struct SizedArray {
         thrust::device_vector<T> out(data);
         assert(in.size() == static_cast<size_t>(shape[0]*shape[1]));
         assert(out.size() == static_cast<size_t>(shape[0]*shape[1]));
-        ENDL;
-        std::cout << in << " " << shape[0] << ' ' << shape[1]; ENDL;
+        // ENDL;
+        // std::cout << in << " " << shape[0] << ' ' << shape[1]; ENDL;
+        if (strategy != 1) {
+            std::cout << "Only accepting strategy 1 (NoBankConflicts)!\n";
+            assert(0);
+        }
         switch (strategy) {
             case 0:
                 transposeDiagonal(raw(out), raw(in), shape[0], shape[1]);
@@ -141,7 +145,7 @@ struct SizedArray {
                 assert(0);
         }
         std::swap(shape[0], shape[1]);
-        std::cout << out << " " << shape[0] << ' ' << shape[1]; ENDL;
+        // std::cout << out << " " << shape[0] << ' ' << shape[1]; ENDL;
         thrust::copy(out.begin(), out.end(), data.begin());
     }
 

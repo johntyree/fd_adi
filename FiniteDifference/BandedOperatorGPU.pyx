@@ -1072,13 +1072,13 @@ cpdef backwardcoeffs(deltas, derivative=1, order=2, force_bandwidth=None):
 
 def test_SizedArray_transpose(np.ndarray[ndim=2, dtype=double] v):
     from visualize import fp
-    fp(v, fmt='i')
+    # fp(v, fmt='i')
     cdef SizedArray[double]* s = to_SizedArray(v)
     v[:] = 0
-    s.transpose(2)
-    print
+    s.transpose(1)
+    # print
     v = from_SizedArray_2(deref(s))
-    fp(v, fmt='i')
+    # fp(v, fmt='i')
     return v
 
 
