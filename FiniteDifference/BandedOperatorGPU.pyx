@@ -142,8 +142,8 @@ cdef class BandedOperator(object):
             SizedArray[int] *offsets = to_SizedArray_i(np.asarray(self.D.offsets))
             SizedArray[double] *low_dirichlet = to_SizedArray(np.atleast_1d(self.dirichlet[0] or [0.0]))
             SizedArray[double] *high_dirichlet = to_SizedArray(np.atleast_1d(self.dirichlet[1] or [0.0]))
-            SizedArray[double] *top_factors = to_SizedArray(np.atleast_1d(self.top_factors or [0.0]))
-            SizedArray[double] *bottom_factors = to_SizedArray(np.atleast_1d(self.bottom_factors or [0.0]))
+            SizedArray[double] *top_factors = to_SizedArray(np.atleast_1d(self.top_factors if self.top_factors is not None else [0.0]))
+            SizedArray[double] *bottom_factors = to_SizedArray(np.atleast_1d(self.bottom_factors if self.bottom_factors is not None else [0.0]))
 
         self.thisptr = new _BandedOperator(
                   deref(diags)
@@ -300,6 +300,52 @@ cdef class BandedOperator(object):
                 and self.D.offsets[2] == -1)
 
 
+    cpdef apply2(self, np.ndarray V, overwrite=False):
+        if not overwrite:
+            V = V.copy()
+        t = range(V.ndim)
+        utils.rolllist(t, self.axis, V.ndim-1)
+        V = np.transpose(V, axes=t)
+
+        if self.dirichlet[0] is not None:
+            # print "Setting V[0,:] to", self.dirichlet[0]
+            V[...,0] = self.dirichlet[0]
+        if self.dirichlet[1] is not None:
+            # print "Setting V[-1,:] to", self.dirichlet[-1]
+            V[...,-1] = self.dirichlet[1]
+
+        cdef SizedArray[double] *sa_V = to_SizedArray(V)
+        self.D.data[0,:-1] = self.D.data[0,1:]
+        self.D.data[2,1:] = self.D.data[2,:-1]
+        self.D.data[0,-1] = 0
+        self.D.data[2,0] = 0
+        self.emigrate("apply2")
+        cdef SizedArray[double] *sa_U = self.thisptr.apply(deref(sa_V))
+        ret = from_SizedArray_2(deref(sa_U)).reshape(-1)
+        self.immigrate("apply2")
+        self.D.data[0,1:] = self.D.data[0,:-1]
+        self.D.data[2,:-1] = self.D.data[2,1:]
+        self.D.data[0,0] = 0
+        self.D.data[2,-1] = 0
+        del sa_V, sa_U
+
+        # ret = self.D.dot(V.flat)
+        if self._is_folded():
+            print "apply folded!"
+            ret = self.fold_vector(ret, unfold=True)
+
+        if self.R is not None:
+            ret += self.R
+
+        if V.ndim == 2:
+            ret = ret.reshape((V.shape[0], V.shape[1]))
+
+        t = range(V.ndim)
+        utils.rolllist(t, V.ndim-1, self.axis)
+        ret = np.transpose(ret, axes=t)
+
+        return ret
+
     cpdef apply(self, V, overwrite=False):
         if not overwrite:
             V = V.copy()
@@ -365,11 +411,15 @@ cdef class BandedOperator(object):
         print
         self.D.data[0,:-1] = self.D.data[0,1:]
         self.D.data[2,1:] = self.D.data[2,:-1]
+        self.D.data[0,-1] = 0
+        self.D.data[2,0] = 0
         self.emigrate("solve2 0")
         self.thisptr.solve(deref(d_V))
         self.immigrate("solve2 0")
         self.D.data[0,1:] = self.D.data[0,:-1]
         self.D.data[2,:-1] = self.D.data[2,1:]
+        self.D.data[0,0] = 0
+        self.D.data[2,-1] = 0
         if V.ndim == 2:
             d_V.reshape(V.shape[0], V.shape[1])
             ret = from_SizedArray_2(deref(d_V))
@@ -1051,7 +1101,7 @@ cdef inline SizedArray[int]* to_SizedArray_i(np.ndarray v):
         v = v.copy("C")
     return new SizedArray[int](<int *>v.data, v.ndim, v.shape)
 
-cdef inline from_SizedArray(SizedArray[double] v):
+cdef inline from_SizedArray(SizedArray[double] &v):
     sz = v.size
     cdef np.ndarray[double, ndim=1] s = np.empty(sz, dtype=float)
     for i in range(sz):
@@ -1059,7 +1109,7 @@ cdef inline from_SizedArray(SizedArray[double] v):
     return s
 
 
-cdef inline from_SizedArray_2(SizedArray[double] v):
+cdef inline from_SizedArray_2(SizedArray[double] &v):
     cdef np.ndarray[double, ndim=2] s = np.empty((v.shape[0], v.shape[1]), dtype=float)
     cdef long i, j
     for i in range(v.shape[0]):

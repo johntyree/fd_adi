@@ -34,7 +34,7 @@ cdef extern from "_BandedOperatorGPU.cuh" namespace "CPU":
     cdef cppclass _BandedOperator:
         void view()
         cbool is_folded()
-        int apply(SizedArray[double], bool)
+        SizedArray[double] *apply(SizedArray[double] &)
         void add_scalar(double val)
         void vectorized_scale(SizedArray[double] vector)
         void add_operator(_BandedOperator &other)
@@ -100,6 +100,7 @@ cdef class BandedOperator(object):
     cpdef fold_vector(self, double[:] v, unfold=*)
     cpdef cbool is_tridiagonal(self)
     cpdef apply(self, V, overwrite=*)
+    cpdef apply2(self, np.ndarray V, overwrite=*)
     cpdef solve(self, V, overwrite=*)
     cpdef solve2(self, np.ndarray V, overwrite=*)
     cpdef applyboundary(self, boundary, mesh)
