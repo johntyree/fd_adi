@@ -790,6 +790,7 @@ class BandedOperator_test(unittest.TestCase):
         vec = self.vec
         # idx = self.flip_idx
         C1 = FD.BO.for_vector(vec, scheme='center', derivative=1, order=2)
+        C1.R = np.arange(vec.size, dtype=float)
         C0 = C1.copy()
         C1.emigrate("C1 0")
         C1.immigrate("C1 0")
