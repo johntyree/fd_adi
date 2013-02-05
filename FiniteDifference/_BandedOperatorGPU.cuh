@@ -120,6 +120,9 @@ struct SizedArray {
                 shape[i] = S.shape[i];
             }
             sanity_check();
+            if (name == "R") {
+                std::cout << "In copy ctor: " << data << "\n";
+            }
     }
 
     SizedArray(thrust::host_vector<T> d, int ndim, intptr_t *s, std::string name)
@@ -129,6 +132,9 @@ struct SizedArray {
                 size *= shape[i];
             }
             sanity_check();
+            if (name == "R") {
+                std::cout << "In vect ctor: " << data << "\n";
+            }
     }
 
     SizedArray(T *d, int ndim, intptr_t *s, std::string name)
