@@ -139,10 +139,13 @@ struct SizedArray {
             }
             data = thrust::host_vector<T>(d, d+size);
             sanity_check();
+            if (name == "R") {
+                std::cout << "In raw ctor: " << data << "\n";
+            }
     }
 
     void sanity_check() {
-        if (static_cast<int>(data.size()) != size) {
+        if (static_cast<Py_ssize_t>(data.size()) != size) {
             std::cout << "\ndata.size()("<<data.size()<<") != size("<<size<<")\n";
             assert(0);
         }
