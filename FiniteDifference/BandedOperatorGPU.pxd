@@ -14,7 +14,7 @@ from libcpp.string cimport string as cpp_string
 
 REAL = np.float64
 
-cdef extern from "_BandedOperatorGPU.cuh" namespace "CPU":
+cdef extern from "_BandedOperatorGPU.cuh":
 
     cdef cppclass SizedArray [T]:
         # T *data
@@ -30,7 +30,7 @@ cdef extern from "_BandedOperatorGPU.cuh" namespace "CPU":
         void reshape(Py_ssize_t h, Py_ssize_t w)
         void flatten()
         void transpose(int)
-        cpp_string to_string()
+        cpp_string show()
 
 
     cdef cppclass _BandedOperator:

@@ -72,7 +72,6 @@ void transposeDiagonal(REAL_t *odata, REAL_t *idata, int width, int height);
 void transposeNoBankConflicts(REAL_t *odata, REAL_t *idata, int width, int height);
 void transposeNaive(REAL_t *odata, REAL_t *idata, int width, int height);
 
-namespace CPU {
 
 template <typename T>
 std::ostream & operator<<(std::ostream &os, thrust::host_vector<T> const &v) {
@@ -213,9 +212,9 @@ struct SizedArray {
         thrust::copy(out.begin(), out.end(), data.begin());
     }
 
-    std::string to_string() {
-        std::string s0 = CPU::to_string(*this);
-        std::string s1 = CPU::to_string(data);
+    std::string show() {
+        std::string s0 = to_string(*this);
+        std::string s1 = to_string(data);
         return s0 + " (" + s1 + ")";
     }
 
@@ -318,8 +317,5 @@ class _BandedOperator {
         bool has_low_dirichlet;
         bool has_residual;
 };
-
-
-} // namespace CPU
 
 #endif

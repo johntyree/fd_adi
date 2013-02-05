@@ -154,8 +154,6 @@ int find_index(T haystack, U needle, int max) {
     return idx;
 }
 
-namespace CPU {
-
 _BandedOperator::_BandedOperator(
         SizedArray<double> &data,
         SizedArray<double> &R,
@@ -491,8 +489,6 @@ void _BandedOperator::vectorized_scale(SizedArray<double> &vector) {
     return;
 }
 
-} // namespace CPU
-
 int main () {
 
     thrust::host_vector<double> a(10);
@@ -507,7 +503,7 @@ int main () {
             thrust::make_counting_iterator(0),
             a.begin(),
             thrust::plus<double>(),
-            CPU::periodic_from_to_mask(begin, end, block_len));
+            periodic_from_to_mask(begin, end, block_len));
 
     printf("\n");
     print_array(a.data(), a.size());

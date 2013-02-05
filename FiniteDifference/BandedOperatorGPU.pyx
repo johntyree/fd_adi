@@ -323,7 +323,7 @@ cdef class BandedOperator(object):
         self.D.data[2,0] = 0
         self.emigrate("apply2")
         print "After emigrate"
-        print self.thisptr.R.to_string()
+        print self.thisptr.R.show()
         print
         cdef SizedArray[double] *sa_U = self.thisptr.apply(deref(sa_V))
         ret = from_SizedArray_2(deref(sa_U)).reshape(-1)
@@ -412,7 +412,7 @@ cdef class BandedOperator(object):
         cdef SizedArray[double] *d_V = to_SizedArray(V0, "solve2 domain V0")
         print "Device array ptr: ", to_string(d_V)
         print
-        print "Device array: ", d_V.to_string()
+        print "Device array: ", d_V.show()
         print
         self.D.data[0,:-1] = self.D.data[0,1:]
         self.D.data[2,1:] = self.D.data[2,:-1]
@@ -430,7 +430,7 @@ cdef class BandedOperator(object):
             ret = from_SizedArray_2(deref(d_V))
         else:
             ret = from_SizedArray(deref(d_V))
-        print "After solve Device array: ", d_V.to_string()
+        print "After solve Device array: ", d_V.show()
         del d_V
 
         t = range(V.ndim)
