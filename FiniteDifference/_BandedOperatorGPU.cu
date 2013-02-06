@@ -146,8 +146,8 @@ void transposeDiagonal(REAL_t *odata, REAL_t *idata,
         int height, int width) {
     dim3 grid(max(1, width/TILE_DIM), max(1, height/TILE_DIM));
     dim3 threads(TILE_DIM, BLOCK_ROWS);
-    std::cout << "Grid: "<<grid.x<<", "<<grid.y
-        << " Threads: "<<threads.x<<", "<<threads.y<<"\n";
+    /* std::cout << "Grid: "<<grid.x<<", "<<grid.y */
+        /* << " Threads: "<<threads.x<<", "<<threads.y<<"\n"; */
     cudaDeviceSynchronize();
     d_transposeDiagonal<<<grid, threads>>>(odata, idata, height, width);
     /* BALLS<<<grid, threads>>>(odata, idata, width, height); */
@@ -192,32 +192,45 @@ _BandedOperator::_BandedOperator(
     operator_rows(operator_rows),
     blocks(blocks),
     block_len(operator_rows / blocks),
-    sup(diags.raw()),
-    mid(diags.raw() + operator_rows),
-    sub(diags.raw() + 2*operator_rows),
+    sup(diags.data.ptr()),
+    mid(diags.data.ptr() + operator_rows),
+    sub(diags.data.ptr() + 2*operator_rows),
     has_high_dirichlet(has_high_dirichlet),
     has_low_dirichlet(has_low_dirichlet),
     has_residual(has_residual)
-    { }
+    {
+        verify_diag_ptrs();
+        /* LOG("BandedOp Successfully Constructed."); */
+    }
 
 void _BandedOperator::verify_diag_ptrs() {
-    for (int i = 0; i < operator_rows; i++) {
-        if (sup[i] != diags(main_diag-1, i)) {
-            std::cout << "sup @ " << i << " = " << sup[i] << " !=  " <<
-                diags(main_diag-1,i);
-            ENDL;
-            assert(0);
-        }
-        if (mid[i] != diags(main_diag, i)) {
-            std::cout << "mid @ " << i << " = " << mid[i] << " !=  " << diags(main_diag,i);
-            ENDL;
-            assert(0);
-        }
-        if (sub[i] != diags(main_diag+1, i)) {
-            std::cout << "sub @ " << i << " = " << sub[i] << " !=  " << diags(main_diag+1,i);
-            ENDL;
-            assert(0);
-        }
+    assert(sup.get() != 0);
+    assert(mid.get() != 0);
+    assert(sub.get() != 0);
+    if (offsets.size != 3) {
+        /* LOG("Not tridiagonal. Skipping diag ptrs check."); */
+        return;
+    }
+    if (*sup != diags.data[diags.idx(main_diag-1, 0)]
+            || (sup.get() != (&diags.data[diags.idx(0,0)]).get())) {
+        LOG("sup[0] = " << *sup << " <->  " << diags.get(0,0));
+        LOG("sup = " << sup.get() << " <->  "
+                << (&diags.data[diags.idx(0, 0)]).get());
+        assert(0);
+    }
+    if (*mid != diags.data[diags.idx(main_diag, 0)]
+            || (mid.get() != (&diags.data[diags.idx(main_diag, 0)]).get())) {
+        LOG("mid[0] = " << *mid << " !=  " << diags.get(main_diag,0));
+        LOG("mid = " << mid.get() << " <->  "
+                << (&diags.data[diags.idx(main_diag, 0)]).get());
+        assert(0);
+    }
+    if (*sub != diags.data[diags.idx(main_diag+1, 0)]
+            || (sub.get() != (&diags.data[diags.idx(main_diag+1, 0)]).get())) {
+        LOG("sub[0] = " << *sub << " !=  " << diags.get(main_diag+1,0));
+        LOG("sub = " << sub.get() << " <->  "
+                << (&diags.data[diags.idx(main_diag+1, 0)]).get());
+        assert(0);
     }
 }
 
@@ -246,6 +259,7 @@ SizedArray<double> *_BandedOperator::apply(SizedArray<double> &V) {
     thrust::device_vector<double> b(mid, mid+N);
     thrust::device_vector<double> c(sup, sup+N);
 
+    LOG("Created diag ptrs");
 
     if (axis == 0) {
         // Transpose somehow
@@ -311,57 +325,58 @@ struct periodic_from_to_mask : thrust::unary_function<int, bool> {
 };
 
 void _BandedOperator::add_operator(_BandedOperator &other) {
-        /*
-         * Add a second BandedOperator to this one.
-         * Does not alter self.R, the residual vector.
-         */
+    /*
+    * Add a second BandedOperator to this one.
+    * Does not alter self.R, the residual vector.
+    */
+    timeval sleeptime = {1, 0};
 
-        timeval sleeptime = {1, 0};
-
-        int begin = has_low_dirichlet;
-        int end = block_len-1 - has_high_dirichlet;
-        int o, to, fro;
-        for (int i = 0; i < other.offsets.size; i++) {
-            fro = i;
-            o = other.offsets(i);
-            to = find_index(offsets.data, o, offsets.size);
-            if (offsets(to) != o) {
-                std::cout << std::endl;
-                std::cout << "to: " << to << "(";
-                /* print_array(&offsets(0), offsets.size); */
-                std::cout << offsets.data;
-                std::cout << ")";
-                std::cout << "fro: " << fro << "(";
-                std::cout << other.offsets.data;
-                /* print_array(&other.offsets(0), other.offsets.size); */
-                std::cout << ")" << std::endl;
-                select(1, NULL, NULL, NULL, &sleeptime);
-                assert (offsets(to) == o);
-            }
-            if (o == 0) {
-                thrust::transform_if(
-                        &diags(to, 0),
-                        &diags(to, 0) + operator_rows,
-                        &other.diags(fro, 0),
-                        thrust::make_counting_iterator(0),
-                        &diags(to, 0),
-                        thrust::plus<double>(),
-                        periodic_from_to_mask(begin, end, block_len));
-            } else {
-                thrust::transform(
-                        &other.diags(fro, 0),
-                        &other.diags(fro, 0) + other.diags.shape[1],
-                        &diags(to, 0),
-                        &diags(to, 0),
-                        thrust::plus<double>());
-            }
+    int begin = has_low_dirichlet;
+    int end = block_len-1 - has_high_dirichlet;
+    int o, to, fro;
+    for (int i = 0; i < other.offsets.size; i++) {
+        fro = i;
+        o = other.offsets.get(i);
+        to = find_index(offsets.data, o, offsets.size);
+        if (offsets.get(to) != o) {
+            std::cout << std::endl;
+            std::cout << "to: " << to << "(";
+            /* print_array(&offsets(0), offsets.size); */
+            std::cout << offsets.data;
+            std::cout << ")";
+            std::cout << "fro: " << fro << "(";
+            std::cout << other.offsets.data;
+            /* print_array(&other.offsets(0), other.offsets.size); */
+            std::cout << ")" << std::endl;
+            select(1, NULL, NULL, NULL, &sleeptime);
+            assert (offsets.get(to) == o);
         }
-        thrust::transform(
-                R.data.begin(),
-                R.data.end(),
-                other.R.data.begin(),
-                R.data.begin(),
-                thrust::plus<double>());
+        /* LOG("Adding offset " << o << "."); */
+        if (o == 0) {
+            thrust::transform_if(
+                    &diags.data[diags.idx(to, 0)],
+                    &diags.data[diags.idx(to, 0)] + operator_rows,
+                    &other.diags.data[diags.idx(fro, 0)],
+                    thrust::make_counting_iterator(0),
+                    &diags.data[diags.idx(to, 0)],
+                    thrust::plus<double>(),
+                    periodic_from_to_mask(begin, end, block_len));
+        } else {
+            thrust::transform(
+                    &other.diags.data[diags.idx(fro, 0)],
+                    &other.diags.data[diags.idx(fro, 0)] + other.diags.shape[1],
+                    &diags.data[diags.idx(to, 0)],
+                    &diags.data[diags.idx(to, 0)],
+                    thrust::plus<double>());
+        }
+    }
+    /* LOG("Adding R."); */
+    thrust::transform(
+            R.data.begin(),
+            R.data.end(),
+            other.R.data.begin(),
+            R.data.begin(),
+            thrust::plus<double>());
 }
 
 
@@ -378,14 +393,13 @@ void _BandedOperator::add_scalar(double val) {
     assert(main_diag < offsets.size);
 
     thrust::transform_if(
-            &diags(main_diag, 0),
-            &diags(main_diag, 0) + operator_rows,
+            &diags.data[diags.idx(main_diag, 0)],
+            &diags.data[diags.idx(main_diag, 0)] + operator_rows,
             thrust::make_constant_iterator(val),
             thrust::make_counting_iterator(0),
-            &diags(main_diag, 0),
+            &diags.data[diags.idx(main_diag, 0)],
             thrust::plus<double>(),
             periodic_from_to_mask(begin, end, block_len));
-
 }
 
 bool _BandedOperator::is_folded() {
@@ -393,6 +407,7 @@ bool _BandedOperator::is_folded() {
 }
 
 int _BandedOperator::solve(SizedArray<double> &V) {
+    TRACE;
     verify_diag_ptrs();
 
     /* std::cout << "Begin C Solve\n"; */
@@ -430,6 +445,7 @@ int _BandedOperator::solve(SizedArray<double> &V) {
     thrust::copy(d_V.begin(), d_V.end(), V.data.begin());
     /* std::cout << "OK\n"; */
     /* std::cout << "End C Solve\n"; */
+    TRACE;
     return 0;
 }
 
@@ -471,31 +487,31 @@ void _BandedOperator::vectorized_scale(SizedArray<double> &vector) {
 
     if (has_low_dirichlet) {
         for (Py_ssize_t b = 0; b < blocks; ++b) {
-            vector(b*block_len % vsize) = 1;
+            vector.data[vector.idx(b*block_len % vsize)] = 1;
         }
     }
 
     if (has_high_dirichlet) {
         for (Py_ssize_t b = 0; b < blocks; ++b) {
-            vector((b+1)*block_len - 1 % vsize) = 1;
+            vector.data[vector.idx((b+1)*block_len - 1 % vsize)] = 1;
         }
     }
 
     for (Py_ssize_t row = 0; row < noffsets; ++row) {
-        int o = offsets(row);
+        int o = offsets.get(row);
         if (o >= 0) { // upper diags
             for (int i = 0; i < (int)operator_rows - o; ++i) {
-                diags(row, i+o) *= vector(i % vsize);
+                diags.data[diags.idx(row, i+o)] *= vector.data[vector.idx(i % vsize)];
             }
         } else { // lower diags
             for (int i = -o; i < (int)operator_rows; ++i) {
-                diags(row, i+o) *= vector(i % vsize);
+                diags.data[diags.idx(row, i+o)] *= vector.data[vector.idx(i % vsize)];
             }
         }
     }
 
     for (Py_ssize_t i = 0; i < operator_rows; ++i) {
-        R(i) *= vector(i % vsize);
+        R.data[R.idx(i)] *= vector.data[vector.idx(i % vsize)];
     }
     return;
 }

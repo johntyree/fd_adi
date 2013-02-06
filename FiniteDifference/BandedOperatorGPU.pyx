@@ -1111,7 +1111,7 @@ cdef inline from_SizedArray(SizedArray[double] &v):
     cdef np.ndarray[double, ndim=1] s = np.empty(sz, dtype=float)
     cdef int i
     for i in range(sz):
-        s[i] = v.idx(i)
+        s[i] = v.get(i)
     return s
 
 cdef inline from_SizedArray_2(SizedArray[double] &v):
@@ -1119,6 +1119,6 @@ cdef inline from_SizedArray_2(SizedArray[double] &v):
     cdef int i, j
     for i in range(v.shape[0]):
         for j in range(v.shape[1]):
-            s[i, j] = v.idx(i, j)
+            s[i, j] = v.get(i, j)
     return s
 

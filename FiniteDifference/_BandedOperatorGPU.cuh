@@ -38,7 +38,15 @@ struct GPUVec : thrust::device_vector<T> {
     GPUVec(const X &x, const Y &y, const Z &z)
         : thrust::device_vector<T>(x, y, z) {}
 
-    T *raw() {
+    inline thrust::device_reference<T> ref() {
+        return thrust::device_reference<T>(ptr());
+    }
+
+    inline thrust::device_ptr<T> ptr() {
+        return thrust::device_ptr<T>(raw());
+    }
+
+    inline T *raw() {
         return thrust::raw_pointer_cast(this->data());
     }
 };
@@ -113,7 +121,7 @@ std::string to_string(T const &a) {
 
 template<typename T>
 struct SizedArray {
-    HostVec<T> data;
+    GPUVec<T> data;
     Py_ssize_t ndim;
     Py_ssize_t size;
     Py_ssize_t shape[8];
@@ -125,9 +133,9 @@ struct SizedArray {
                 shape[i] = S.shape[i];
             }
             sanity_check();
-            if (name == "R") {
-                std::cout << "In copy ctor: " << data << "\n";
-            }
+            /* if (name == "R") { */
+                /* std::cout << "In copy ctor: " << data << "\n"; */
+            /* } */
     }
 
     SizedArray(thrust::host_vector<T> d, int ndim, intptr_t *s, std::string name)
@@ -137,9 +145,9 @@ struct SizedArray {
                 size *= shape[i];
             }
             sanity_check();
-            if (name == "R") {
-                std::cout << "In vect ctor: " << data << "\n";
-            }
+            /* if (name == "R") { */
+                /* std::cout << "In vect ctor: " << data << "\n"; */
+            /* } */
     }
 
     SizedArray(T *d, int ndim, intptr_t *s, std::string name)
@@ -150,9 +158,9 @@ struct SizedArray {
             }
             data = thrust::host_vector<T>(d, d+size);
             sanity_check();
-            if (name == "R") {
-                std::cout << "In raw ctor: " << data << "\n";
-            }
+            /* if (name == "R") { */
+                /* std::cout << "In raw ctor: " << data << "\n"; */
+            /* } */
     }
 
     void sanity_check() {
@@ -175,10 +183,6 @@ struct SizedArray {
         ndim = 2;
     }
 
-    T *raw() {
-        return thrust::raw_pointer_cast(data.data());
-    }
-
     void flatten() {
         shape[0] = size;
         shape[1] = 0;
@@ -189,7 +193,7 @@ struct SizedArray {
         assert (ndim == 2);
         //XXX
         GPUVec<T> in(data);
-        thrust::fill(data.begin(), data.end(), 0);
+        /* thrust::fill(data.begin(), data.end(), 0); */
         GPUVec<T> out(data);
         assert(in.size() == static_cast<size_t>(shape[0]*shape[1]));
         assert(out.size() == static_cast<size_t>(shape[0]*shape[1]));
@@ -225,7 +229,7 @@ struct SizedArray {
     }
 
 
-    inline T &operator()(int i) {
+    inline int idx(int i) {
         assert (ndim >= 1);
         int idx = i;
         if (idx < 0 || size <= idx) {
@@ -233,10 +237,11 @@ struct SizedArray {
             std::cout << name  << " idx("<<idx<<") not in range [0, Size("<<size<<"))\n";
             assert(0);
         }
-        return data[idx];
+        return idx;
     }
 
-    inline T &operator()(int i, int j) {
+    inline int idx(int i, int j) {
+        /* LOG("Accessing idx: " << idx); */
         assert (ndim == 2);
         int idx = i * shape[1] + j;
         if (i >= shape[0]) {
@@ -259,14 +264,21 @@ struct SizedArray {
             std::cout << std::endl;
             assert(0);
         }
-        return data[idx];
+        return idx;
     }
 
-    inline T &idx(int i) {
-        return operator()(i);
+    inline void set(int i, T x) {
+        data[idx(i)] = x;
     }
-    inline T &idx(int i, int j) {
-        return operator()(i, j);
+    inline T get(int i) {
+        return data[idx(i)];
+    }
+
+    inline void set(int i, int j, T x) {
+        data[idx(i, j)] = x;
+    }
+    inline T get(int i, int j) {
+        return data[idx(i, j)];
     }
 
 };
@@ -318,7 +330,7 @@ class _BandedOperator {
         Py_ssize_t operator_rows;
         Py_ssize_t blocks;
         Py_ssize_t block_len;
-        double *sup, *mid, *sub;
+        thrust::device_ptr<double> sup, mid, sub;
         bool has_high_dirichlet;
         bool has_low_dirichlet;
         bool has_residual;

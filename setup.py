@@ -63,6 +63,7 @@ except AttributeError:
 
 cython_modules = cythonize('FiniteDifference/*.pyx',
                            cython_include_dirs=["FiniteDifference", numpy_include],
+                           pyrex_gdb=True,
                            nthreads=4)
 
 for m in cython_modules:
