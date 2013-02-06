@@ -30,6 +30,17 @@
 #include "_BandedOperatorGPU.cuh"
 #include <stdio.h>
 
+void debug_printer(const char *type, const char *fn, const char *func, int line, std::string msg) {
+    std::cout
+        << type << ": "
+        << fn << "(" << line << "): "
+        << func;
+        if (msg.size() != 0) {
+            std::cout << "\n\t" << msg;
+        }
+        std::cout << std::endl;
+}
+
 #define TILE_DIM 1
 #define BLOCK_ROWS 1
 
