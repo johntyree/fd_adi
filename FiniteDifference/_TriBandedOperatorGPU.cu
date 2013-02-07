@@ -47,10 +47,6 @@ void debug_printer(const char *type, const char *fn, const char *func, int line,
 
 #define FULLTRACE 0;
 
-static cusparseHandle_t handle;
-static char cusparse_initialized = 0;
-
-
 __global__
 void d_transposeNaive(REAL_t *odata, REAL_t* idata, int height, int width) {
     int xIndex = blockIdx.x*TILE_DIM + threadIdx.x;
@@ -213,6 +209,11 @@ _TriBandedOperator::_TriBandedOperator(
     is_tridiagonal(offsets.size == 3 && main_diag != -1)
     {
         verify_diag_ptrs();
+        status = cusparseCreate(&handle);
+        if (status != CUSPARSE_STATUS_SUCCESS) {
+            std::cerr << "CUSPARSE Library initialization failed." << std::endl;
+            assert(false);
+        }
     }
 
 void _TriBandedOperator::verify_diag_ptrs() {
@@ -437,17 +438,6 @@ int _TriBandedOperator::solve(SizedArray<double> &V) {
     verify_diag_ptrs();
 
     /* std::cout << "Begin C Solve\n"; */
-    cusparseStatus_t status = CUSPARSE_STATUS_SUCCESS;
-    if (!cusparse_initialized) {
-        status = cusparseCreate(&handle);
-        ++cusparse_initialized;
-    }
-
-    if (status != CUSPARSE_STATUS_SUCCESS) {
-        std::cerr << "CUSPARSE Library initialization failed." << std::endl;
-        return 1;
-    }
-
     /* std::cout << "Copy Host->Dev... " << V.data << ' '; */
     GPUVec<double> d_V(V.data);
     GPUVec<double> d_sup(sup, sup+V.size);
@@ -475,34 +465,6 @@ int _TriBandedOperator::solve(SizedArray<double> &V) {
     return 0;
 }
 
-void _TriBandedOperator::status() {
-    /* private: */
-        /* Py_ssize_t blocks; */
-        /* Py_ssize_t operator_rows; */
-        /* Py_ssize_t block_len; */
-        /* Py_ssize_t main_diag; */
-        /* bool has_high_dirichlet; */
-        /* bool has_low_dirichlet; */
-        /* bool has_residual; */
-        /* unsigned int axis; */
-        /* SizedArray<double> data; */
-        /* SizedArray<double> R; */
-        /* SizedArray<double> high_dirichlet; */
-        /* SizedArray<double> low_dirichlet; */
-        /* SizedArray<double> top_factors; */
-        /* SizedArray<double> bottom_factors; */
-
-    std::cout << "Status of: " << this << std::endl;
-    std::cout << "C_diags:    " << diags << std::endl;
-    std::cout << "C_R:       " << R << std::endl;
-    std::cout << "C_offests: " << offsets << std::endl;
-    std::cout << "C_axis:    " << axis << std::endl;
-    /* std::cout << "C_<++>: " << &this-><++> << std::endl; */
-    /* std::cout << "C_<++>: " << &this-><++> << std::endl; */
-    /* std::cout << "C_<++>: " << &this-><++> << std::endl; */
-    /* std::cout << "C_<++>: " << &this-><++> << std::endl; */
-    /* std::cout << "C_OFFSETS: " << &this->offsets << std::endl; */
-}
 
 void _TriBandedOperator::vectorized_scale(SizedArray<double> &vector) {
     FULLTRACE;

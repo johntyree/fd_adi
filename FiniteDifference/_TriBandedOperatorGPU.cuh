@@ -11,6 +11,7 @@
 #include <cassert>
 #include <thrust/tuple.h>
 
+#include <cusparse_v2.h>
 #include <cmath>
 
 #include "backtrace.h"
@@ -287,7 +288,6 @@ class _TriBandedOperator {
         SizedArray<double> bottom_factors;
         SizedArray<int> offsets;
 
-        void status();
         void verify_diag_ptrs();
         bool is_folded();
         SizedArray<double> *apply(SizedArray<double> &);
@@ -323,6 +323,8 @@ class _TriBandedOperator {
         bool has_low_dirichlet;
         bool has_residual;
         bool is_tridiagonal;
+        cusparseHandle_t handle;
+        cusparseStatus_t status;
 };
 
 #endif
