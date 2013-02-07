@@ -14,7 +14,7 @@ from libcpp.string cimport string as cpp_string
 
 REAL = np.float64
 
-cdef extern from "_BandedOperatorGPU.cuh":
+cdef extern from "_TriBandedOperatorGPU.cuh":
 
     cdef cppclass SizedArray [T]:
         # T *data
@@ -33,19 +33,19 @@ cdef extern from "_BandedOperatorGPU.cuh":
         cpp_string show()
 
 
-    cdef cppclass _BandedOperator:
+    cdef cppclass _TriBandedOperator:
         void view()
         cbool is_folded()
         SizedArray[double] *apply(SizedArray[double] &)
         void add_scalar(double val)
         void vectorized_scale(SizedArray[double] vector)
-        void add_operator(_BandedOperator &other)
+        void add_operator(_TriBandedOperator &other)
         void status()
         int solve(SizedArray[double] &)
         SizedArray[int] offsets
         SizedArray[double] diags
         SizedArray[double] R
-        _BandedOperator(
+        _TriBandedOperator(
             SizedArray[double] data,
             SizedArray[double] R,
             SizedArray[int] offsets,
@@ -65,12 +65,12 @@ cdef extern from "_BandedOperatorGPU.cuh":
     void cout(SizedArray[int] *a)
     void cout(SizedArray[double] *a)
     void cout(SizedArray[double] a)
-    void cout(_BandedOperator *a)
+    void cout(_TriBandedOperator *a)
     cpp_string to_string(double *)
     cpp_string to_string(SizedArray[int] *a)
     cpp_string to_string(SizedArray[double] *a)
     cpp_string to_string(SizedArray[double] a)
-    cpp_string to_string(_BandedOperator *a)
+    cpp_string to_string(_TriBandedOperator *a)
 
 
 cdef class BandedOperator(object):
@@ -89,7 +89,7 @@ cdef class BandedOperator(object):
         shape
         top_factors, bottom_factors
 
-    cdef _BandedOperator *thisptr
+    cdef _TriBandedOperator *thisptr
 
     cdef inline cbool _is_folded(self)
 

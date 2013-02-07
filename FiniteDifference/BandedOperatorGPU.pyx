@@ -4,7 +4,7 @@
 # cython: profile = True
 # cython: embedsignature = True
 # distutils: language = c++
-# distutils: sources = FiniteDifference/_BandedOperatorGPU.cu
+# distutils: sources = FiniteDifference/_TriBandedOperatorGPU.cu
 """Description."""
 
 from bisect import bisect_left
@@ -129,7 +129,7 @@ cdef class BandedOperator(object):
         self.D.data = from_SizedArray_2(self.thisptr.diags)
         self.R = from_SizedArray(self.thisptr.R)
         del self.thisptr
-        self.thisptr = <_BandedOperator *>0
+        self.thisptr = <_TriBandedOperator *>0
         self.location = LOCATION_PYTHON
 
 
@@ -146,7 +146,7 @@ cdef class BandedOperator(object):
             SizedArray[double] *top_factors = to_SizedArray(np.atleast_1d(self.top_factors if self.top_factors is not None else [0.0]), "top_factors")
             SizedArray[double] *bottom_factors = to_SizedArray(np.atleast_1d(self.bottom_factors if self.bottom_factors is not None else [0.0]), "bottom_factors")
 
-        self.thisptr = new _BandedOperator(
+        self.thisptr = new _TriBandedOperator(
                   deref(diags)
                 , deref(R)
                 , deref(offsets)
