@@ -82,21 +82,20 @@ class Cpp_test(unittest.TestCase):
 
     def setUp(self):
         shape = (4,4)
-        # self.v1 = np.arange(shape[0]*shape[1], dtype=float)**2
-        self.v1 = np.ones(shape[0]*shape[1], dtype=float)
+        self.v1 = np.arange(shape[0]*shape[1], dtype=float)**2
         self.v2 = self.v1.copy()
         self.v2.resize(shape)
 
         coeffs = {(0,) : lambda *x: 1,
-                  # (0,0): lambda *x: 1,
+                  (0,0): lambda *x: 1,
                   (1,) : lambda *x: 1,
-                  # (1,1): lambda *x: 1,
+                  (1,1): lambda *x: 1,
                   }
         bounds = {
                 (0,)  : ((0, lambda *args: 0), (1, lambda *args: 1)),
-                # (0,0)  : ((0, lambda *args: 0), (None, lambda *args: 1)),
+                (0,0)  : ((0, lambda *args: 0), (None, lambda *args: 1)),
                 (1,)  : ((None, lambda *args: None), (None, lambda *args: None)),
-                # (1,1)  : ((1, lambda *args: 0.0), (None, lambda *args: None)),
+                (1,1)  : ((1, lambda *args: 0.0), (None, lambda *args: None)),
                 }
 
         schemes = {}
@@ -106,8 +105,8 @@ class Cpp_test(unittest.TestCase):
         self.F = FD.FiniteDifferenceEngineADI(self.G, coefficients=coeffs,
                 boundaries=bounds, schemes=schemes, force_bandwidth=None)
         self.F.init()
-        self.F.operators[0].R = np.arange(self.G.size)
-        # self.F.operators[1].R = np.arange(self.G.size)
+        self.F.operators[0].R = np.arange(self.G.size, dtype=float)
+        self.F.operators[1].R = np.arange(self.G.size, dtype=float)
         self.F.operators[1].diagonalize()
 
     def test_SizedArray1(self):
