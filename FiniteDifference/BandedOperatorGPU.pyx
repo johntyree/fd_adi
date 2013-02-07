@@ -1097,15 +1097,20 @@ def test_SizedArray2_roundtrip(np.ndarray[ndim=2, dtype=double] v):
     v[:,:] = 0
     return from_SizedArray_2(deref(s))
 
-cdef inline SizedArray[double]* to_SizedArray(np.ndarray v, cpp_string name):
+cdef inline SizedArray[double]* to_SizedArray(np.ndarray v, name) except +:
+    assert v.dtype.type == np.float64, ("Types don't match! Got (%s) expected (%s)."
+                                      % (v.dtype.type, np.float64))
+    cdef double *ptr
     if not v.flags.c_contiguous:
         v = v.copy("C")
-    return new SizedArray[double](<double *>v.data, v.ndim, v.shape, name)
+    return new SizedArray[double](<double *>np.PyArray_DATA(v), v.ndim, v.shape, name)
 
-cdef inline SizedArray[int]* to_SizedArray_i(np.ndarray v, cpp_string name):
+cdef inline SizedArray[int]* to_SizedArray_i(np.ndarray v, cpp_string name) except +:
+    assert v.dtype.type == np.int32, ("Types don't match! Got (%s) expected (%s)."
+                                      % (v.dtype.type, np.int64))
     if not v.flags.c_contiguous:
         v = v.copy("C")
-    return new SizedArray[int](<int *>v.data, v.ndim, v.shape, name)
+    return new SizedArray[int](<int *>np.PyArray_DATA(v), v.ndim, v.shape, name)
 
 cdef inline from_SizedArray(SizedArray[double] &v):
     sz = v.size
