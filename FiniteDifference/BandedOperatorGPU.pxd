@@ -66,6 +66,7 @@ cdef extern from "_BandedOperatorGPU.cuh":
     void cout(SizedArray[double] *a)
     void cout(SizedArray[double] a)
     void cout(_BandedOperator *a)
+    cpp_string to_string(double *)
     cpp_string to_string(SizedArray[int] *a)
     cpp_string to_string(SizedArray[double] *a)
     cpp_string to_string(SizedArray[double] a)
