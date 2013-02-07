@@ -69,8 +69,8 @@ cdef class BandedOperator(object):
 
 
     # def __dealloc__(self):
-        # if (self.thisptr):
-            # del self.thisptr
+        # if (self.thisptr_tri):
+            # del self.thisptr_tri
 
     def copy_meta_data(self, other, **kwargs):
         for attr in self.attrs:
@@ -125,18 +125,77 @@ cdef class BandedOperator(object):
     cpdef immigrate(self, tag=""):
         if tag and False:
             print id(self), "Immigrate:", tag
-        assert (self.thisptr)
-        self.D.data = from_SizedArray_2(self.thisptr.diags)
-        self.R = from_SizedArray(self.thisptr.R)
-        del self.thisptr
-        self.thisptr = <_TriBandedOperator *>0
+        assert (self.thisptr_tri)
+        self.D.data = from_SizedArray_2(self.thisptr_tri.diags)
+        self.R = from_SizedArray(self.thisptr_tri.R)
+        del self.thisptr_tri
+        self.thisptr_tri = <_TriBandedOperator *> 0
+        self.location = LOCATION_PYTHON
+
+    cdef immigrate_csr(self, tag=""):
+        pass
+        # if tag and False:
+            # print id(self), "Immigrate:", tag
+        # assert (self.thisptr_csr)
+        # self.D.data = from_SizedArray_2(self.thisptr_csr.diags)
+        # self.R = from_SizedArray(self.thisptr_csr.R)
+        # del self.thisptr_csr
+        # self.thisptr_csr = <_CSRBandedOperator *> 0
+        # self.location = LOCATION_PYTHON
+
+    cdef immigrate_tri(self, tag=""):
+        if tag and False:
+            print id(self), "Immigrate:", tag
+        assert (self.thisptr_tri)
+        self.D.data = from_SizedArray_2(self.thisptr_tri.diags)
+        self.R = from_SizedArray(self.thisptr_tri.R)
+        del self.thisptr_tri
+        self.thisptr_tri = <_TriBandedOperator *> 0
         self.location = LOCATION_PYTHON
 
 
     cpdef emigrate(self, tag=""):
+        if self.is_tridiagonal():
+            return self.emigrate_tri(tag)
+        else:
+            return self.emigrate_csr(tag)
+
+    cdef emigrate_csr(self, tag=""):
         if tag and False:
             print id(self), "Emigrate: ", tag
-        assert not (self.thisptr)
+        assert not (self.thisptr_csr)
+        # cdef:
+            # SizedArray[double] *diags = to_SizedArray(self.D.data, "data")
+            # SizedArray[double] *R = to_SizedArray(self.R, "R")
+            # SizedArray[int] *offsets = to_SizedArray_i(np.asarray(self.D.offsets), "Offsets")
+            # SizedArray[double] *low_dirichlet = to_SizedArray(np.atleast_1d(self.dirichlet[0] or [0.0]), "low_dirichlet")
+            # SizedArray[double] *high_dirichlet = to_SizedArray(np.atleast_1d(self.dirichlet[1] or [0.0]), "high_dirichlet")
+            # SizedArray[double] *top_factors = to_SizedArray(np.atleast_1d(self.top_factors if self.top_factors is not None else [0.0]), "top_factors")
+            # SizedArray[double] *bottom_factors = to_SizedArray(np.atleast_1d(self.bottom_factors if self.bottom_factors is not None else [0.0]), "bottom_factors")
+
+        # self.thisptr_csr = new _TriBandedOperator(
+                  # deref(diags)
+                # , deref(R)
+                # , deref(offsets)
+                # , deref(high_dirichlet)
+                # , deref(low_dirichlet)
+                # , deref(top_factors)
+                # , deref(bottom_factors)
+                # , self.axis
+                # , self.shape[0]
+                # , self.blocks
+                # , self.dirichlet[1] is not None
+                # , self.dirichlet[0] is not None
+                # , self.R is not None
+                # )
+
+        self.location = LOCATION_GPU
+        # del diags, offsets, R, high_dirichlet, low_dirichlet, top_factors, bottom_factors
+
+    cdef emigrate_tri(self, tag=""):
+        if tag and False:
+            print id(self), "Emigrate: ", tag
+        assert not (self.thisptr_tri)
         cdef:
             SizedArray[double] *diags = to_SizedArray(self.D.data, "data")
             SizedArray[double] *R = to_SizedArray(self.R, "R")
@@ -146,7 +205,7 @@ cdef class BandedOperator(object):
             SizedArray[double] *top_factors = to_SizedArray(np.atleast_1d(self.top_factors if self.top_factors is not None else [0.0]), "top_factors")
             SizedArray[double] *bottom_factors = to_SizedArray(np.atleast_1d(self.bottom_factors if self.bottom_factors is not None else [0.0]), "bottom_factors")
 
-        self.thisptr = new _TriBandedOperator(
+        self.thisptr_tri = new _TriBandedOperator(
                   deref(diags)
                 , deref(R)
                 , deref(offsets)
@@ -322,7 +381,7 @@ cdef class BandedOperator(object):
         self.D.data[0,-1] = 0
         self.D.data[2,0] = 0
         self.emigrate("apply2")
-        cdef SizedArray[double] *sa_U = self.thisptr.apply(deref(sa_V))
+        cdef SizedArray[double] *sa_U = self.thisptr_tri.apply(deref(sa_V))
         ret = from_SizedArray_2(deref(sa_U)).reshape(-1)
         self.immigrate("apply2")
         self.D.data[0,1:] = self.D.data[0,:-1]
@@ -416,7 +475,7 @@ cdef class BandedOperator(object):
         self.D.data[0,-1] = 0
         self.D.data[2,0] = 0
         self.emigrate("solve2 0")
-        self.thisptr.solve(deref(d_V))
+        self.thisptr_tri.solve(deref(d_V))
         self.immigrate("solve2 0")
         self.D.data[0,1:] = self.D.data[0,:-1]
         self.D.data[2,:-1] = self.D.data[2,1:]
@@ -756,8 +815,8 @@ cdef class BandedOperator(object):
             B.emigrate("add op B 0")
         if other.location != LOCATION_GPU:
             other.emigrate("add op other 0")
-        assert (other.thisptr)
-        B.thisptr.add_operator(deref(other.thisptr))
+        assert (other.thisptr_tri)
+        B.thisptr_tri.add_operator(deref(other.thisptr_tri))
         B.immigrate("add op B 0")
         other.immigrate("add op other 0")
         return B
@@ -781,7 +840,7 @@ cdef class BandedOperator(object):
         if self.location != LOCATION_GPU:
             B.emigrate("addscalar B 0")
 
-        B.thisptr.add_scalar(other)
+        B.thisptr_tri.add_scalar(other)
 
         B.immigrate("addscalar B 0")
 
@@ -794,7 +853,7 @@ cdef class BandedOperator(object):
         self.emigrate()
 
         cdef SizedArray[double] *v = to_SizedArray(vector, "Vectorized scale v")
-        self.thisptr.vectorized_scale(deref(v))
+        self.thisptr_tri.vectorized_scale(deref(v))
         del v
 
         self.immigrate()

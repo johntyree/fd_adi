@@ -104,7 +104,8 @@ cdef class BandedOperator(object):
         shape
         top_factors, bottom_factors
 
-    cdef _TriBandedOperator *thisptr
+    cdef _TriBandedOperator *thisptr_tri
+    cdef _CSRBandedOperator *thisptr_csr
 
     cdef inline cbool _is_folded(self)
 
@@ -113,6 +114,8 @@ cdef class BandedOperator(object):
     cdef  emigrate_tri(self, tag=*)
     cdef  emigrate_csr(self, tag=*)
     cpdef immigrate(self, tag=*)
+    cdef  immigrate_tri(self, tag=*)
+    cdef  immigrate_csr(self, tag=*)
     cpdef diagonalize(self)
     cpdef undiagonalize(self)
     cpdef foldbottom(self, unfold=*)
