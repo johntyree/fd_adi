@@ -132,11 +132,15 @@ class Cpp_test(unittest.TestCase):
         npt.assert_array_equal(R0, B0.R)
         npt.assert_array_equal(ref, tst)
 
+
     def test_apply_axis_1(self):
         B1  = self.F.operators[1]
         fp(B1.D.data)
-        fp(B1.R)
-        npt.assert_array_equal(B1.apply(self.v2), B1.apply2(self.v2.copy()))
+        R1 = B1.R.copy()
+        ref = B1.apply(self.v2)
+        tst = B1.apply2(self.v2.copy())
+        npt.assert_array_equal(R1, B1.R)
+        npt.assert_array_equal(ref, tst)
 
 
 class BlackScholesOption_test(unittest.TestCase):
@@ -800,6 +804,7 @@ class BandedOperator_test(unittest.TestCase):
         C1.emigrate("C1 0")
         C1.immigrate("C1 0")
         assert C1 == C0
+        npt.assert_array_equal(C1.R, C0.R)
 
     def test_addself(self):
         vec = self.vec

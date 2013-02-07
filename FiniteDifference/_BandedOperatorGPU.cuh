@@ -11,6 +11,10 @@
 #include <cassert>
 #include <thrust/tuple.h>
 
+#include <cmath>
+
+#include "backtrace.h"
+
 
 
 #define TRACE debug_printer("TRACE", __FILE__, __PRETTY_FUNCTION__, __LINE__ , std::string());
@@ -89,7 +93,7 @@ void transposeNaive(REAL_t *odata, REAL_t *idata, int width, int height);
 
 template <typename T>
 std::ostream & operator<<(std::ostream &os, thrust::host_vector<T> const &v) {
-    os << "addr(" << &v << ") size(" << v.size() << ")  [ ";
+    os << "HOST addr(" << &v << ") size(" << v.size() << ")  [ ";
     std::ostream_iterator<T> out = std::ostream_iterator<T>(os, " ");
     std::copy(v.begin(), v.end(), out);
     return os << "]";
@@ -97,7 +101,7 @@ std::ostream & operator<<(std::ostream &os, thrust::host_vector<T> const &v) {
 
 template <typename T>
 std::ostream & operator<<(std::ostream &os, thrust::device_vector<T> const &v) {
-    os << "addr(" << &v << ") size(" << v.size() << ")  [ ";
+    os << "DEVICE addr(" << &v << ") size(" << v.size() << ")  [ ";
     std::ostream_iterator<T> out = std::ostream_iterator<T>(os, " ");
     std::copy(v.begin(), v.end(), out);
     return os << "]";
@@ -158,9 +162,19 @@ struct SizedArray {
             }
             data = thrust::host_vector<T>(d, d+size);
             sanity_check();
-            /* if (name == "R") { */
-                /* std::cout << "In raw ctor: " << data << "\n"; */
-            /* } */
+            if (name == "R") {
+                bool failed = false;
+                for (int i = 0; i < size; ++i) {
+                    double x = data[i];
+                    x = std::abs(x);
+                    failed = failed || (0 < x && x < 1e-300);
+                }
+                if (failed) {
+                    std::cout << "In raw ctor: " << data << "\n";
+                    /* backtrace(); */
+                    /* assert(0); */
+                }
+            }
     }
 
     void sanity_check() {
@@ -257,11 +271,12 @@ struct SizedArray {
                 << "not in range [0, shape[1]("<<shape[1]<<")).\n";
             assert(0);
         } else if (idx < 0 || size <= idx) {
-            std::cout << std::endl;
-            std::cout << "\nNot only are we out of range, but you wrote the"
-                << " single-dimension tests wrong, obviously.\n";
-            std::cout << name  << " idx("<<idx<<") not in range [0, Size("<<size<<"))\n";
-            std::cout << std::endl;
+            LOG("\nNot only are we out of range, but you wrote the"
+                << " single-dimension tests wrong, obviously.\n");
+            LOG(name  << " i("<<i<<") j("<<j<<") Shape("
+                <<shape[0]<<','<<shape[1]<<") idx("<<idx
+                <<") not in range [0, Size("<<size<<"))\n");
+            backtrace();
             assert(0);
         }
         return idx;
@@ -285,7 +300,7 @@ struct SizedArray {
 
 template <typename T>
 std::ostream & operator<<(std::ostream & os, SizedArray<T> const &sa) {
-    return os << sa.name << ": addr("<<&sa<<") size("<<sa.size<<") ndim("<<sa.ndim<< ")";
+    return os << sa.name << ": addr("<<&sa<<") size("<<sa.size<<") ndim("<<sa.ndim<< ")" << sa.data;
 }
 
 

@@ -30,6 +30,7 @@
 #include "_BandedOperatorGPU.cuh"
 #include <stdio.h>
 
+
 void debug_printer(const char *type, const char *fn, const char *func, int line, std::string msg) {
     std::cout
         << type << ": "
@@ -43,6 +44,8 @@ void debug_printer(const char *type, const char *fn, const char *func, int line,
 
 #define TILE_DIM 1
 #define BLOCK_ROWS 1
+
+#define FULLTRACE 0;
 
 static cusparseHandle_t handle;
 static char cusparse_initialized = 0;
@@ -161,7 +164,16 @@ int find_index(T haystack, U needle, int max) {
     for (idx = 0; idx < max; ++idx) {
         if (haystack[idx] == needle) break;
     }
-    if (idx >= max) idx = -1;
+    if (idx >= max) {
+        /* LOG("Did not find "<<needle<<" before reaching index "<<max<<"."); */
+        /* std::cout << '\t'; */
+        /* std::cout << "Haystack [ "; */
+        /* for (idx = 0; idx < max; ++idx) { */
+            /* std::cout << haystack[idx] << " "; */
+        /* } */
+        /* std::cout << "]"; ENDL; */
+        idx = -1;
+    }
     return idx;
 }
 
@@ -207,11 +219,18 @@ void _BandedOperator::verify_diag_ptrs() {
     assert(sup.get() != 0);
     assert(mid.get() != 0);
     assert(sub.get() != 0);
+    if (main_diag == -1) {
+        /* LOG("No main diag means not tridiagonal, hopefully."); */
+        return;
+    }
     if (offsets.size != 3) {
         /* LOG("Not tridiagonal. Skipping diag ptrs check."); */
         return;
     }
-    if (*sup != diags.data[diags.idx(main_diag-1, 0)]
+    int idx;
+    /* LOG("main_diag("<<main_diag<<")"); */
+    idx = diags.idx(main_diag-1, 0);
+    if (*sup != diags.data[idx]
             || (sup.get() != (&diags.data[diags.idx(0,0)]).get())) {
         LOG("sup[0] = " << *sup << " <->  " << diags.get(0,0));
         LOG("sup = " << sup.get() << " <->  "
@@ -249,6 +268,7 @@ struct zipdot : thrust::binary_function<const Triple &, const Triple &, REAL_t> 
     }
 };
 SizedArray<double> *_BandedOperator::apply(SizedArray<double> &V) {
+    FULLTRACE;
     using std::cout;
     using std::endl;
     const unsigned N = V.size;
@@ -305,6 +325,7 @@ SizedArray<double> *_BandedOperator::apply(SizedArray<double> &V) {
 
     // Transpose back
     /* return ret; */
+    FULLTRACE;
     return U;
 }
 
@@ -325,6 +346,7 @@ struct periodic_from_to_mask : thrust::unary_function<int, bool> {
 };
 
 void _BandedOperator::add_operator(_BandedOperator &other) {
+    FULLTRACE;
     /*
     * Add a second BandedOperator to this one.
     * Does not alter self.R, the residual vector.
@@ -377,11 +399,13 @@ void _BandedOperator::add_operator(_BandedOperator &other) {
             other.R.data.begin(),
             R.data.begin(),
             thrust::plus<double>());
+    FULLTRACE;
 }
 
 
 
 void _BandedOperator::add_scalar(double val) {
+    FULLTRACE;
     /* Add a scalar to the main diagonal.
      * Does not alter the residual vector.
      */
@@ -400,6 +424,7 @@ void _BandedOperator::add_scalar(double val) {
             &diags.data[diags.idx(main_diag, 0)],
             thrust::plus<double>(),
             periodic_from_to_mask(begin, end, block_len));
+    FULLTRACE;
 }
 
 bool _BandedOperator::is_folded() {
@@ -407,7 +432,7 @@ bool _BandedOperator::is_folded() {
 }
 
 int _BandedOperator::solve(SizedArray<double> &V) {
-    TRACE;
+    FULLTRACE;
     verify_diag_ptrs();
 
     /* std::cout << "Begin C Solve\n"; */
@@ -445,7 +470,7 @@ int _BandedOperator::solve(SizedArray<double> &V) {
     thrust::copy(d_V.begin(), d_V.end(), V.data.begin());
     /* std::cout << "OK\n"; */
     /* std::cout << "End C Solve\n"; */
-    TRACE;
+    FULLTRACE;
     return 0;
 }
 
@@ -479,6 +504,7 @@ void _BandedOperator::status() {
 }
 
 void _BandedOperator::vectorized_scale(SizedArray<double> &vector) {
+    FULLTRACE;
     Py_ssize_t vsize = vector.size;
     Py_ssize_t noffsets = offsets.size;
     Py_ssize_t block_len = operator_rows / blocks;
@@ -499,6 +525,9 @@ void _BandedOperator::vectorized_scale(SizedArray<double> &vector) {
 
     for (Py_ssize_t row = 0; row < noffsets; ++row) {
         int o = offsets.get(row);
+        if (o >= offsets.size) {
+            LOG("Offsets get(row) bombed. Wanted row "<< row <<" and think it's @ index "<<o<<".");
+        }
         if (o >= 0) { // upper diags
             for (int i = 0; i < (int)operator_rows - o; ++i) {
                 diags.data[diags.idx(row, i+o)] *= vector.data[vector.idx(i % vsize)];
@@ -509,10 +538,12 @@ void _BandedOperator::vectorized_scale(SizedArray<double> &vector) {
             }
         }
     }
+    /* LOG("Scaled data."); */
 
     for (Py_ssize_t i = 0; i < operator_rows; ++i) {
         R.data[R.idx(i)] *= vector.data[vector.idx(i % vsize)];
     }
+    /* LOG("Scaled R."); */
     return;
 }
 

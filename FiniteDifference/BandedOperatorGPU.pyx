@@ -322,6 +322,7 @@ cdef class BandedOperator(object):
         self.D.data[0,-1] = 0
         self.D.data[2,0] = 0
         self.emigrate("apply2")
+        print
         print "After emigrate"
         print self.thisptr.R.show()
         print
