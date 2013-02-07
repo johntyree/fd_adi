@@ -322,10 +322,6 @@ cdef class BandedOperator(object):
         self.D.data[0,-1] = 0
         self.D.data[2,0] = 0
         self.emigrate("apply2")
-        print
-        print "After emigrate"
-        print self.thisptr.R.show()
-        print
         cdef SizedArray[double] *sa_U = self.thisptr.apply(deref(sa_V))
         ret = from_SizedArray_2(deref(sa_U)).reshape(-1)
         self.immigrate("apply2")

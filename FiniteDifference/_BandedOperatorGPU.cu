@@ -279,8 +279,6 @@ SizedArray<double> *_BandedOperator::apply(SizedArray<double> &V) {
     thrust::device_vector<double> b(mid, mid+N);
     thrust::device_vector<double> c(sup, sup+N);
 
-    LOG("Created diag ptrs");
-
     if (axis == 0) {
         // Transpose somehow
     }
@@ -525,9 +523,6 @@ void _BandedOperator::vectorized_scale(SizedArray<double> &vector) {
 
     for (Py_ssize_t row = 0; row < noffsets; ++row) {
         int o = offsets.get(row);
-        if (o >= offsets.size) {
-            LOG("Offsets get(row) bombed. Wanted row "<< row <<" and think it's @ index "<<o<<".");
-        }
         if (o >= 0) { // upper diags
             for (int i = 0; i < (int)operator_rows - o; ++i) {
                 diags.data[diags.idx(row, i+o)] *= vector.data[vector.idx(i % vsize)];

@@ -137,9 +137,6 @@ struct SizedArray {
                 shape[i] = S.shape[i];
             }
             sanity_check();
-            /* if (name == "R") { */
-                /* std::cout << "In copy ctor: " << data << "\n"; */
-            /* } */
     }
 
     SizedArray(thrust::host_vector<T> d, int ndim, intptr_t *s, std::string name)
@@ -149,48 +146,35 @@ struct SizedArray {
                 size *= shape[i];
             }
             sanity_check();
-            /* if (name == "R") { */
-                /* std::cout << "In vect ctor: " << data << "\n"; */
-            /* } */
     }
 
-    SizedArray(T *d, int ndim, intptr_t *s, std::string name)
+    SizedArray(T *rawptr, int ndim, intptr_t *s, std::string name)
         : ndim(ndim), size(1), name(name) {
             for (Py_ssize_t i = 0; i < ndim; ++i) {
                 shape[i] = s[i];
                 size *= shape[i];
             }
-            data = thrust::host_vector<T>(d, d+size);
+            data.assign(rawptr, rawptr+size);
             sanity_check();
-            if (name == "R") {
-                bool failed = false;
-                for (int i = 0; i < size; ++i) {
-                    double x = data[i];
-                    x = std::abs(x);
-                    failed = failed || (0 < x && x < 1e-300);
-                }
-                if (failed) {
-                    std::cout << "In raw ctor: " << data << "\n";
-                    /* backtrace(); */
-                    /* assert(0); */
-                }
-            }
     }
 
     void sanity_check() {
         if (static_cast<Py_ssize_t>(data.size()) != size) {
-            std::cout << "\ndata.size()("<<data.size()<<") != size("<<size<<")\n";
-            assert(0);
+            LOG("\ndata.size()("<<data.size()<<") != size("<<size<<")");
+            assert(false);
         }
         for (int i = 0; i < ndim; ++i) {
-            assert(shape[i] != 0);
+            if (shape[i] == 0) {
+                LOG("shape["<<i<<"] is "<<i<<"... ndim("<<ndim<<")");
+                assert(false);
+            }
         }
     }
 
     void reshape(Py_ssize_t h, Py_ssize_t w) {
         if (h*w != size) {
-            std::cout << "Height("<<h<<") x Width("<<w<<") != Size("<<size<<")\n";
-            assert(0);
+            LOG("Height("<<h<<") x Width("<<w<<") != Size("<<size<<")");
+            assert(false);
         }
         shape[0] = h;
         shape[1] = w;
@@ -241,36 +225,29 @@ struct SizedArray {
         assert (ndim >= 1);
         int idx = i;
         if (idx < 0 || size <= idx) {
-            std::cout << std::endl;
-            std::cout << name  << " idx("<<idx<<") not in range [0, Size("<<size<<"))\n";
+            LOG(name  << " idx("<<idx<<") not in range [0, Size("<<size<<"))");
             assert(0);
         }
         return idx;
     }
 
     inline int idx(int i, int j) {
-        /* LOG("Accessing idx: " << idx); */
         assert (ndim == 2);
         int idx = i * shape[1] + j;
         if (i >= shape[0]) {
-            std::cout << std::endl;
-            std::cout << std::endl;
-            std::cout << name  << " i("<<i<<")"
-                << "not in range [0, shape[0]("<<shape[0]<<")).\n";
+            LOG(name  << " i("<<i<<")"
+                << "not in range [0, shape[0]("<<shape[0]<<")).");
             assert(0);
         } else if (j >= shape[1]) {
-            std::cout << std::endl;
-            std::cout << std::endl;
-            std::cout << name  << " j("<<j<<")"
-                << "not in range [0, shape[1]("<<shape[1]<<")).\n";
+            LOG(name  << " j("<<j<<")"
+                << "not in range [0, shape[1]("<<shape[1]<<")).");
             assert(0);
         } else if (idx < 0 || size <= idx) {
             LOG("\nNot only are we out of range, but you wrote the"
-                << " single-dimension tests wrong, obviously.\n");
+                << " single-dimension tests wrong, obviously.");
             LOG(name  << " i("<<i<<") j("<<j<<") Shape("
                 <<shape[0]<<','<<shape[1]<<") idx("<<idx
                 <<") not in range [0, Size("<<size<<"))\n");
-            backtrace();
             assert(0);
         }
         return idx;
