@@ -209,10 +209,10 @@ _BandedOperator::_BandedOperator(
     sub(diags.data.ptr() + 2*operator_rows),
     has_high_dirichlet(has_high_dirichlet),
     has_low_dirichlet(has_low_dirichlet),
-    has_residual(has_residual)
+    has_residual(has_residual),
+    is_tridiagonal(noffsets == 3 && main_diag != -1)
     {
         verify_diag_ptrs();
-        /* LOG("BandedOp Successfully Constructed."); */
     }
 
 void _BandedOperator::verify_diag_ptrs() {

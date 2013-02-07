@@ -322,6 +322,7 @@ class _BandedOperator {
         bool has_high_dirichlet;
         bool has_low_dirichlet;
         bool has_residual;
+        bool is_tridiagonal;
 };
 
 #endif
