@@ -1,6 +1,16 @@
 #ifndef VECARRAY_H
 #define VECARRAY_H
 
+#include <thrust/host_vector.h>
+#include <thrust/device_vector.h>
+
+#include <iostream>
+#include <sstream>
+#include <algorithm>
+#include <cassert>
+
+#include "_kernels.h"
+
 template <typename T>
 struct GPUVec : thrust::device_vector<T> {
 
@@ -144,23 +154,13 @@ struct SizedArray {
         assert (ndim == 2);
         //XXX
         thrust::device_ptr<double> out = thrust::device_malloc<double>(data.size());
-        if (strategy != 1) {
-            std::cout << "Only accepting strategy 1 (NoBankConflicts)!\n";
-            assert(0);
-        }
         switch (strategy) {
-            case 0:
-                transposeDiagonal(out.get(), data.raw(), shape[0], shape[1]);
-                break;
             case 1:
                 transposeNoBankConflicts(out.get(), data.raw(), shape[0], shape[1]);
                 break;
-            case 2:
-                transposeNaive(out.get(), data.raw(), shape[0], shape[1]);
-                break;
             default:
                 std::cerr << "\nUnknown Transpose Strategy.\n";
-                assert(0);
+                assert(false);
         }
         reshape(shape[1], shape[0]);
         data.assign(out, out+size);
@@ -228,7 +228,6 @@ std::ostream & operator<<(std::ostream & os, SizedArray<T> const &sa) {
         <<sa.size<<") ndim("<<sa.ndim<< ") ["
         << sa.data << " ]";
 }
-
 
 
 #endif /* end of include guard */

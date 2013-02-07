@@ -2,17 +2,10 @@
 #ifndef _TriBandedOperatorGPU_cuh
 #define _TriBandedOperatorGPU_cuh
 
-#include <thrust/host_vector.h>
-#include <thrust/device_vector.h>
-
-#include <iostream>
-#include <sstream>
-#include <algorithm>
-#include <cassert>
 #include <thrust/tuple.h>
+#include <thrust/device_ptr.h>
 
 #include <cusparse_v2.h>
-#include <cmath>
 
 #include "common.h"
 #include "backtrace.h"
@@ -20,11 +13,6 @@
 
 
 typedef thrust::tuple<REAL_t,REAL_t,REAL_t> Triple;
-
-void transposeDiagonal(REAL_t *odata, REAL_t *idata, int width, int height);
-void transposeNoBankConflicts(REAL_t *odata, REAL_t *idata, int width, int height);
-void transposeNaive(REAL_t *odata, REAL_t *idata, int width, int height);
-
 
 class _TriBandedOperator {
     public:

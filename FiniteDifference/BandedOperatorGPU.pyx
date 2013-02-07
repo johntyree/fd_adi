@@ -4,7 +4,7 @@
 # cython: profile = True
 # cython: embedsignature = True
 # distutils: language = c++
-# distutils: sources = FiniteDifference/_TriBandedOperatorGPU.cu
+# distutils: sources = FiniteDifference/GPU_Code.cu
 """Description."""
 
 from bisect import bisect_left

@@ -1,10 +1,26 @@
 #ifndef COMMON_H
 #define COMMON_H
 
+#include <iostream>
+#include <sstream>
 
 #define TRACE debug_printer("TRACE", __FILE__, __PRETTY_FUNCTION__, __LINE__ , std::string());
 #define LOG(msg) {std::ostringstream s; s << msg; debug_printer("LOG", __FILE__, __PRETTY_FUNCTION__, __LINE__ , s.str());}
-void debug_printer(const char *type, const char *fn, const char *func, int line, std::string msg);
+#define FULLTRACE noop();
+
+inline void noop() {};
+
+inline void debug_printer(const char *type, const char *fn, const char *func, int line, std::string msg) {
+    std::cout
+        << type << ": "
+        << fn << "(" << line << "): "
+        << func;
+        if (msg.size() != 0) {
+            std::cout << "\n\t" << msg;
+        }
+        std::cout << std::endl;
+}
+
 
 #define ENDL std::cout << std::endl
 
