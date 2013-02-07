@@ -14,7 +14,7 @@ from libcpp.string cimport string as cpp_string
 
 REAL = np.float64
 
-cdef extern from "_TriBandedOperatorGPU.cuh":
+cdef extern from "VecArray.h":
 
     cdef cppclass SizedArray [T]:
         # T *data
@@ -32,13 +32,28 @@ cdef extern from "_TriBandedOperatorGPU.cuh":
         void transpose(int)
         cpp_string show()
 
+cdef extern from "_CSRBandedOperatorGPU.cuh":
+
+    cdef cppclass _CSRBandedOperator:
+        SizedArray[double] *apply(SizedArray[double] &)
+        void vectorized_scale(SizedArray[double] &vector)
+
+        _CSRBandedOperator(
+            SizedArray[double] &data,
+            SizedArray[int] &row_ind,
+            SizedArray[int] &col_ind,
+            Py_ssize_t operator_rows,
+            Py_ssize_t blocks
+            )
+
+cdef extern from "_TriBandedOperatorGPU.cuh":
 
     cdef cppclass _TriBandedOperator:
         void view()
         cbool is_folded()
         SizedArray[double] *apply(SizedArray[double] &)
         void add_scalar(double val)
-        void vectorized_scale(SizedArray[double] vector)
+        void vectorized_scale(SizedArray[double] &vector)
         void add_operator(_TriBandedOperator &other)
         void status()
         int solve(SizedArray[double] &)
@@ -95,6 +110,8 @@ cdef class BandedOperator(object):
 
     cpdef copy(self)
     cpdef emigrate(self, tag=*)
+    cdef  emigrate_tri(self, tag=*)
+    cdef  emigrate_csr(self, tag=*)
     cpdef immigrate(self, tag=*)
     cpdef diagonalize(self)
     cpdef undiagonalize(self)
