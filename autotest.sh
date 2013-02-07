@@ -19,4 +19,4 @@ onmodify () {
     done )
 }
 
-onmodify . "python setup.py nosetests --with-id --immediate --rednose --verbosity=3 || echo -ne '\a'"
+onmodify . "python setup.py nosetests --with-id --failed --immediate --rednose --verbosity=3 || echo -ne '\a'"
