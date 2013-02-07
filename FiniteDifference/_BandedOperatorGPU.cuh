@@ -206,34 +206,28 @@ struct SizedArray {
     void transpose(int strategy) {
         assert (ndim == 2);
         //XXX
-        GPUVec<T> in(data);
-        /* thrust::fill(data.begin(), data.end(), 0); */
-        GPUVec<T> out(data);
-        assert(in.size() == static_cast<size_t>(shape[0]*shape[1]));
-        assert(out.size() == static_cast<size_t>(shape[0]*shape[1]));
-        // ENDL;
-        // std::cout << in << " " << shape[0] << ' ' << shape[1]; ENDL;
+        thrust::device_ptr<double> out = thrust::device_malloc<double>(data.size());
         if (strategy != 1) {
             std::cout << "Only accepting strategy 1 (NoBankConflicts)!\n";
             assert(0);
         }
         switch (strategy) {
             case 0:
-                transposeDiagonal(out.raw(), in.raw(), shape[0], shape[1]);
+                transposeDiagonal(out.get(), data.raw(), shape[0], shape[1]);
                 break;
             case 1:
-                transposeNoBankConflicts(out.raw(), in.raw(), shape[0], shape[1]);
+                transposeNoBankConflicts(out.get(), data.raw(), shape[0], shape[1]);
                 break;
             case 2:
-                transposeNaive(out.raw(), in.raw(), shape[0], shape[1]);
+                transposeNaive(out.get(), data.raw(), shape[0], shape[1]);
                 break;
             default:
                 std::cerr << "\nUnknown Transpose Strategy.\n";
                 assert(0);
         }
-        std::swap(shape[0], shape[1]);
-        // std::cout << out << " " << shape[0] << ' ' << shape[1]; ENDL;
-        thrust::copy(out.begin(), out.end(), data.begin());
+        reshape(shape[1], shape[0]);
+        data.assign(out, out+size);
+        thrust::device_free(out);
     }
 
     std::string show() {
