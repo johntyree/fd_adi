@@ -300,7 +300,9 @@ struct SizedArray {
 
 template <typename T>
 std::ostream & operator<<(std::ostream & os, SizedArray<T> const &sa) {
-    return os << sa.name << ": addr("<<&sa<<") size("<<sa.size<<") ndim("<<sa.ndim<< ")" << sa.data;
+    return os << sa.name << ": addr("<<&sa<<") size("
+        <<sa.size<<") ndim("<<sa.ndim<< ") ["
+        << sa.data << " ]";
 }
 
 
