@@ -94,6 +94,11 @@ struct SizedArray {
     Py_ssize_t shape[8];
     std::string name;
 
+    SizedArray(Py_ssize_t size, std::string name)
+        : data(size), size(size), name(name) {
+            sanity_check();
+    }
+
     SizedArray(SizedArray<T> const &S)
         : data(S.data), ndim(S.ndim), size(S.size), name(S.name) {
             for (Py_ssize_t i = 0; i < ndim; ++i) {
