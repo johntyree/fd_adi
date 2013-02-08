@@ -170,30 +170,37 @@ class Cpp_test(unittest.TestCase):
         npt.assert_array_equal(ref, tst)
 
     def test_csr_apply(self):
-        B01  = self.F.operators[1]
+        B01  = self.F.operators[(0,1)]
         fp(B01.D.data)
         ref = B01.apply(self.v2)
         tst = B01.apply2(self.v2.copy())
         npt.assert_array_equal(ref, tst)
 
+    def test_GPUSolve_0(self):
+        B = self.F.operators[0]
+        B.D.data = np.random.random((B.D.data.shape))
+        B.R = np.random.random(B.D.data.shape[1])
+        B.D.data[0,0] = 0
+        B.D.data[-1,-1] = 0
+        origdata = B.D.data.copy()
+        ref = B.solve(self.v2)
+        tst = B.solve2(self.v2.copy())
+        fp(ref - tst, 3, 'e')
+        npt.assert_array_almost_equal(ref, tst, decimal=8)
+        npt.assert_array_equal(origdata, B.D.data)
 
-    def test_GPUSolve(self):
-        return
-        # B = self.F.operators[1]
-        # B.D.data = np.random.random((B.D.data.shape))
-        # B.R = np.random.random(B.D.data.shape[1])
-        # B.D.data[0,0] = 0
-        # B.D.data[-1,-1] = 0
-        # origdata = B.D.data.copy()
-        # fp(B.D.data)
-        # fp(B.D.offsets)
-        # ref = B.solve(self.vec)
-        # ref = 1
-        # tst = 1
-        # tst = B.solve2(self.vec.copy())
-        # fp(ref - tst, 3, 'e')
-        # npt.assert_array_almost_equal(ref, tst, decimal=8)
-        # npt.assert_array_equal(origdata, B.D.data)
+    def test_GPUSolve_1(self):
+        B = self.F.operators[1]
+        B.D.data = np.random.random((B.D.data.shape))
+        B.R = np.random.random(B.D.data.shape[1])
+        B.D.data[0,0] = 0
+        B.D.data[-1,-1] = 0
+        origdata = B.D.data.copy()
+        ref = B.solve(self.v2)
+        tst = B.solve2(self.v2.copy())
+        fp(ref - tst, 3, 'e')
+        npt.assert_array_almost_equal(ref, tst, decimal=8)
+        npt.assert_array_equal(origdata, B.D.data)
 
 
 class BlackScholesOption_test(unittest.TestCase):
