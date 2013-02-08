@@ -28,11 +28,13 @@ _CSRBandedOperator::_CSRBandedOperator(
         SizedArray<int> &row_ind,
         SizedArray<int> &col_ind,
         Py_ssize_t operator_rows,
-        Py_ssize_t blocks
+        Py_ssize_t blocks,
+        std::string name
         ) :
     data(data.data),
     row_ind(row_ind.data),
     col_ind(col_ind.data),
+    name(name),
     operator_rows(operator_rows),
     blocks(blocks),
     block_len(operator_rows / blocks),
@@ -43,6 +45,7 @@ _CSRBandedOperator::_CSRBandedOperator(
             std::cerr << "CUSPARSE Library initialization failed." << std::endl;
             assert(false);
         }
+        LOG("CSRBandedOperator constructed: " << name);
     }
 
 

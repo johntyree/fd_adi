@@ -13,6 +13,7 @@ class _CSRBandedOperator {
         GPUVec<double> data;
         GPUVec<int> row_ind;
         GPUVec<int> col_ind;
+        std::string name;
 
         SizedArray<double> *apply(SizedArray<double> &);
         void vectorized_scale(SizedArray<double> &vector);
@@ -22,7 +23,8 @@ class _CSRBandedOperator {
             SizedArray<int> &row_ind,
             SizedArray<int> &col_ind,
             Py_ssize_t operator_rows,
-            Py_ssize_t blocks
+            Py_ssize_t blocks,
+            std::string name = "<UNKNOWN CSR>"
             );
 
     private:

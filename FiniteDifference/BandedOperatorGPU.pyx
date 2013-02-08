@@ -168,7 +168,7 @@ cdef class BandedOperator(object):
 
 
     cdef emigrate_csr(self, tag=""):
-        if tag and False:
+        if tag:
             print id(self), "Emigrate: ", tag
         assert not (self.thisptr_csr)
         csr = self.D.tocsr()
@@ -190,7 +190,7 @@ cdef class BandedOperator(object):
 
 
     cdef emigrate_tri(self, tag=""):
-        if tag and False:
+        if tag:
             print id(self), "Emigrate: ", tag
         assert not (self.thisptr_tri)
         cdef:

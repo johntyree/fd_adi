@@ -55,6 +55,15 @@ cdef extern from "_CSRBandedOperatorGPU.cuh":
             Py_ssize_t blocks
             )
 
+        _CSRBandedOperator(
+            SizedArray[double] &data,
+            SizedArray[int] &row_ind,
+            SizedArray[int] &col_ind,
+            Py_ssize_t operator_rows,
+            Py_ssize_t blocks,
+            cpp_string name
+            )
+
 cdef extern from "_TriBandedOperatorGPU.cuh":
 
     cdef cppclass _TriBandedOperator:
