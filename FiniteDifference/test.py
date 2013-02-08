@@ -123,7 +123,7 @@ class Cpp_test(unittest.TestCase):
         B = self.F.operators[0]
         ref = B.copy()
         B.emigrate("C1 0")
-        del B.D
+        B.D.data *= 0
         B.immigrate("C1 0")
         assert ref == B
 
@@ -131,7 +131,7 @@ class Cpp_test(unittest.TestCase):
         B = self.F.operators[1]
         ref = B.copy()
         B.emigrate("B test 1")
-        del B.D
+        B.D.data *= 0
         B.immigrate("B test 1")
         assert ref == B
 
@@ -139,7 +139,6 @@ class Cpp_test(unittest.TestCase):
         B = self.F.operators[(0,1)]
         ref = B.copy()
         B.emigrate("B test 01")
-        del B.D
         B.immigrate("B test 01")
         assert ref == B
 

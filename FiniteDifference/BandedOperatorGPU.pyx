@@ -123,16 +123,14 @@ cdef class BandedOperator(object):
 
 
     cpdef immigrate(self, tag=""):
-        if tag and False:
-            print id(self), "Immigrate:", tag
         if self.is_cross_derivative():
             self.immigrate_csr(tag)
         else:
             self.immigrate_tri(tag)
 
     cdef immigrate_csr(self, tag=""):
-        if tag and False:
-            print id(self), "Immigrate:", tag
+        if tag:
+            print "Immigrate:", tag, to_string(self.thisptr_csr)
         assert (self.thisptr_csr)
         csr = self.D.tocsr()
 
@@ -147,9 +145,9 @@ cdef class BandedOperator(object):
 
 
     cdef immigrate_tri(self, tag=""):
-        if tag and False:
-            print id(self), "Immigrate:", tag
-        assert (self.thisptr_tri)
+        if tag:
+            print "Immigrate:", tag, to_string(self.thisptr_tri)
+        assert self.thisptr_tri != <void *>0
         self.D.data = from_SizedArray_2(self.thisptr_tri.diags)
         self.R = from_SizedArray(self.thisptr_tri.R)
         del self.thisptr_tri
@@ -348,15 +346,21 @@ cdef class BandedOperator(object):
         return self._is_folded()
 
     cpdef cbool is_cross_derivative(self):
-        ret = (
-                self.D.offsets.shape[0] == 9
-            and self.D.offsets[3] == 1
-            and self.D.offsets[4] == 0
-            and self.D.offsets[5] == -1)
-        if not ret and not self.is_tridiagonal():
-            print "Neither tri nor cross term:", self.D.offsets
-        else:
-            print "Is_cross? " + str(ret), self.D.offsets
+        if self.location == LOCATION_PYTHON:
+            ret = (
+                    self.D.offsets.shape[0] == 9
+                and self.D.offsets[3] == 1
+                and self.D.offsets[4] == 0
+                and self.D.offsets[5] == -1)
+            if not ret and not self.is_tridiagonal():
+                print "Neither tri nor cross term:", self.D.offsets
+            else:
+                print "Is_cross? " + str(ret), self.D.offsets
+        elif self.location == LOCATION_GPU:
+            print "TRI: ", to_string(<void *>self.thisptr_tri)
+            print "CSR: ", to_string(<void *>self.thisptr_csr)
+            ret = <cbool>self.thisptr_csr
+            print "ret: ", ret
         return ret
 
 
@@ -818,13 +822,13 @@ cdef class BandedOperator(object):
         # Don't double the dirichlet boundaries!
         # The actual operation starts here.
         if B.location != LOCATION_GPU:
-            B.emigrate("add op B 0")
+            B.emigrate_tri("add op B 0")
         if other.location != LOCATION_GPU:
-            other.emigrate("add op other 0")
+            other.emigrate_tri("add op other 0")
         assert (other.thisptr_tri)
         B.thisptr_tri.add_operator(deref(other.thisptr_tri))
-        B.immigrate("add op B 0")
-        other.immigrate("add op other 0")
+        B.immigrate_tri("add op B 0")
+        other.immigrate_tri("add op other 0")
         return B
 
 
@@ -853,13 +857,17 @@ cdef class BandedOperator(object):
         return B
 
 
-    cpdef vectorized_scale(self, np.ndarray vector):
+    cpdef vectorized_scale(self, np.ndarray vector) except +:
 
-        # if self.location != LOCATION_GPU:
-        self.emigrate()
+        if self.location != LOCATION_GPU:
+            self.emigrate()
 
         cdef SizedArray[double] *v = to_SizedArray(vector, "Vectorized scale v")
-        self.thisptr_tri.vectorized_scale(deref(v))
+        if self.thisptr_tri:
+            self.thisptr_tri.vectorized_scale(deref(v))
+        elif self.thisptr_csr:
+            # raise NotImplementedError("Vectorized Scale on CSR mat is coming...")
+            print "Vectorized Scale on CSR mat is coming..."
         del v
 
         self.immigrate()
