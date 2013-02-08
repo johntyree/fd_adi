@@ -34,6 +34,11 @@ class _CSRBandedOperator {
         Py_ssize_t nnz;
         cusparseHandle_t handle;
         cusparseStatus_t status;
+
+        friend std::ostream& operator<<(
+                std::ostream &,
+                const _CSRBandedOperator&);
 };
 
+std::ostream & operator<<(std::ostream & os, _CSRBandedOperator const &B);
 #endif

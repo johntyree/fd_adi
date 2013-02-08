@@ -20,8 +20,19 @@
 
 #include "_CSRBandedOperatorGPU.cuh"
 
-__device__ const REAL_t one = 1;
-__device__ const REAL_t zero = 0;
+__device__ static const REAL_t one = 1;
+__device__ static const REAL_t zero = 0;
+
+std::ostream & operator<<(std::ostream & os, _CSRBandedOperator const &B) {
+    return os << B.name << ": addr("<<&B<<")\n\t"
+        << "operator_rows(" << B.operator_rows << ") "
+        << "blocks(" << B.blocks <<") "
+        << "nnz(" << B.nnz << ")\n\t"
+        << "data(" << B.data << ")\n\t"
+        << "row_ind(" << B.row_ind << ")\n\t"
+        << "col_ind(" << B.col_ind << ")\n"
+        ;
+}
 
 _CSRBandedOperator::_CSRBandedOperator(
         SizedArray<double> &data,
@@ -45,7 +56,7 @@ _CSRBandedOperator::_CSRBandedOperator(
             std::cerr << "CUSPARSE Library initialization failed." << std::endl;
             assert(false);
         }
-        LOG("CSRBandedOperator constructed: " << name);
+        LOG("CSRBandedOperator constructed: " << *this);
     }
 
 
