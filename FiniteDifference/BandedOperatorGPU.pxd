@@ -31,9 +31,9 @@ cdef extern from "VecArray.h":
         SizedArray(T*, int, np.npy_intp*, cpp_string name) except +
         T get(int i) except +
         T get(int i, int j) except +
-        void reshape(Py_ssize_t h, Py_ssize_t w)
+        void reshape(Py_ssize_t h, Py_ssize_t w) except +
         void flatten()
-        void transpose(int)
+        void transpose(int) except +
         cpp_string show()
 
 cdef extern from "_CSRBandedOperatorGPU.cuh":
@@ -51,7 +51,7 @@ cdef extern from "_CSRBandedOperatorGPU.cuh":
             SizedArray[int] &col_ind,
             Py_ssize_t operator_rows,
             Py_ssize_t blocks
-            )
+        ) except +
 
         _CSRBandedOperator(
             SizedArray[double] &data,
@@ -60,20 +60,19 @@ cdef extern from "_CSRBandedOperatorGPU.cuh":
             Py_ssize_t operator_rows,
             Py_ssize_t blocks,
             cpp_string name
-            )
+        ) except +
 
 cdef extern from "_TriBandedOperatorGPU.cuh":
 
     cdef cppclass _TriBandedOperator:
         void view()
-        cbool is_folded()
+        cbool is_folded() except +
         cbool has_residual
-        SizedArray[double] *apply(SizedArray[double] &)
-        void add_scalar(double val)
-        void vectorized_scale(SizedArray[double] &vector)
-        void add_operator(_TriBandedOperator &other)
-        void status()
-        int solve(SizedArray[double] &)
+        SizedArray[double] *apply(SizedArray[double] &) except +
+        void add_scalar(double val) except +
+        void vectorized_scale(SizedArray[double] &vector) except +
+        void add_operator(_TriBandedOperator &other) except +
+        int solve(SizedArray[double] &) except +
         SizedArray[int] offsets
         SizedArray[double] diags
         SizedArray[double] R
@@ -91,7 +90,7 @@ cdef extern from "_TriBandedOperatorGPU.cuh":
             cbool has_high_dirichlet,
             cbool has_low_dirichlet,
             cbool has_residual
-            )
+        ) except +
 
 
     void cout(SizedArray[int] *a)
