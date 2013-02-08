@@ -173,6 +173,9 @@ class Cpp_test(unittest.TestCase):
         B01  = self.F.operators[(0,1)]
         fp(B01.D.data)
         ref = B01.apply(self.v2)
+        print B01.D.tocsr().data
+        print B01.D.tocsr().indptr
+        print B01.D.tocsr().indices
         tst = B01.apply2(self.v2.copy())
         npt.assert_array_equal(ref, tst)
 

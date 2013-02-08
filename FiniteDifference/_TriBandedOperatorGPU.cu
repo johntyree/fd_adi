@@ -222,7 +222,7 @@ struct periodic_from_to_mask : thrust::unary_function<int, bool> {
 };
 
 void _TriBandedOperator::add_operator(_TriBandedOperator &other) {
-    LOG("Adding operator @ " << &other << " to this one @ " << this);
+    /* LOG("Adding operator @ " << &other << " to this one @ " << this); */
     /*
     * Add a second BandedOperator to this one.
     * Does not alter self.R, the residual vector.
@@ -246,7 +246,7 @@ void _TriBandedOperator::add_operator(_TriBandedOperator &other) {
             std::cout << ")" << std::endl;
             assert (offsets.get(to) == o);
         }
-        LOG("Adding offset " << o << ".");
+        /* LOG("Adding offset " << o << "."); */
         if (o == 0) {
             thrust::transform_if(
                     &diags.data[diags.idx(to, 0)],
@@ -265,7 +265,7 @@ void _TriBandedOperator::add_operator(_TriBandedOperator &other) {
                     thrust::plus<double>());
         }
     }
-    LOG("Adding R.");
+    /* LOG("Adding R."); */
     thrust::transform(
             R.data.begin(),
             R.data.end(),

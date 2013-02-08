@@ -100,6 +100,8 @@ cdef extern from "_TriBandedOperatorGPU.cuh":
     void cout(SizedArray[double] a)
     void cout(_TriBandedOperator *a)
     cpp_string to_string(double *)
+    cpp_string to_string(void  *)
+    cpp_string to_string(cbool)
     cpp_string to_string(SizedArray[int] *a)
     cpp_string to_string(SizedArray[double] *a)
     cpp_string to_string(SizedArray[double] a)
@@ -151,7 +153,7 @@ cdef class BandedOperator(object):
     cpdef splice_with(self, begin, at, inplace=*)
     cpdef add_operator(BandedOperator self, BandedOperator other, cbool inplace=*)
     cpdef add_scalar(self, float other, cbool inplace=*)
-    cpdef vectorized_scale(self, np.ndarray arr)
+    cpdef vectorized_scale(self, np.ndarray arr) except +
     cpdef scale(self, func)
 
     cpdef mul(self, val, inplace=*)
