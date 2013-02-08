@@ -95,7 +95,7 @@ struct SizedArray {
     std::string name;
 
     SizedArray(Py_ssize_t size, std::string name)
-        : data(size), size(size), name(name) {
+        : data(size), size(size), name(name), ndim(1) {
             sanity_check();
     }
 
@@ -130,6 +130,12 @@ struct SizedArray {
         if (static_cast<Py_ssize_t>(data.size()) != size) {
             LOG("\ndata.size()("<<data.size()<<") != size("<<size<<")");
             assert(false);
+        }
+        if (ndim > 8) {
+            LOG("ndim("<<ndim<<") is out of range . Failed to initialize?");
+            std::ostringstream s;
+            s << "ndim("<<ndim<<") is out of range . Failed to initialize?";
+            throw std::domain_error(s.str());
         }
         for (int i = 0; i < ndim; ++i) {
             if (shape[i] == 0) {
