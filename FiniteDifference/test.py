@@ -19,6 +19,7 @@ from visualize import fp
 import Grid
 
 import FiniteDifferenceEngine as FD
+import BandedOperatorGPU as BOG
 
 from blackscholes import BlackScholesFiniteDifferenceEngine, BlackScholesOption
 from heston import HestonBarrierOption
@@ -168,6 +169,18 @@ class Cpp_test(unittest.TestCase):
         tst = B1.apply2(self.v2.copy())
         npt.assert_array_equal(R1, B1.R)
         npt.assert_array_equal(ref, tst)
+
+
+    def test_csr_apply_0(self):
+        vec = np.arange(10, dtype=float)
+        B = BOG.for_vector(vec)
+        ref = B.apply(vec)
+        print B.D.tocsr().data
+        print B.D.tocsr().indptr
+        print B.D.tocsr().indices
+        tst = B.apply2(vec)
+        npt.assert_array_equal(ref, tst)
+
 
     def test_csr_apply(self):
         B01  = self.F.operators[(0,1)]
