@@ -135,7 +135,7 @@ cdef class BandedOperator(object):
 
     cdef immigrate_csr(self, tag=""):
         if tag:
-            print "Immigrate:", tag, to_string(self.thisptr_csr)
+            print "Immigrate CSR:", tag, to_string(self.thisptr_csr)
         assert (self.thisptr_csr)
         csr = self.D.tocsr()
 
@@ -151,7 +151,7 @@ cdef class BandedOperator(object):
 
     cdef immigrate_tri(self, tag=""):
         if tag:
-            print "Immigrate:", tag, to_string(self.thisptr_tri)
+            print "Immigrate Tri:", tag, to_string(self.thisptr_tri)
         assert self.thisptr_tri != <void *>0
         self.D.data = from_SizedArray_2(self.thisptr_tri.diags)
         if self.thisptr_tri.has_residual:
@@ -173,7 +173,7 @@ cdef class BandedOperator(object):
 
     cdef emigrate_csr(self, tag=""):
         if tag:
-            print id(self), "Emigrate: ", tag
+            print "Emigrate CSR:", tag, to_string(self.thisptr_csr)
         assert not (self.thisptr_csr)
         csr = self.D.tocsr()
         cdef:
@@ -185,17 +185,18 @@ cdef class BandedOperator(object):
                   deref(data)
                 , deref(row_ind)
                 , deref(col_ind)
-                , self.D.shape[1]
+                , self.D.shape[0]
                 , self.blocks
+                , tag
                 )
 
         self.location = LOCATION_GPU
-        del data, row_ind, col_ind
+        # del data, row_ind, col_ind
 
 
     cdef emigrate_tri(self, tag=""):
         if tag:
-            print id(self), "Emigrate: ", tag
+            print "Emigrate Tri:", tag, to_string(self.thisptr_tri)
         assert not (self.thisptr_tri)
         cdef:
             SizedArray[double] *diags = to_SizedArray(self.D.data, "data")
@@ -390,7 +391,8 @@ cdef class BandedOperator(object):
             sa_U = self.thisptr_tri.apply(deref(sa_V))
         else:
             sa_U = self.thisptr_csr.apply(deref(sa_V))
-        ret = from_SizedArray_2(deref(sa_U)).reshape(-1)
+        print to_string(deref(sa_U))
+        ret = from_SizedArray(deref(sa_U)).reshape(-1)
         self.immigrate("apply2")
         self.D.data[0,1:] = self.D.data[0,:-1]
         self.D.data[2,:-1] = self.D.data[2,1:]
