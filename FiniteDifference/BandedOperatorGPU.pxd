@@ -67,6 +67,7 @@ cdef extern from "_TriBandedOperatorGPU.cuh":
     cdef cppclass _TriBandedOperator:
         void view()
         cbool is_folded()
+        cbool has_residual
         SizedArray[double] *apply(SizedArray[double] &)
         void add_scalar(double val)
         void vectorized_scale(SizedArray[double] &vector)

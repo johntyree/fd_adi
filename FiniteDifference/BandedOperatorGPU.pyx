@@ -154,7 +154,11 @@ cdef class BandedOperator(object):
             print "Immigrate:", tag, to_string(self.thisptr_tri)
         assert self.thisptr_tri != <void *>0
         self.D.data = from_SizedArray_2(self.thisptr_tri.diags)
-        self.R = from_SizedArray(self.thisptr_tri.R)
+        if self.thisptr_tri.has_residual:
+            self.R = from_SizedArray(self.thisptr_tri.R)
+        else:
+            assert self.R is None, ("We used to have a residual..."
+                                    "but now it's gone!")
         del self.thisptr_tri
         self.thisptr_tri = <_TriBandedOperator *> 0
         self.location = LOCATION_PYTHON

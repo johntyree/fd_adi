@@ -48,6 +48,12 @@ class _TriBandedOperator {
             bool has_residual
             );
 
+        // This is public to get to and from python
+        bool has_residual;
+        bool has_high_dirichlet;
+        bool has_low_dirichlet;
+        bool is_tridiagonal;
+
     private:
         unsigned int axis;
         Py_ssize_t main_diag;
@@ -55,10 +61,6 @@ class _TriBandedOperator {
         Py_ssize_t blocks;
         Py_ssize_t block_len;
         thrust::device_ptr<double> sup, mid, sub;
-        bool has_high_dirichlet;
-        bool has_low_dirichlet;
-        bool has_residual;
-        bool is_tridiagonal;
         cusparseHandle_t handle;
         cusparseStatus_t status;
 };
