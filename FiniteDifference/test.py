@@ -81,6 +81,7 @@ class BarrierOption_test(unittest.TestCase):
 class Cpp_test(unittest.TestCase):
 
     def setUp(self):
+        print "Setting up Params for CPP tests"
         shape = (4,4)
         self.v1 = np.arange(shape[0]*shape[1], dtype=float)**2
         self.v2 = self.v1.copy()

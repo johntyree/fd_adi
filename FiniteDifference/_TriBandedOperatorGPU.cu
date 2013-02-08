@@ -19,11 +19,9 @@
 #include <vector>
 #include <iterator>
 #include <cassert>
-#include <ctime>
 #include <stdexcept>
 
 #include <sys/select.h>
-#include <sys/time.h>
 
 #include <cusparse_v2.h>
 
@@ -92,6 +90,7 @@ _TriBandedOperator::_TriBandedOperator(
     }
 
 void _TriBandedOperator::verify_diag_ptrs() {
+    FULLTRACE;
     assert(sup.get() != 0);
     assert(mid.get() != 0);
     assert(sub.get() != 0);
@@ -127,6 +126,7 @@ void _TriBandedOperator::verify_diag_ptrs() {
                 << (&diags.data[diags.idx(main_diag+1, 0)]).get());
         assert(0);
     }
+    FULLTRACE;
 }
 
 
@@ -222,13 +222,11 @@ struct periodic_from_to_mask : thrust::unary_function<int, bool> {
 };
 
 void _TriBandedOperator::add_operator(_TriBandedOperator &other) {
-    FULLTRACE;
+    LOG("Adding operator @ " << &other << " to this one @ " << this);
     /*
     * Add a second BandedOperator to this one.
     * Does not alter self.R, the residual vector.
     */
-    timeval sleeptime = {1, 0};
-
     int begin = has_low_dirichlet;
     int end = block_len-1 - has_high_dirichlet;
     int o, to, fro;
@@ -246,10 +244,9 @@ void _TriBandedOperator::add_operator(_TriBandedOperator &other) {
             std::cout << other.offsets.data;
             /* print_array(&other.offsets(0), other.offsets.size); */
             std::cout << ")" << std::endl;
-            select(1, NULL, NULL, NULL, &sleeptime);
             assert (offsets.get(to) == o);
         }
-        /* LOG("Adding offset " << o << "."); */
+        LOG("Adding offset " << o << ".");
         if (o == 0) {
             thrust::transform_if(
                     &diags.data[diags.idx(to, 0)],
@@ -268,7 +265,7 @@ void _TriBandedOperator::add_operator(_TriBandedOperator &other) {
                     thrust::plus<double>());
         }
     }
-    /* LOG("Adding R."); */
+    LOG("Adding R.");
     thrust::transform(
             R.data.begin(),
             R.data.end(),
@@ -310,6 +307,7 @@ bool _TriBandedOperator::is_folded() {
 
 
 int _TriBandedOperator::solve(SizedArray<double> &V) {
+    FULLTRACE;
     verify_diag_ptrs();
 
     /* std::cout << "Begin C Solve\n"; */
@@ -400,9 +398,5 @@ int main () {
 
     printf("\n");
     print_array(a.data(), a.size());
-    time_t theTime;
-    time(&theTime);   // get the calendar time
-    tm *t = localtime( &theTime );  // convert to local
-    std::cout << "The time is: " << asctime(t);
     return 0;
 }
