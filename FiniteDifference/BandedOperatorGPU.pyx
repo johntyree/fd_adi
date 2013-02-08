@@ -1171,6 +1171,14 @@ cdef inline SizedArray[int]* to_SizedArray_i(np.ndarray v, cpp_string name) exce
         v = v.copy("C")
     return new SizedArray[int](<int *>np.PyArray_DATA(v), v.ndim, v.shape, name)
 
+cdef inline from_SizedArray_i(SizedArray[int] &v):
+    cdef int sz = v.size
+    cdef np.ndarray[int, ndim=1] s = np.empty(sz, dtype=int)
+    cdef int i
+    for i in range(sz):
+        s[i] = v.get(i)
+    return s
+
 cdef inline from_SizedArray(SizedArray[double] &v):
     sz = v.size
     cdef np.ndarray[double, ndim=1] s = np.empty(sz, dtype=float)
