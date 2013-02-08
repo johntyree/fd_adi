@@ -61,6 +61,9 @@ _CSRBandedOperator::_CSRBandedOperator(
 
 
 SizedArray<double> *_CSRBandedOperator::apply(SizedArray<double> &V) {
+    if (V.size != operator_rows) {
+        DIE("Dimension mismatch. V(" <<V.size<<") vs "<<operator_rows);
+    }
     const unsigned N = V.size;
     thrust::device_vector<double> in(V.data);
     thrust::device_vector<double> out(N);
@@ -73,27 +76,26 @@ SizedArray<double> *_CSRBandedOperator::apply(SizedArray<double> &V) {
     cusparseMatDescr_t mat_description;
     status = cusparseCreateMatDescr(&mat_description);
     if (status != CUSPARSE_STATUS_SUCCESS) {
-        std::cerr << "CUSPARSE matrix description init failed." << std::endl;
-        assert(false);
+        DIE("CUSPARSE matrix description init failed.");
     }
+    double const zero_one[] = {0,1};
     status = cusparseDcsrmv(handle,
             CUSPARSE_OPERATION_NON_TRANSPOSE,
             operator_rows,
             operator_rows,
             nnz,
-            &one,
+            zero_one+1,
             mat_description,
             data.raw(),
-            row_ind.raw(),
             col_ind.raw(),
+            row_ind.raw(),
             V.data.raw(),
-            &zero,
+            zero_one,
             U->data.raw()
             );
 
     if (status != CUSPARSE_STATUS_SUCCESS) {
-        std::cerr << "CUSPARSE CSR MV product failed." << std::endl;
-        assert(false);
+        DIE("CUSPARSE CSR MV product failed.");
     }
 
     return U;
@@ -105,6 +107,9 @@ void _CSRBandedOperator::vectorized_scale(SizedArray<double> &vector) {
     Py_ssize_t vsize = vector.size;
     Py_ssize_t block_len = operator_rows / blocks;
 
-    assert(operator_rows % vsize == 0);
+    if (operator_rows % vsize == 0) {
+        DIE("Vector length does not divide "
+                "evenly into operator size. Cannot scale.");
+    }
     return;
 }

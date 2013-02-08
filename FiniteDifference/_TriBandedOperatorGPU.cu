@@ -84,16 +84,15 @@ _TriBandedOperator::_TriBandedOperator(
         verify_diag_ptrs();
         status = cusparseCreate(&handle);
         if (status != CUSPARSE_STATUS_SUCCESS) {
-            std::cerr << "CUSPARSE Library initialization failed." << std::endl;
-            assert(false);
+            DIE("CUSPARSE Library initialization failed.");
         }
     }
 
 void _TriBandedOperator::verify_diag_ptrs() {
     FULLTRACE;
-    assert(sup.get() != 0);
-    assert(mid.get() != 0);
-    assert(sub.get() != 0);
+    if (sup.get() == 0 || mid.get() == 0 || sub.get() == 0) {
+        DIE("Diag pointers aren't non-null");
+    }
     if (main_diag == -1) {
         /* LOG("No main diag means not tridiagonal, hopefully."); */
         return;
@@ -107,24 +106,21 @@ void _TriBandedOperator::verify_diag_ptrs() {
     idx = diags.idx(main_diag-1, 0);
     if (*sup != diags.data[idx]
             || (sup.get() != (&diags.data[diags.idx(0,0)]).get())) {
-        LOG("sup[0] = " << *sup << " <->  " << diags.get(0,0));
-        LOG("sup = " << sup.get() << " <->  "
+        DIE("sup[0] = " << *sup << " <->  " << diags.get(0,0)
+            << "\n\tsup = " << sup.get() << " <->  "
                 << (&diags.data[diags.idx(0, 0)]).get());
-        assert(0);
     }
     if (*mid != diags.data[diags.idx(main_diag, 0)]
             || (mid.get() != (&diags.data[diags.idx(main_diag, 0)]).get())) {
-        LOG("mid[0] = " << *mid << " !=  " << diags.get(main_diag,0));
-        LOG("mid = " << mid.get() << " <->  "
+        DIE("mid[0] = " << *mid << " !=  " << diags.get(main_diag,0)
+            << "\n\tmid = " << mid.get() << " <->  "
                 << (&diags.data[diags.idx(main_diag, 0)]).get());
-        assert(0);
     }
     if (*sub != diags.data[diags.idx(main_diag+1, 0)]
             || (sub.get() != (&diags.data[diags.idx(main_diag+1, 0)]).get())) {
-        LOG("sub[0] = " << *sub << " !=  " << diags.get(main_diag+1,0));
-        LOG("sub = " << sub.get() << " <->  "
+        DIE("sub[0] = " << *sub << " !=  " << diags.get(main_diag+1,0)
+            << "\n\tsub = " << sub.get() << " <->  "
                 << (&diags.data[diags.idx(main_diag+1, 0)]).get());
-        assert(0);
     }
     FULLTRACE;
 }
@@ -244,7 +240,7 @@ void _TriBandedOperator::add_operator(_TriBandedOperator &other) {
             std::cout << other.offsets.data;
             /* print_array(&other.offsets(0), other.offsets.size); */
             std::cout << ")" << std::endl;
-            assert (offsets.get(to) == o);
+            assert(offsets.get(to) == o);
         }
         /* LOG("Adding offset " << o << "."); */
         if (o == 0) {
@@ -286,8 +282,6 @@ void _TriBandedOperator::add_scalar(double val) {
 
     int begin = has_low_dirichlet;
     int end = block_len-1 - has_high_dirichlet;
-
-    assert(main_diag < offsets.size);
 
     thrust::transform_if(
             &diags.data[diags.idx(main_diag, 0)],
@@ -345,7 +339,11 @@ void _TriBandedOperator::vectorized_scale(SizedArray<double> &vector) {
     Py_ssize_t noffsets = offsets.size;
     Py_ssize_t block_len = operator_rows / blocks;
 
-    assert(operator_rows % vsize == 0);
+    if (operator_rows % vsize != 0) {
+        DIE("Vector length does not divide "
+            "evenly into operator size. Cannot scale."
+            << "\n vsize("<<vsize<<") operator_rows("<<operator_rows<<")");
+    }
 
     if (has_low_dirichlet) {
         for (Py_ssize_t b = 0; b < blocks; ++b) {

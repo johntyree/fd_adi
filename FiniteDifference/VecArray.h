@@ -9,6 +9,7 @@
 #include <algorithm>
 #include <cassert>
 
+#include "common.h"
 #include "_kernels.h"
 
 template <typename T>
@@ -128,27 +129,21 @@ struct SizedArray {
 
     void sanity_check() {
         if (static_cast<Py_ssize_t>(data.size()) != size) {
-            LOG("\ndata.size()("<<data.size()<<") != size("<<size<<")");
-            assert(false);
+            DIE("\ndata.size()("<<data.size()<<") != size("<<size<<")");
         }
         if (ndim > 8) {
-            LOG("ndim("<<ndim<<") is out of range . Failed to initialize?");
-            std::ostringstream s;
-            s << "ndim("<<ndim<<") is out of range . Failed to initialize?";
-            throw std::domain_error(s.str());
+            DIE("ndim("<<ndim<<") is out of range . Failed to initialize?");
         }
         for (int i = 0; i < ndim; ++i) {
             if (shape[i] == 0) {
-                LOG("shape["<<i<<"] is "<<i<<"... ndim("<<ndim<<")");
-                assert(false);
+                DIE("shape["<<i<<"] is "<<i<<"... ndim("<<ndim<<")");
             }
         }
     }
 
     void reshape(Py_ssize_t h, Py_ssize_t w) {
         if (h*w != size) {
-            LOG("Height("<<h<<") x Width("<<w<<") != Size("<<size<<")");
-            assert(false);
+            DIE("Height("<<h<<") x Width("<<w<<") != Size("<<size<<")");
         }
         shape[0] = h;
         shape[1] = w;
@@ -162,7 +157,9 @@ struct SizedArray {
     }
 
     void transpose(int strategy) {
-        assert (ndim == 2);
+        if (ndim != 2) {
+            DIE("Can only transpose 2D matrix.");
+        }
         //XXX
         thrust::device_ptr<double> out = thrust::device_malloc<double>(data.size());
         switch (strategy) {
@@ -170,8 +167,7 @@ struct SizedArray {
                 transposeNoBankConflicts(out.get(), data.raw(), shape[0], shape[1]);
                 break;
             default:
-                std::cerr << "\nUnknown Transpose Strategy.\n";
-                assert(false);
+                DIE("\nUnknown Transpose Strategy.")
         }
         reshape(shape[1], shape[0]);
         data.assign(out, out+size);
@@ -185,34 +181,30 @@ struct SizedArray {
     }
 
 
-    inline int idx(int i) {
-        assert (ndim >= 1);
-        int idx = i;
+    inline int idx(int idx) {
         if (idx < 0 || size <= idx) {
-            LOG(name  << " idx("<<idx<<") not in range [0, Size("<<size<<"))");
-            assert(0);
+            DIE(name  << " idx("<<idx<<") not in range [0, Size("<<size<<"))");
         }
         return idx;
     }
 
     inline int idx(int i, int j) {
-        assert (ndim == 2);
+        if (ndim != 2) {
+            DIE("Can't use 2D index on a 1D array.");
+        }
         int idx = i * shape[1] + j;
         if (i >= shape[0]) {
-            LOG(name  << " i("<<i<<")"
+            DIE(name  << " i("<<i<<")"
                 << "not in range [0, shape[0]("<<shape[0]<<")).");
-            assert(0);
         } else if (j >= shape[1]) {
-            LOG(name  << " j("<<j<<")"
+            DIE(name  << " j("<<j<<")"
                 << "not in range [0, shape[1]("<<shape[1]<<")).");
-            assert(0);
         } else if (idx < 0 || size <= idx) {
-            LOG("\nNot only are we out of range, but you wrote the"
-                << " single-dimension tests wrong, obviously.");
-            LOG(name  << " i("<<i<<") j("<<j<<") Shape("
+            DIE("\nNot only are we out of range, but you wrote the"
+                << " single-dimension tests wrong, obviously.\n\t"
+                << name  << " i("<<i<<") j("<<j<<") Shape("
                 <<shape[0]<<','<<shape[1]<<") idx("<<idx
                 <<") not in range [0, Size("<<size<<"))\n");
-            assert(0);
         }
         return idx;
     }
