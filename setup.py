@@ -63,7 +63,7 @@ except AttributeError:
 
 cython_modules = cythonize('FiniteDifference/*.pyx',
                            cython_include_dirs=["FiniteDifference", numpy_include],
-                           pyrex_gdb=True,
+                           cython_gdb=True,
                            nthreads=4)
 
 for m in cython_modules:
@@ -71,7 +71,7 @@ for m in cython_modules:
     m.libraries = ['cudart', 'cusparse']
     m.include_dirs += ["FiniteDifference", numpy_include, CUDA['include']]
     m.runtime_library_dirs = [CUDA['lib64']]
-    both_args = ['-O0']
+    both_args = []#['-O0']
     embedded_gcc_args = ["-Wall", "-fPIC"] + both_args
     m.extra_compile_args = {}
     m.extra_compile_args['gcc'] = ["-Wextra", "-pedantic", "-std=c++0x"] + embedded_gcc_args
