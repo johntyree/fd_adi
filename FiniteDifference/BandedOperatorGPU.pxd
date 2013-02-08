@@ -111,6 +111,7 @@ cdef class BandedOperator(object):
         solve_banded_offsets
         unsigned int blocks
         shape
+        cbool csr
         top_factors, bottom_factors
 
     cdef _TriBandedOperator *thisptr_tri
@@ -131,7 +132,8 @@ cdef class BandedOperator(object):
     cpdef foldtop(self, unfold=*)
     cpdef fold_vector(self, double[:] v, unfold=*)
     cpdef cbool is_tridiagonal(self)
-    cpdef cbool is_cross_derivative(self) except +
+    cpdef use_csr_format(self, cbool b=*)
+    cpdef cbool is_cross_derivative(self)
     cpdef apply(self, V, overwrite=*)
     cpdef apply2(self, np.ndarray V, overwrite=*)
     cpdef solve(self, V, overwrite=*)

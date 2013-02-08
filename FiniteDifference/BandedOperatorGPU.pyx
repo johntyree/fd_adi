@@ -36,7 +36,9 @@ cdef class BandedOperator(object):
             U2 = L.I * (U1 - R) --> U2 = B.solve(U1)
         """
 
-        self.attrs = ('derivative', 'location', 'order', 'axis', 'deltas', 'dirichlet', 'blocks', 'top_factors', 'bottom_factors')
+        self.attrs = ('derivative', 'location', 'csr', 'order', 'axis',
+                      'deltas', 'dirichlet', 'blocks', 'top_factors',
+                      'bottom_factors')
         data, offsets = data_offsets
         assert data.shape[1] > 3, "Vector too short to use finite differencing."
         if not inplace:
@@ -66,6 +68,7 @@ cdef class BandedOperator(object):
         self.bottom_factors = None
         self.axis = axis
         self.location = LOCATION_PYTHON
+        self.csr = False
 
 
     # def __dealloc__(self):
@@ -121,6 +124,8 @@ cdef class BandedOperator(object):
         B.copy_meta_data(self)
         return B
 
+    cpdef use_csr_format(self, cbool b=True):
+        self.csr = b
 
     cpdef immigrate(self, tag=""):
         if self.is_cross_derivative():
@@ -346,22 +351,7 @@ cdef class BandedOperator(object):
         return self._is_folded()
 
     cpdef cbool is_cross_derivative(self):
-        if self.location == LOCATION_PYTHON:
-            ret = (
-                    self.D.offsets.shape[0] == 9
-                and self.D.offsets[3] == 1
-                and self.D.offsets[4] == 0
-                and self.D.offsets[5] == -1)
-            if not ret and not self.is_tridiagonal():
-                print "Neither tri nor cross term:", self.D.offsets
-            else:
-                print "Is_cross? " + str(ret), self.D.offsets
-        elif self.location == LOCATION_GPU:
-            print "TRI: ", to_string(<void *>self.thisptr_tri)
-            print "CSR: ", to_string(<void *>self.thisptr_csr)
-            ret = <cbool>self.thisptr_csr
-            print "ret: ", ret
-        return ret
+        return self.csr
 
 
     cpdef cbool is_tridiagonal(self):
