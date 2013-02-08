@@ -350,11 +350,13 @@ cdef class BandedOperator(object):
     cpdef cbool is_cross_derivative(self):
         ret = (
                 self.D.offsets.shape[0] == 9
-            and self.D.offsets[5] == 1
+            and self.D.offsets[3] == 1
             and self.D.offsets[4] == 0
-            and self.D.offsets[3] == -1)
+            and self.D.offsets[5] == -1)
         if not ret and not self.is_tridiagonal():
             print "Neither tri nor cross term:", self.D.offsets
+        else:
+            print "Is_cross? " + str(ret), self.D.offsets
         return ret
 
 
