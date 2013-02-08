@@ -125,23 +125,26 @@ cdef class BandedOperator(object):
     cpdef immigrate(self, tag=""):
         if tag and False:
             print id(self), "Immigrate:", tag
-        assert (self.thisptr_tri)
-        self.D.data = from_SizedArray_2(self.thisptr_tri.diags)
-        self.R = from_SizedArray(self.thisptr_tri.R)
-        del self.thisptr_tri
-        self.thisptr_tri = <_TriBandedOperator *> 0
-        self.location = LOCATION_PYTHON
+        if self.is_cross_derivative():
+            self.immigrate_csr(tag)
+        else:
+            self.immigrate_tri(tag)
 
     cdef immigrate_csr(self, tag=""):
-        pass
-        # if tag and False:
-            # print id(self), "Immigrate:", tag
-        # assert (self.thisptr_csr)
-        # self.D.data = from_SizedArray_2(self.thisptr_csr.diags)
-        # self.R = from_SizedArray(self.thisptr_csr.R)
-        # del self.thisptr_csr
-        # self.thisptr_csr = <_CSRBandedOperator *> 0
-        # self.location = LOCATION_PYTHON
+        if tag and False:
+            print id(self), "Immigrate:", tag
+        assert (self.thisptr_csr)
+        csr = self.D.tocsr()
+
+        csr.data = from_GPUVec(self.thisptr_csr.data)
+        csr.indices = from_GPUVec_i(self.thisptr_csr.col_ind)
+        csr.indptr = from_GPUVec_i(self.thisptr_csr.row_ind)
+
+        self.D = csr.todia()
+        del self.thisptr_csr
+        self.thisptr_csr = <_CSRBandedOperator *> 0
+        self.location = LOCATION_PYTHON
+
 
     cdef immigrate_tri(self, tag=""):
         if tag and False:
@@ -155,42 +158,33 @@ cdef class BandedOperator(object):
 
 
     cpdef emigrate(self, tag=""):
-        if self.is_tridiagonal():
-            return self.emigrate_tri(tag)
-        else:
+        if self.is_cross_derivative():
             return self.emigrate_csr(tag)
+        else:
+            return self.emigrate_tri(tag)
+
 
     cdef emigrate_csr(self, tag=""):
         if tag and False:
             print id(self), "Emigrate: ", tag
         assert not (self.thisptr_csr)
-        # cdef:
-            # SizedArray[double] *diags = to_SizedArray(self.D.data, "data")
-            # SizedArray[double] *R = to_SizedArray(self.R, "R")
-            # SizedArray[int] *offsets = to_SizedArray_i(np.asarray(self.D.offsets), "Offsets")
-            # SizedArray[double] *low_dirichlet = to_SizedArray(np.atleast_1d(self.dirichlet[0] or [0.0]), "low_dirichlet")
-            # SizedArray[double] *high_dirichlet = to_SizedArray(np.atleast_1d(self.dirichlet[1] or [0.0]), "high_dirichlet")
-            # SizedArray[double] *top_factors = to_SizedArray(np.atleast_1d(self.top_factors if self.top_factors is not None else [0.0]), "top_factors")
-            # SizedArray[double] *bottom_factors = to_SizedArray(np.atleast_1d(self.bottom_factors if self.bottom_factors is not None else [0.0]), "bottom_factors")
+        csr = self.D.tocsr()
+        cdef:
+            SizedArray[double] *data = to_SizedArray(csr.data, "data")
+            SizedArray[int] *row_ind = to_SizedArray_i(csr.indptr, "row_ind")
+            SizedArray[int] *col_ind = to_SizedArray_i(csr.indices, "col_ind")
 
-        # self.thisptr_csr = new _TriBandedOperator(
-                  # deref(diags)
-                # , deref(R)
-                # , deref(offsets)
-                # , deref(high_dirichlet)
-                # , deref(low_dirichlet)
-                # , deref(top_factors)
-                # , deref(bottom_factors)
-                # , self.axis
-                # , self.shape[0]
-                # , self.blocks
-                # , self.dirichlet[1] is not None
-                # , self.dirichlet[0] is not None
-                # , self.R is not None
-                # )
+        self.thisptr_csr = new _CSRBandedOperator(
+                  deref(data)
+                , deref(row_ind)
+                , deref(col_ind)
+                , self.D.shape[1]
+                , self.blocks
+                )
 
         self.location = LOCATION_GPU
-        # del diags, offsets, R, high_dirichlet, low_dirichlet, top_factors, bottom_factors
+        del data, row_ind, col_ind
+
 
     cdef emigrate_tri(self, tag=""):
         if tag and False:
@@ -352,6 +346,16 @@ cdef class BandedOperator(object):
         return self.top_factors is not None or self.bottom_factors is not None
     def is_folded(self):
         return self._is_folded()
+
+    cpdef cbool is_cross_derivative(self):
+        ret = (
+                self.D.offsets.shape[0] == 9
+            and self.D.offsets[5] == 1
+            and self.D.offsets[4] == 0
+            and self.D.offsets[3] == -1)
+        if not ret and not self.is_tridiagonal():
+            print "Neither tri nor cross term:", self.D.offsets
+        return ret
 
 
     cpdef cbool is_tridiagonal(self):
@@ -1181,5 +1185,20 @@ cdef inline from_SizedArray_2(SizedArray[double] &v):
     for i in range(v.shape[0]):
         for j in range(v.shape[1]):
             s[i, j] = v.get(i, j)
+    return s
+
+
+cdef inline from_GPUVec(GPUVec[double] &v):
+    cdef int sz = v.size(), i
+    cdef np.ndarray[double, ndim=1] s = np.empty(sz, dtype=np.float64)
+    for i in range(sz):
+        s[i] = v[i]
+    return s
+
+cdef inline from_GPUVec_i(GPUVec[int] &v):
+    cdef int sz = v.size(), i
+    cdef np.ndarray[int, ndim=1] s = np.empty(sz, dtype=np.int32)
+    for i in range(sz):
+        s[i] = v[i]
     return s
 

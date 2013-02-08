@@ -10,6 +10,10 @@
 
 class _CSRBandedOperator {
     public:
+        GPUVec<double> data;
+        GPUVec<int> row_ind;
+        GPUVec<int> col_ind;
+
         SizedArray<double> *apply(SizedArray<double> &);
         void vectorized_scale(SizedArray<double> &vector);
 
@@ -22,9 +26,6 @@ class _CSRBandedOperator {
             );
 
     private:
-        GPUVec<double> data;
-        GPUVec<int> row_ind;
-        GPUVec<int> col_ind;
         Py_ssize_t operator_rows;
         Py_ssize_t blocks;
         Py_ssize_t block_len;

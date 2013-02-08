@@ -12,11 +12,17 @@ from libcpp cimport bool as cbool
 from libcpp.pair cimport pair
 from libcpp.string cimport string as cpp_string
 
+from FiniteDifference.thrust.host_vector cimport host_vector
+from FiniteDifference.thrust.device_vector cimport device_vector
+
 REAL = np.float64
 
 cdef extern from "VecArray.h":
 
-    cdef cppclass SizedArray [T]:
+    cdef cppclass GPUVec[T](device_vector):
+        pass
+
+    cdef cppclass SizedArray[T]:
         # T *data
         Py_ssize_t size
         Py_ssize_t ndim
@@ -35,6 +41,9 @@ cdef extern from "VecArray.h":
 cdef extern from "_CSRBandedOperatorGPU.cuh":
 
     cdef cppclass _CSRBandedOperator:
+        GPUVec[double] data
+        GPUVec[int] row_ind
+        GPUVec[int] col_ind
         SizedArray[double] *apply(SizedArray[double] &)
         void vectorized_scale(SizedArray[double] &vector)
 
@@ -122,6 +131,7 @@ cdef class BandedOperator(object):
     cpdef foldtop(self, unfold=*)
     cpdef fold_vector(self, double[:] v, unfold=*)
     cpdef cbool is_tridiagonal(self)
+    cpdef cbool is_cross_derivative(self) except +
     cpdef apply(self, V, overwrite=*)
     cpdef apply2(self, np.ndarray V, overwrite=*)
     cpdef solve(self, V, overwrite=*)
@@ -146,6 +156,5 @@ cpdef backwardcoeffs(deltas, derivative=*, order=*, force_bandwidth=*)
 cdef inline int sign(int i)
 
 cdef inline unsigned int get_real_index(double[:] haystack, double needle)
-
 cdef inline unsigned int get_int_index(int[:] haystack, int needle)
 
