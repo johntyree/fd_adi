@@ -67,6 +67,9 @@ SizedArray<double> *_CSRBandedOperator::apply(SizedArray<double> &V) {
 
     // XXX: This can possibly be optimized to run in place...
     SizedArray<double> *U = new SizedArray<double>(V.size, "CSR Solve U from V");
+    U->shape[0] = V.shape[0];
+    U->shape[1] = V.shape[1];
+    U->ndim = V.ndim;
     cusparseMatDescr_t mat_description;
     status = cusparseCreateMatDescr(&mat_description);
     if (status != CUSPARSE_STATUS_SUCCESS) {
