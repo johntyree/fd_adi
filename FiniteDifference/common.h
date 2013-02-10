@@ -5,24 +5,29 @@
 #include <sstream>
 #include <stdexcept>
 
-#define TRACE debug_printer("TRACE", __FILE__, __PRETTY_FUNCTION__, __LINE__ , std::string());
-#define LOG(msg) {std::ostringstream s; s << msg; debug_printer("LOG", __FILE__, __PRETTY_FUNCTION__, __LINE__ , s.str());}
-#define DIE(msg) {std::ostringstream s; s << msg; throw std::domain_error(s.str());}
+#define TRACE debug_printer(std::cout, "TRACE", __FILE__, __PRETTY_FUNCTION__, __LINE__ , std::string());
+#define LOG(msg) {std::ostringstream s; s << msg;\
+    debug_printer(std::cout, "LOG", __FILE__, __PRETTY_FUNCTION__, __LINE__ , s.str());\
+}
+#define DIE(msg) {std::ostringstream l, s; s << msg;\
+    l << __FILE__ << "(" << __LINE__ << "): "\
+    << __PRETTY_FUNCTION__ << "\n\t";\
+    throw std::domain_error(l.str() + s.str());\
+}
 #define ENDL std::cout << std::endl
-
 #define FULLTRACE noop();
 
 inline void noop() {};
 
-inline void debug_printer(const char *type, const char *fn, const char *func, int line, std::string msg) {
-    std::cout
+inline void debug_printer(std::ostream &os, const char *type, const char *fn, const char *func, int line, std::string msg) {
+    os
         << type << ": "
         << fn << "(" << line << "): "
         << func;
         if (msg.size() != 0) {
-            std::cout << "\n\t" << msg;
+            os << "\n\t" << msg;
         }
-        std::cout << std::endl;
+        os << std::endl;
 }
 
 
