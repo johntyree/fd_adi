@@ -381,12 +381,13 @@ cdef class BandedOperator(object):
 
         cdef SizedArray[double] *sa_V = to_SizedArray(V.copy(order='C'), "apply2 sa_V(V)")
         print to_string(deref(sa_V))
-        self.D.data[0,:-1] = self.D.data[0,1:]
-        self.D.data[2,1:] = self.D.data[2,:-1]
-        self.D.data[0,-1] = 0
-        self.D.data[2,0] = 0
-        self.emigrate("apply2")
         cdef SizedArray[double] *sa_U
+        if not self.is_cross_derivative():
+            self.D.data[0,:-1] = self.D.data[0,1:]
+            self.D.data[2,1:] = self.D.data[2,:-1]
+            self.D.data[0,-1] = 0
+            self.D.data[2,0] = 0
+        self.emigrate("apply2")
         if self.thisptr_tri:
             sa_U = self.thisptr_tri.apply(deref(sa_V))
         else:
@@ -394,10 +395,11 @@ cdef class BandedOperator(object):
         print to_string(deref(sa_U))
         ret = from_SizedArray(deref(sa_U)).reshape(-1)
         self.immigrate("apply2")
-        self.D.data[0,1:] = self.D.data[0,:-1]
-        self.D.data[2,:-1] = self.D.data[2,1:]
-        self.D.data[0,0] = 0
-        self.D.data[2,-1] = 0
+        if not self.is_cross_derivative():
+            self.D.data[0,1:] = self.D.data[0,:-1]
+            self.D.data[2,:-1] = self.D.data[2,1:]
+            self.D.data[0,0] = 0
+            self.D.data[2,-1] = 0
         del sa_V, sa_U
 
         # ret = self.D.dot(V.flat)
