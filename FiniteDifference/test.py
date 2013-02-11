@@ -182,7 +182,7 @@ class Cpp_test(unittest.TestCase):
         npt.assert_array_equal(ref, tst)
 
 
-    def test_csr_apply(self):
+    def test_csr_apply_01(self):
         B01  = self.F.operators[(0,1)]
         ref = B01.apply(self.v2)
         print B01.D.tocsr().data
@@ -190,6 +190,21 @@ class Cpp_test(unittest.TestCase):
         print B01.D.tocsr().indices
         tst = B01.apply2(self.v2.copy())
         npt.assert_array_equal(ref, tst)
+
+    def test_csr_apply_random(self):
+        B = self.F.operators[0]
+        B.R = None
+        B.dirichlet = (None, None)
+        B.csr = True
+        for i in range(5):
+            sz = np.random.randint(3, 20)
+            B.D = scipy.sparse.csr_matrix(np.random.random((sz*sz,sz*sz)))
+            B.R = np.random.random(sz * sz)
+            v = np.random.random((sz, sz))
+            ref = B.apply(v)
+            tst = B.apply2(v)
+            npt.assert_array_almost_equal(ref, tst, decimal=8)
+
 
     def test_GPUSolve_0(self):
         B = self.F.operators[0]
