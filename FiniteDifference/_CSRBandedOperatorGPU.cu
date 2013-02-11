@@ -29,6 +29,7 @@ std::ostream & operator<<(std::ostream & os, _CSRBandedOperator const &B) {
         << "blocks(" << B.blocks <<") "
         << "nnz(" << B.nnz << ")\n\t"
         << "data(" << B.data << ")\n\t"
+        << "row_ptr(" << B.row_ptr << ")\n\t"
         << "row_ind(" << B.row_ind << ")\n\t"
         << "col_ind(" << B.col_ind << ")\n"
         ;
@@ -36,6 +37,7 @@ std::ostream & operator<<(std::ostream & os, _CSRBandedOperator const &B) {
 
 _CSRBandedOperator::_CSRBandedOperator(
         SizedArray<double> &data,
+        SizedArray<int> &row_ptr,
         SizedArray<int> &row_ind,
         SizedArray<int> &col_ind,
         Py_ssize_t operator_rows,
@@ -43,6 +45,7 @@ _CSRBandedOperator::_CSRBandedOperator(
         std::string name
         ) :
     data(data.data),
+    row_ptr(row_ptr.data),
     row_ind(row_ind.data),
     col_ind(col_ind.data),
     name(name),
@@ -78,19 +81,19 @@ SizedArray<double> *_CSRBandedOperator::apply(SizedArray<double> &V) {
     if (status != CUSPARSE_STATUS_SUCCESS) {
         DIE("CUSPARSE matrix description init failed.");
     }
-    double const zero_one[] = {0,1};
+    double zero = 0, one = 1;
     status = cusparseDcsrmv(handle,
             CUSPARSE_OPERATION_NON_TRANSPOSE,
             operator_rows,
             operator_rows,
             nnz,
-            zero_one+1,
+            &one,
             mat_description,
             data.raw(),
+            row_ptr.raw(),
             col_ind.raw(),
-            row_ind.raw(),
             V.data.raw(),
-            zero_one,
+            &zero,
             U->data.raw()
             );
 

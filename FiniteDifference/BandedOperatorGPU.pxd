@@ -40,6 +40,7 @@ cdef extern from "_CSRBandedOperatorGPU.cuh":
 
     cdef cppclass _CSRBandedOperator:
         GPUVec[double] data
+        GPUVec[int] row_ptr
         GPUVec[int] row_ind
         GPUVec[int] col_ind
         SizedArray[double] *apply(SizedArray[double] &) except +
@@ -47,14 +48,7 @@ cdef extern from "_CSRBandedOperatorGPU.cuh":
 
         _CSRBandedOperator(
             SizedArray[double] &data,
-            SizedArray[int] &row_ind,
-            SizedArray[int] &col_ind,
-            Py_ssize_t operator_rows,
-            Py_ssize_t blocks
-        ) except +
-
-        _CSRBandedOperator(
-            SizedArray[double] &data,
+            SizedArray[int] &row_ptr,
             SizedArray[int] &row_ind,
             SizedArray[int] &col_ind,
             Py_ssize_t operator_rows,

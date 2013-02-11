@@ -141,7 +141,7 @@ cdef class BandedOperator(object):
 
         csr.data = from_GPUVec(self.thisptr_csr.data)
         csr.indices = from_GPUVec_i(self.thisptr_csr.col_ind)
-        csr.indptr = from_GPUVec_i(self.thisptr_csr.row_ind)
+        csr.indptr = from_GPUVec_i(self.thisptr_csr.row_ptr)
 
         self.D = csr.todia()
         del self.thisptr_csr
@@ -176,13 +176,16 @@ cdef class BandedOperator(object):
             print "Emigrate CSR:", tag, to_string(self.thisptr_csr)
         assert not (self.thisptr_csr)
         csr = self.D.tocsr()
+        coo = csr.tocoo()
         cdef:
             SizedArray[double] *data = to_SizedArray(csr.data, "data")
-            SizedArray[int] *row_ind = to_SizedArray_i(csr.indptr, "row_ind")
+            SizedArray[int] *row_ptr = to_SizedArray_i(csr.indptr, "row_ptr")
+            SizedArray[int] *row_ind = to_SizedArray_i(coo.row, "row_ind")
             SizedArray[int] *col_ind = to_SizedArray_i(csr.indices, "col_ind")
 
         self.thisptr_csr = new _CSRBandedOperator(
                   deref(data)
+                , deref(row_ptr)
                 , deref(row_ind)
                 , deref(col_ind)
                 , self.D.shape[0]
@@ -191,7 +194,7 @@ cdef class BandedOperator(object):
                 )
 
         self.location = LOCATION_GPU
-        # del data, row_ind, col_ind
+        del data, row_ptr, row_ind, col_ind
 
 
     cdef emigrate_tri(self, tag=""):
