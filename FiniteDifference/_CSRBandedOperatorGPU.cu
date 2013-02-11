@@ -59,18 +59,13 @@ _CSRBandedOperator::_CSRBandedOperator(
             std::cerr << "CUSPARSE Library initialization failed." << std::endl;
             assert(false);
         }
-        LOG("CSRBandedOperator constructed: " << *this);
+        /* LOG("CSRBandedOperator constructed: " << *this); */
     }
-
 
 SizedArray<double> *_CSRBandedOperator::apply(SizedArray<double> &V) {
     if (V.size != operator_rows) {
-        DIE("Dimension mismatch. V(" <<V.size<<") vs "<<operator_rows);
+        DIE(V.name << ": Dimension mismatch. V(" <<V.size<<") vs "<<operator_rows);
     }
-    const unsigned N = V.size;
-    thrust::device_vector<double> in(V.data);
-    thrust::device_vector<double> out(N);
-
     // XXX: This can possibly be optimized to run in place...
     SizedArray<double> *U = new SizedArray<double>(V.size, "CSR Solve U from V");
     U->shape[0] = V.shape[0];
@@ -106,7 +101,6 @@ SizedArray<double> *_CSRBandedOperator::apply(SizedArray<double> &V) {
 
 
 void _CSRBandedOperator::vectorized_scale(SizedArray<double> &vector) {
-    FULLTRACE;
     Py_ssize_t vsize = vector.size;
     Py_ssize_t block_len = operator_rows / blocks;
 

@@ -184,7 +184,6 @@ class Cpp_test(unittest.TestCase):
 
     def test_csr_apply(self):
         B01  = self.F.operators[(0,1)]
-        fp(B01.D.data)
         ref = B01.apply(self.v2)
         print B01.D.tocsr().data
         print B01.D.tocsr().indptr
@@ -782,7 +781,7 @@ class FiniteDifferenceEngineADI_test(unittest.TestCase):
         # print
         # print "diff"
         # fp(d2gdxdy - manuald2gdxdy, fmt='e')
-        npt.assert_array_almost_equal(d2gdxdy, manuald2gdxdy)
+        npt.assert_array_almost_equal(manuald2gdxdy, d2gdxdy)
 
         scale = np.random.random()
 
@@ -809,7 +808,7 @@ class FiniteDifferenceEngineADI_test(unittest.TestCase):
         # print "diff"
         # fp(d2gdxdy_scaled - manuald2gdxdy, fmt='e')
 
-        npt.assert_array_almost_equal(d2gdxdy_scaled, manuald2gdxdy_scaled)
+        npt.assert_array_almost_equal(manuald2gdxdy_scaled, d2gdxdy_scaled)
 
 
 class Grid_test(unittest.TestCase):
