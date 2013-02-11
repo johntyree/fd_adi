@@ -129,14 +129,14 @@ struct SizedArray {
 
     void sanity_check() {
         if (static_cast<Py_ssize_t>(data.size()) != size) {
-            DIE("\ndata.size()("<<data.size()<<") != size("<<size<<")");
+            DIE(name << ": data.size()("<<data.size()<<") != size("<<size<<")");
         }
         if (ndim > 8) {
-            DIE("ndim("<<ndim<<") is out of range . Failed to initialize?");
+            DIE(name << ": ndim("<<ndim<<") is out of range . Failed to initialize?");
         }
         for (int i = 0; i < ndim; ++i) {
             if (shape[i] == 0) {
-                DIE("shape["<<i<<"] is "<<i<<"... ndim("<<ndim<<")");
+                DIE(name << ": shape["<<i<<"] is "<<i<<"... ndim("<<ndim<<")");
             }
         }
     }

@@ -5,10 +5,29 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
+#include "filter.h"
 
 #define SIZE 20
 
-inline void backtrace(void) {
+inline char* demangle2(char *bt) {
+    char *output = NULL;
+    char * const argv[] = {"/usr/bin/c++filt", "c++filt", NULL};
+    int argc = 3;
+    filter(&output, 0, bt, strlen(bt), argc, argv);
+    return output;
+}
+
+
+inline char* demangle(char *dest, size_t n, char *bt) {
+    char *output = demangle2(bt);
+    size_t s = strlen(output);
+    n = s > n ? n : s;
+    memcpy(dest, output, n);
+    free(output);
+    return dest;
+}
+
+inline char* backtrace(char *full) {
     int j, nptrs;
     void *buffer[100];
     char **strings;
@@ -21,14 +40,22 @@ inline void backtrace(void) {
 
     strings = backtrace_symbols(buffer, nptrs);
     if (strings == NULL) {
-        perror("backtrace_symbols");
+        perror("backtrace_symbols() failed.");
         exit(EXIT_FAILURE);
     }
 
-    for (j = 0; j < nptrs; j++)
-        printf("%s\n", strings[j]);
+    for (j = 1; j < nptrs; j++) {
+        strcat(full, strings[j]);
+        strcat(full, "\n");
+    }
 
     free(strings);
+    return full;
+}
+
+inline void backtrace(void) {
+    char full[65535] = {0};
+    printf("%s\n", backtrace(full));
 }
 
 #endif /* end of include guard */
