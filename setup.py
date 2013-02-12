@@ -10,7 +10,7 @@ from os.path import join as pjoin
 import numpy
 
 NVCC_ARCH = os.environ['NVCC_ARCH'] or 'sm_13'
-thrust_contrib = os.path.expanduser("~/thrust-contrib/")
+thrust = map(os.path.expanduser, ["~/thrust", "~/thrust-contrib", "~/projects/thrust"])
 
 def find_in_path(name, path):
     "Find a file in a search path"
@@ -70,7 +70,7 @@ cython_modules = cythonize('FiniteDifference/*.pyx',
 for m in cython_modules:
     m.library_dirs = [CUDA['lib64']]
     m.libraries = ['cudart', 'cusparse']
-    m.include_dirs += ["FiniteDifference", numpy_include, CUDA['include'], thrust_contrib]
+    m.include_dirs += thrust + ["FiniteDifference", numpy_include, CUDA['include']]
     m.runtime_library_dirs = [CUDA['lib64']]
     both_args = []#['-O0']
     embedded_gcc_args = ["-Wall", "-fPIC"] + both_args
