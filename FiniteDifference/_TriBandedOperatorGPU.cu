@@ -362,6 +362,11 @@ void _TriBandedOperator::vectorized_scale(SizedArray<double> &vector) {
     for (Py_ssize_t row = 0; row < noffsets; ++row) {
         int o = offsets.get(row);
         if (o >= 0) { // upper diags
+            /* thrust::transform(diags.data.begin() + diags.idx(row, o), */
+                    /* diags.data.end() + diags.idx(row, operator_rows-1), */
+                    /* make_tile_iterator(vector.data.begin(), vector.data.size()), */
+                    /* diags.data.begin() + diags.idx(row,o), */
+                    /* thrust::multiplies<REAL_t>()); */
             for (int i = 0; i < (int)operator_rows - o; ++i) {
                 diags.data[diags.idx(row, i+o)] *= vector.data[vector.idx(i % vsize)];
             }
