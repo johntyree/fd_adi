@@ -346,6 +346,8 @@ void _TriBandedOperator::vectorized_scale(SizedArray<double> &vector) {
             "evenly into operator size. Cannot scale."
             << "\n vsize("<<vsize<<") operator_rows("<<operator_rows<<")");
     }
+    if (vsize != vector.data.size()) {DIE("vsize != vector.data.size()")}
+    if (vsize == 0) {DIE("vsize == 0")}
 
     if (has_low_dirichlet) {
         for (Py_ssize_t b = 0; b < blocks; ++b) {
