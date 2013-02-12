@@ -8,9 +8,11 @@
 #include <thrust/version.h>
 #include <thrust/sort.h>
 #include <thrust/copy.h>
+#include <thrust/functional.h>
 #include <thrust/iterator/constant_iterator.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/zip_iterator.h>
+#include <thrust/iterator/tile_iterator.h>
 
 #include <algorithm>
 #include <cstdlib>
@@ -371,9 +373,13 @@ void _TriBandedOperator::vectorized_scale(SizedArray<double> &vector) {
     }
     /* LOG("Scaled data."); */
 
-    for (Py_ssize_t i = 0; i < operator_rows; ++i) {
-        R.data[R.idx(i)] *= vector.data[vector.idx(i % vsize)];
-    }
+    thrust::transform(R.data.begin(), R.data.end(),
+            make_tile_iterator(vector.data.begin(), vector.data.size()),
+            R.data.begin(),
+            thrust::multiplies<REAL_t>());
+    /* for (Py_ssize_t i = 0; i < operator_rows; ++i) { */
+        /* R.data[R.idx(i)] *= vector.data[vector.idx(i % vsize)]; */
+    /* } */
     /* LOG("Scaled R."); */
     return;
 }
