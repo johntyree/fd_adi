@@ -49,7 +49,7 @@ class BarrierOption_test(unittest.TestCase):
         state = self.state.copy()
         self.option.top = (False, np.infty)
         self.option.monte_carlo_callback(s, state)
-        npt.assert_array_equal(state, np.ones(state.shape))
+        npt.assert_array_equal(np.ones(state.shape), state)
 
     def test_knockout_inevitable(self):
         self.option.top = (False, 0)
@@ -1487,8 +1487,8 @@ class ScalingFuncs(unittest.TestCase):
         vecB.vectorized_scale(self.f0(vec))
 
 
-        npt.assert_array_equal(no_nan(newB.D.data), 0)
-        npt.assert_array_equal(no_nan(vecB.D.data), 0)
+        npt.assert_array_equal(0, no_nan(newB.D.data))
+        npt.assert_array_equal(0, no_nan(vecB.D.data))
 
         for dchlet in itertools.product([1.0, None], repeat=2):
             oldB = FD.BandedOperator((data.copy(), offsets), res.copy())
@@ -1558,7 +1558,7 @@ class ScalingFuncs(unittest.TestCase):
             # print
             # print "newB"
             # fp(newB.D)
-            npt.assert_array_equal(veczeroB.D.data, manualzeroB)
+            npt.assert_array_equal(manualzeroB, veczeroB.D.data)
             npt.assert_(newB == vecB)
             npt.assert_array_equal(manualB, newB)
             npt.assert_array_equal(manualB, vecB)
@@ -1602,8 +1602,8 @@ class ScalingFuncs(unittest.TestCase):
         vecB.vectorized_scale(self.f0(vec))
 
 
-        npt.assert_array_equal(no_nan(newB.D.data), 0)
-        npt.assert_array_equal(no_nan(vecB.D.data), 0)
+        npt.assert_array_equal(0, no_nan(newB.D.data))
+        npt.assert_array_equal(0, no_nan(vecB.D.data))
 
         for dchlet in itertools.product([1., None], repeat=2):
             oldB = FD.BandedOperator((data.copy(), offsets), res.copy())
@@ -1677,7 +1677,7 @@ class ScalingFuncs(unittest.TestCase):
             # print
             # print "newB"
             # fp(newB.D)
-            npt.assert_array_equal(veczeroB.D.data, manualzeroB)
+            npt.assert_array_equal(manualzeroB, veczeroB.D.data)
             npt.assert_(newB == vecB)
             npt.assert_array_equal(manualB, newB)
             npt.assert_array_equal(manualB, vecB)
@@ -1762,7 +1762,7 @@ class ScalingFuncs(unittest.TestCase):
             # print
             # print "newR"
             # print newB.R
-            assert (zeroB.D.data == manualzeroB).all()
+            npt.assert_array_equal(manualzeroB, zeroB.D.data)
             assert manualB == newB
 
 
@@ -1783,7 +1783,7 @@ class ScalingFuncs(unittest.TestCase):
         newB = oldB.copy()
         newB.scale(f0)
         # fp(newB.D.data)
-        npt.assert_array_equal(no_nan(newB.D.data), 0)
+        npt.assert_array_equal(0, no_nan(newB.D.data))
 
         manualB = oldB.copy()
         newB = oldB.copy()

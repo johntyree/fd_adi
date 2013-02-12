@@ -11,6 +11,7 @@
 #include <thrust/iterator/constant_iterator.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/zip_iterator.h>
+#include <thrust/iterator/repeat_iterator.h>
 
 #include <algorithm>
 #include <cstdlib>
@@ -99,10 +100,11 @@ SizedArray<double> *_CSRBandedOperator::apply(SizedArray<double> &V) {
     return U;
 }
 
-
 void _CSRBandedOperator::vectorized_scale(SizedArray<double> &vector) {
     Py_ssize_t vsize = vector.size;
     Py_ssize_t block_len = operator_rows / blocks;
+
+    /* repeat_iterator<REAL_t> spot (spots. */
 
     if (operator_rows % vsize == 0) {
         DIE("Vector length does not divide "
