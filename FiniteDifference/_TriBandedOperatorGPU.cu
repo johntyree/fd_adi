@@ -335,32 +335,32 @@ int _TriBandedOperator::solve(SizedArray<double> &V) {
 }
 
 
-void _TriBandedOperator::vectorized_scale(SizedArray<double> &vector) {
+void _TriBandedOperator::vectorized_scale(SizedArray<double> &_vector) {
     FULLTRACE;
-    Py_ssize_t vsize = vector.size;
+    Py_ssize_t vsize = _vector.size;
     Py_ssize_t noffsets = offsets.size;
     Py_ssize_t block_len = operator_rows / blocks;
 
-    typedef thrust::devicevector<REAL_t>::iterator Iterator;
-    tiled_range<Iterator> v(vector.data.begin(), vector.data.end(), operator_rows / vsize);
+    typedef thrust::device_vector<REAL_t>::iterator Iterator;
+    tiled_range<Iterator> v(_vector.data.begin(), _vector.data.end(), operator_rows / vsize);
 
     if (operator_rows % vsize != 0) {
         DIE("Vector length does not divide "
             "evenly into operator size. Cannot scale."
             << "\n vsize("<<vsize<<") operator_rows("<<operator_rows<<")");
     }
-    if (vsize != vector.data.size()) {DIE("vsize != vector.data.size()")}
+    if (vsize != _vector.data.size()) {DIE("vsize != _vector.data.size()")}
     if (vsize == 0) {DIE("vsize == 0")}
 
     if (has_low_dirichlet) {
         for (Py_ssize_t b = 0; b < blocks; ++b) {
-            vector.data[vector.idx(b*block_len % vsize)] = 1;
+            _vector.data[_vector.idx(b*block_len % vsize)] = 1;
         }
     }
 
     if (has_high_dirichlet) {
         for (Py_ssize_t b = 0; b < blocks; ++b) {
-            vector.data[vector.idx((b+1)*block_len - 1 % vsize)] = 1;
+            _vector.data[_vector.idx((b+1)*block_len - 1 % vsize)] = 1;
         }
     }
 
