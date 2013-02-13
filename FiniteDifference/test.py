@@ -205,6 +205,23 @@ class Cpp_test(unittest.TestCase):
             tst = B.apply2(v)
             npt.assert_array_almost_equal(ref, tst, decimal=8)
 
+    def test_csr_scale(self):
+        B = self.F.operators[0]
+        B.D = scipy.sparse.csr_matrix(np.ones((5,5)))
+        B.R = None
+        B.dirichlet = (None, None)
+        B.csr = True
+        ref = np.arange(B.D.shape[0], dtype=float).repeat(B.D.shape[1])
+        ref.resize(B.D.shape)
+        B.vectorized_scale(np.arange(B.D.shape[0], dtype=float))
+        z = np.zeros((B.D.shape[0],1))
+        fp(ref)
+        print
+        fp(B.D)
+        print
+        fp(B.D - ref)
+        npt.assert_array_equal(ref, B.D)
+
 
     def test_GPUSolve_0(self):
         B = self.F.operators[0]
