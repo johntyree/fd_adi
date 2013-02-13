@@ -11,7 +11,6 @@
 #include <thrust/iterator/constant_iterator.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/zip_iterator.h>
-#include <thrust/iterator/repeat_iterator.h>
 
 #include <algorithm>
 #include <cstdlib>

@@ -12,7 +12,7 @@
 #include <thrust/iterator/constant_iterator.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/zip_iterator.h>
-#include <thrust/iterator/tile_iterator.h>
+#include "tiled_range.h"
 
 #include <algorithm>
 #include <cstdlib>
@@ -341,6 +341,9 @@ void _TriBandedOperator::vectorized_scale(SizedArray<double> &vector) {
     Py_ssize_t noffsets = offsets.size;
     Py_ssize_t block_len = operator_rows / blocks;
 
+    typedef thrust::devicevector<REAL_t>::iterator Iterator;
+    tiled_range<Iterator> v(vector.data.begin(), vector.data.end(), operator_rows / vsize);
+
     if (operator_rows % vsize != 0) {
         DIE("Vector length does not divide "
             "evenly into operator size. Cannot scale."
@@ -364,29 +367,24 @@ void _TriBandedOperator::vectorized_scale(SizedArray<double> &vector) {
     for (Py_ssize_t row = 0; row < noffsets; ++row) {
         int o = offsets.get(row);
         if (o >= 0) { // upper diags
-            /* thrust::transform(diags.data.begin() + diags.idx(row, o), */
-                    /* diags.data.end() + diags.idx(row, operator_rows-1), */
-                    /* make_tile_iterator(vector.data.begin(), vector.data.size()), */
-                    /* diags.data.begin() + diags.idx(row,o), */
-                    /* thrust::multiplies<REAL_t>()); */
-            for (int i = 0; i < (int)operator_rows - o; ++i) {
-                diags.data[diags.idx(row, i+o)] *= vector.data[vector.idx(i % vsize)];
-            }
+            thrust::transform(diags.data.begin() + diags.idx(row, o),
+                    diags.data.begin() + diags.idx(row, operator_rows),
+                    v.begin(),
+                    diags.data.begin() + diags.idx(row,o),
+                    thrust::multiplies<REAL_t>());
         } else { // lower diags
-            for (int i = -o; i < (int)operator_rows; ++i) {
-                diags.data[diags.idx(row, i+o)] *= vector.data[vector.idx(i % vsize)];
-            }
+            thrust::transform(diags.data.begin() + diags.idx(row, 0),
+                    diags.data.begin() + diags.idx(row, operator_rows+o),
+                    v.begin() + -o,
+                    diags.data.begin() + diags.idx(row, 0),
+                    thrust::multiplies<REAL_t>());
         }
     }
     /* LOG("Scaled data."); */
-
     thrust::transform(R.data.begin(), R.data.end(),
-            make_tile_iterator(vector.data.begin(), vector.data.size()),
+            v.begin(),
             R.data.begin(),
             thrust::multiplies<REAL_t>());
-    /* for (Py_ssize_t i = 0; i < operator_rows; ++i) { */
-        /* R.data[R.idx(i)] *= vector.data[vector.idx(i % vsize)]; */
-    /* } */
     /* LOG("Scaled R."); */
     return;
 }
