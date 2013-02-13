@@ -10,7 +10,7 @@ from os.path import join as pjoin
 import numpy
 
 NVCC_ARCH = os.environ['NVCC_ARCH'] or 'sm_13'
-thrust = map(os.path.expanduser, ["~/thrust", "~/thrust-contrib", "~/projects/thrust"])
+thrust = map(os.path.expanduser, ["~/thrust", "~/thrust-contrib", "~/projects/thrust-contrib", "~/projects/thrust"])
 
 def find_in_path(name, path):
     "Find a file in a search path"
