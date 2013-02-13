@@ -871,8 +871,7 @@ cdef class BandedOperator(object):
         if self.thisptr_tri:
             self.thisptr_tri.vectorized_scale(deref(v))
         elif self.thisptr_csr:
-            # raise NotImplementedError("Vectorized Scale on CSR mat is coming...")
-            print "Vectorized Scale on CSR mat is coming..."
+            self.thisptr_csr.vectorized_scale(deref(v))
         del v
 
         self.immigrate()
