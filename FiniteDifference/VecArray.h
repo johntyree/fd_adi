@@ -182,14 +182,14 @@ struct SizedArray {
     }
 
 
-    inline int idx(int idx) {
+    int idx(int idx) {
         if (idx < 0 || size <= idx) {
             DIE(name  << " idx("<<idx<<") not in range [0, Size("<<size<<"))");
         }
         return idx;
     }
 
-    inline int idx(int i, int j) {
+    int idx(int i, int j) {
         if (ndim != 2) {
             DIE("Can't use 2D index on a 1D array.");
         }
@@ -197,10 +197,12 @@ struct SizedArray {
         if (i >= shape[0]) {
             DIE(name  << " i("<<i<<")"
                 << "not in range [0, shape[0]("<<shape[0]<<")).");
-        } else if (j >= shape[1]) {
-            DIE(name  << " j("<<j<<")"
-                << "not in range [0, shape[1]("<<shape[1]<<")).");
-        } else if (idx < 0 || size <= idx) {
+        };
+        if (j >= shape[1]) {
+            DIE(name  << " j("<<j<<") "
+                "not in range [0, shape[1]("<<shape[1]<<")).");
+        };
+        if (idx < 0 || size <= idx) {
             DIE("\nNot only are we out of range, but you wrote the"
                 << " single-dimension tests wrong, obviously.\n\t"
                 << name  << " i("<<i<<") j("<<j<<") Shape("
