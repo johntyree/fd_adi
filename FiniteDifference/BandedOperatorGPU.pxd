@@ -28,12 +28,12 @@ cdef extern from "VecArray.h":
         Py_ssize_t ndim
         Py_ssize_t[8] shape
         cpp_string name
-        SizedArray(T*, int, np.npy_intp*, cpp_string name) except +
-        T get(int i) except +
-        T get(int i, int j) except +
-        void reshape(Py_ssize_t h, Py_ssize_t w) except +
+        SizedArray(T*, int, np.npy_intp*, cpp_string name)
+        T get(int i)
+        T get(int i, int j)
+        void reshape(Py_ssize_t h, Py_ssize_t w)
         void flatten()
-        void transpose(int) except +
+        void transpose(int)
         cpp_string show()
 
 cdef extern from "_CSRBandedOperatorGPU.cuh":
@@ -43,8 +43,8 @@ cdef extern from "_CSRBandedOperatorGPU.cuh":
         GPUVec[int] row_ptr
         GPUVec[int] row_ind
         GPUVec[int] col_ind
-        SizedArray[double] *apply(SizedArray[double] &) except +
-        void vectorized_scale(SizedArray[double] &vector) except +
+        SizedArray[double] *apply(SizedArray[double] &)
+        void vectorized_scale(SizedArray[double] &vector)
 
         _CSRBandedOperator(
             SizedArray[double] &data,
@@ -54,19 +54,19 @@ cdef extern from "_CSRBandedOperatorGPU.cuh":
             Py_ssize_t operator_rows,
             Py_ssize_t blocks,
             cpp_string name
-        ) except +
+        )
 
 cdef extern from "_TriBandedOperatorGPU.cuh":
 
     cdef cppclass _TriBandedOperator:
         void view()
-        cbool is_folded() except +
+        cbool is_folded()
         cbool has_residual
-        SizedArray[double] *apply(SizedArray[double] &) except +
-        void add_scalar(double val) except +
-        void vectorized_scale(SizedArray[double] &vector) except +
-        void add_operator(_TriBandedOperator &other) except +
-        int solve(SizedArray[double] &) except +
+        SizedArray[double] *apply(SizedArray[double] &)
+        void add_scalar(double val)
+        void vectorized_scale(SizedArray[double] &vector)
+        void add_operator(_TriBandedOperator &other)
+        int solve(SizedArray[double] &)
         SizedArray[int] offsets
         SizedArray[double] diags
         SizedArray[double] R
@@ -84,7 +84,7 @@ cdef extern from "_TriBandedOperatorGPU.cuh":
             cbool has_high_dirichlet,
             cbool has_low_dirichlet,
             cbool has_residual
-        ) except +
+        )
 
 
     void cout(SizedArray[int] *a)
