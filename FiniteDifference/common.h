@@ -10,18 +10,20 @@
 #define LOG(msg) {std::ostringstream s; s << msg;\
     debug_printer(std::cout, "LOG", __FILE__, __PRETTY_FUNCTION__, __LINE__ , s.str());\
 }
-#define DIE(msg) {std::ostringstream l, s;\
-    char full[65535] = {0};\
-    char clean[65535] = {0};\
-    backtrace(full);\
-    demangle(clean, 65535, full);\
-    l << __FILE__ << "(" << __LINE__ << "): "\
-    << __PRETTY_FUNCTION__ << "\n\t";\
-    s << msg << "\n" << clean;\
-    throw std::domain_error(l.str() + s.str());\
+#define DIE(msg) {\
+    std::ostringstream s;\
+    unsigned const sz = 512 * 1024;\
+    char full[sz];\
+    get_backtrace(full, sz);\
+    s << __FILE__ << "(" << __LINE__ << ")\n"\
+    << __PRETTY_FUNCTION__ << "\n\t"\
+    << msg << "\n"\
+    << full << "\n";\
+    throw std::domain_error(s.str());\
 }
+
 #define ENDL std::cout << std::endl
-#define FULLTRACE noop();
+#define FULLTRACE TRACE;
 
 inline void noop() {};
 
