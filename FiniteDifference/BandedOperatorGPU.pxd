@@ -17,6 +17,12 @@ from FiniteDifference.thrust.device_vector cimport device_vector
 
 REAL = np.float64
 
+# cdef extern from "backtrace.h":
+    # pass
+
+# cdef extern from "filter.h":
+    # pass
+
 cdef extern from "VecArray.h":
 
     cdef cppclass GPUVec[T](device_vector):
