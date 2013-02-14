@@ -31,6 +31,7 @@
 
 template <typename T, typename U>
 int find_index(T haystack, U needle, int max) {
+    FULLTRACE;
     int idx;
     for (idx = 0; idx < max; ++idx) {
         if (haystack[idx] == needle) break;
@@ -45,6 +46,7 @@ int find_index(T haystack, U needle, int max) {
         /* std::cout << "]"; ENDL; */
         idx = -1;
     }
+    FULLTRACE;
     return idx;
 }
 
@@ -225,6 +227,7 @@ void _TriBandedOperator::add_operator(_TriBandedOperator &other) {
     * Add a second BandedOperator to this one.
     * Does not alter self.R, the residual vector.
     */
+    FULLTRACE;
     int begin = has_low_dirichlet;
     int end = block_len-1 - has_high_dirichlet;
     int o, to, fro;
@@ -386,6 +389,7 @@ void _TriBandedOperator::vectorized_scale(SizedArray<double> &_vector) {
             R.data.begin(),
             thrust::multiplies<REAL_t>());
     /* LOG("Scaled R."); */
+    FULLTRACE;
     return;
 }
 
