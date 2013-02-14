@@ -4,7 +4,7 @@
 # cython: profile = True
 # cython: embedsignature = True
 # distutils: language = c++
-# distutils: sources = FiniteDifference/_GPU_Code.cu FiniteDifference/filter.c
+# distutils: sources = FiniteDifference/_GPU_Code.cu FiniteDifference/backtrace.c FiniteDifference/filter.c
 """Description."""
 
 from bisect import bisect_left
