@@ -159,7 +159,7 @@ struct SizedArray {
 
     void transpose(int strategy) {
         if (ndim != 2) {
-            DIE("Can only transpose 2D matrix.");
+            DIE("Can only transpose 2D matrix");
         }
         //XXX
         thrust::device_ptr<double> out = thrust::device_malloc<double>(data.size());
@@ -168,7 +168,7 @@ struct SizedArray {
                 transposeNoBankConflicts(out.get(), data.raw(), shape[0], shape[1]);
                 break;
             default:
-                DIE("\nUnknown Transpose Strategy.")
+                DIE("\nUnknown Transpose Strategy")
         }
         reshape(shape[1], shape[0]);
         data.assign(out, out+size);
@@ -191,16 +191,16 @@ struct SizedArray {
 
     int idx(int i, int j) {
         if (ndim != 2) {
-            DIE("Can't use 2D index on a 1D array.");
+            DIE("Can't use 2D index on a 1D array");
         }
         int idx = i * shape[1] + j;
         if (i >= shape[0]) {
             DIE(name  << " i("<<i<<")"
-                << "not in range [0, shape[0]("<<shape[0]<<")).");
+                << "not in range [0, shape[0]("<<shape[0]<<"))");
         };
         if (j >= shape[1]) {
             DIE(name  << " j("<<j<<") "
-                "not in range [0, shape[1]("<<shape[1]<<")).");
+                "not in range [0, shape[1]("<<shape[1]<<"))");
         };
         if (idx < 0 || size <= idx) {
             DIE("\nNot only are we out of range, but you wrote the"
