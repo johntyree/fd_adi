@@ -105,9 +105,13 @@ void _CSRBandedOperator::vectorized_scale(SizedArray<double> &vector) {
 
     /* repeat_iterator<REAL_t> spot (spots. */
 
-    if (operator_rows % vsize == 0) {
+    if (operator_rows % vsize != 0) {
         DIE("Vector length does not divide "
-                "evenly into operator size. Cannot scale.");
+            "evenly into operator size. Cannot scale. "
+            "vsize("<<vsize<<") "
+            "operator_rows("<<operator_rows<<") "
+            "blocks("<<blocks<<")"
+           );
     }
     return;
 }
