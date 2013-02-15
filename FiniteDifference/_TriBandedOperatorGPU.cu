@@ -353,7 +353,7 @@ void _TriBandedOperator::vectorized_scale(SizedArray<double> &vector) {
         "diags.idx(1,0)("<<diags.idx(1,0)<<") "
         );
     LOG("diags.name("<<diags.name<<")");
-    LOG("diags.idx(0,op)("<<diags.idx(0,operator_rows)<<")");
+    LOG("diags.idx(0,op)("<<diags.idx(0,0)+operator_rows<<")");
 
     if (operator_rows % vsize != 0) {
         DIE("Vector length does not divide "
@@ -379,13 +379,13 @@ void _TriBandedOperator::vectorized_scale(SizedArray<double> &vector) {
         int o = offsets.get(row);
         if (o >= 0) { // upper diags
             thrust::transform(diags.data.begin() + diags.idx(row, o),
-                    diags.data.begin() + diags.idx(row, operator_rows),
+                    diags.data.begin() + diags.idx(row, 0) + operator_rows,
                     v.begin(),
                     diags.data.begin() + diags.idx(row,o),
                     thrust::multiplies<REAL_t>());
         } else { // lower diags
             thrust::transform(diags.data.begin() + diags.idx(row, 0),
-                    diags.data.begin() + diags.idx(row, operator_rows+o),
+                    diags.data.begin() + diags.idx(row, 0) + operator_rows + o,
                     v.begin() + -o,
                     diags.data.begin() + diags.idx(row, 0),
                     thrust::multiplies<REAL_t>());
