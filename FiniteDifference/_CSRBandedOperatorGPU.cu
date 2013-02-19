@@ -11,6 +11,7 @@
 #include <thrust/iterator/constant_iterator.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/zip_iterator.h>
+#include "repeated_range.h"
 
 #include <algorithm>
 #include <cstdlib>
@@ -99,11 +100,21 @@ SizedArray<double> *_CSRBandedOperator::apply(SizedArray<double> &V) {
     return U;
 }
 
+template<typename Tuple>
+struct compute_index : public thrust::unary_function<Tuple, int> {
+    int h, w;
+
+    compute_index(int h, int w) : h(h), w(w) {}
+
+    __host__ __device__
+    int operator()(Tuple i) {
+        return thrust::get<0>(i);
+    }
+};
+
+
 void _CSRBandedOperator::vectorized_scale(SizedArray<double> &vector) {
     Py_ssize_t vsize = vector.size;
-    Py_ssize_t block_len = operator_rows / blocks;
-
-    /* repeat_iterator<REAL_t> spot (spots. */
 
     if (operator_rows % vsize != 0) {
         DIE("Vector length does not divide "
@@ -113,5 +124,24 @@ void _CSRBandedOperator::vectorized_scale(SizedArray<double> &vector) {
             "blocks("<<blocks<<")"
            );
     }
+
+
+    typedef thrust::tuple<int, int> IntTuple;
+    typedef thrust::device_vector<REAL_t>::iterator Iterator;
+
+    repeated_range<Iterator> v(vector.data.begin(), vector.data.end(), operator_rows / vsize);
+
+    thrust::transform(data.begin(), data.end(),
+        thrust::make_permutation_iterator(v.begin(),
+            thrust::make_transform_iterator(
+                thrust::make_zip_iterator(
+                    thrust::make_tuple(row_ind.begin(), col_ind.begin())
+                    ),
+                compute_index<IntTuple>(block_len, block_len)
+                )
+            ),
+            data.begin(),
+            thrust::multiplies<double>());
+    FULLTRACE;
     return;
 }

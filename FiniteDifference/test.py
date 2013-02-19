@@ -210,17 +210,16 @@ class Cpp_test(unittest.TestCase):
         B.D = scipy.sparse.csr_matrix(np.ones((5,5)))
         B.R = None
         B.dirichlet = (None, None)
-        B.csr = True
+        B.use_csr_format()
         ref = np.arange(B.D.shape[0], dtype=float).repeat(B.D.shape[1])
         ref.resize(B.D.shape)
         B.vectorized_scale(np.arange(B.D.shape[0], dtype=float))
-        z = np.zeros((B.D.shape[0],1))
         fp(ref)
         print
         fp(B.D)
         print
         fp(B.D - ref)
-        npt.assert_array_equal(ref, B.D)
+        npt.assert_array_equal(ref, B.D.todense())
 
 
     def test_GPUSolve_0(self):
