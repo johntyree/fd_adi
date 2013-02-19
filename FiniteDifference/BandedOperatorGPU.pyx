@@ -137,13 +137,13 @@ cdef class BandedOperator(object):
         if tag:
             print "Immigrate CSR:", tag, to_string(self.thisptr_csr)
         assert (self.thisptr_csr)
+        self.use_csr_format()
         csr = self.D.tocsr()
 
         csr.data = from_GPUVec(self.thisptr_csr.data)
         csr.indices = from_GPUVec_i(self.thisptr_csr.col_ind)
         csr.indptr = from_GPUVec_i(self.thisptr_csr.row_ptr)
 
-        self.D = csr.todia()
         del self.thisptr_csr
         self.thisptr_csr = <_CSRBandedOperator *> 0
         self.location = LOCATION_PYTHON
