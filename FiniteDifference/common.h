@@ -23,7 +23,7 @@
 }
 
 #define ENDL std::cout << std::endl
-#define FULLTRACE TRACE;
+#define FULLTRACE noop();
 
 inline void noop() {};
 

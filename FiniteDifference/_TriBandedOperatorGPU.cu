@@ -346,14 +346,16 @@ void _TriBandedOperator::vectorized_scale(SizedArray<double> &vector) {
 
     typedef thrust::device_vector<REAL_t>::iterator Iterator;
     tiled_range<Iterator> v(vector.data.begin(), vector.data.end(), operator_rows / vsize);
-    LOG("op_rows("<<operator_rows<<") vsize("<<vsize<<") "
-        "v.d.size("<<vector.data.size()<<") "
-        "v.size()("<<v.end()-v.begin()<<") "
-        "diags.shape("<<diags.shape[0]<<","<<diags.shape[1]<<") "
-        "diags.idx(1,0)("<<diags.idx(1,0)<<") "
-        );
-    LOG("diags.name("<<diags.name<<")");
-    LOG("diags.idx(0,op)("<<diags.idx(0,0)+operator_rows<<")");
+    /*
+     * LOG("op_rows("<<operator_rows<<") vsize("<<vsize<<") "
+     *     "v.d.size("<<vector.data.size()<<") "
+     *     "v.size()("<<v.end()-v.begin()<<") "
+     *     "diags.shape("<<diags.shape[0]<<","<<diags.shape[1]<<") "
+     *     "diags.idx(1,0)("<<diags.idx(1,0)<<") "
+     *     );
+     * LOG("diags.name("<<diags.name<<")");
+     * LOG("diags.idx(0,op)("<<diags.idx(0,0)+operator_rows<<")");
+     */
 
     if (operator_rows % vsize != 0) {
         DIE("Vector length does not divide "

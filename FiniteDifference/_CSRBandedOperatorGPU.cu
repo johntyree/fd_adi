@@ -64,6 +64,7 @@ _CSRBandedOperator::_CSRBandedOperator(
     }
 
 SizedArray<double> *_CSRBandedOperator::apply(SizedArray<double> &V) {
+    FULLTRACE;
     if (V.size != operator_rows) {
         DIE(V.name << ": Dimension mismatch. V(" <<V.size<<") vs "<<operator_rows);
     }
@@ -96,7 +97,7 @@ SizedArray<double> *_CSRBandedOperator::apply(SizedArray<double> &V) {
     if (status != CUSPARSE_STATUS_SUCCESS) {
         DIE("CUSPARSE CSR MV product failed.");
     }
-
+    FULLTRACE;
     return U;
 }
 
@@ -114,6 +115,7 @@ struct compute_index : public thrust::unary_function<Tuple, int> {
 
 
 void _CSRBandedOperator::vectorized_scale(SizedArray<double> &vector) {
+    FULLTRACE;
     Py_ssize_t vsize = vector.size;
 
     if (operator_rows % vsize != 0) {
@@ -121,7 +123,9 @@ void _CSRBandedOperator::vectorized_scale(SizedArray<double> &vector) {
             "evenly into operator size. Cannot scale. "
             "vsize("<<vsize<<") "
             "operator_rows("<<operator_rows<<") "
-            "blocks("<<blocks<<")"
+            "blocks("<<blocks<<") "
+            "Vector ndim("<<vector.ndim<<") "
+            "Vector shape("<<vector.shape[0]<<", "<<vector.shape[1]<<")"
            );
     }
 
