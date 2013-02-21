@@ -19,4 +19,5 @@ onmodify () {
     done )
 }
 
-onmodify . "touch FiniteDifference/_GPU_Code.cu; python setup.py nosetests --failed --rednose --verbosity=3 --with-id $@ || echo -ne '\a'"
+# onmodify . "touch FiniteDifference/_GPU_Code.cu; python setup.py nosetests --failed --rednose --verbosity=3 --with-id $@ || echo -ne '\a'"
+onmodify . "python setup.py build_ext --inplace && nosetests --rednose --verbosity=3 --with-id $@ || echo -ne '\a'"
