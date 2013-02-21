@@ -154,6 +154,13 @@ cdef class BandedOperator(object):
             print "Immigrate Tri:", tag, to_string(self.thisptr_tri)
         assert self.thisptr_tri != <void *>0
         self.D.data = from_SizedArray_2(self.thisptr_tri.diags)
+
+        if self.is_tridiagonal():
+            self.D.data[0,1:] = self.D.data[0,:-1]
+            self.D.data[2,:-1] = self.D.data[2,1:]
+            self.D.data[0,0] = 0
+            self.D.data[2,-1] = 0
+
         if self.thisptr_tri.has_residual:
             self.R = from_SizedArray(self.thisptr_tri.R)
         else:
@@ -201,6 +208,12 @@ cdef class BandedOperator(object):
         if tag:
             print "Emigrate Tri:", tag, to_string(self.thisptr_tri)
         assert not (self.thisptr_tri)
+        # We have to shift the offsets between scipy and cublas
+        if self.is_tridiagonal():
+            self.D.data[0,:-1] = self.D.data[0,1:]
+            self.D.data[2,1:] = self.D.data[2,:-1]
+            self.D.data[0,-1] = 0
+            self.D.data[2,0] = 0
         cdef:
             SizedArray[double] *diags = to_SizedArray(self.D.data, "data")
             SizedArray[double] *R = to_SizedArray(self.R, "R")
@@ -385,11 +398,6 @@ cdef class BandedOperator(object):
         cdef SizedArray[double] *sa_V = to_SizedArray(V.copy(order='C'), "apply2 sa_V(V)")
         print to_string(deref(sa_V))
         cdef SizedArray[double] *sa_U
-        if not self.is_cross_derivative():
-            self.D.data[0,:-1] = self.D.data[0,1:]
-            self.D.data[2,1:] = self.D.data[2,:-1]
-            self.D.data[0,-1] = 0
-            self.D.data[2,0] = 0
         self.emigrate("apply2")
         if self.thisptr_tri:
             sa_U = self.thisptr_tri.apply(deref(sa_V))
@@ -398,11 +406,6 @@ cdef class BandedOperator(object):
         print to_string(deref(sa_U))
         ret = from_SizedArray(deref(sa_U)).reshape(-1)
         self.immigrate("apply2")
-        if not self.is_cross_derivative():
-            self.D.data[0,1:] = self.D.data[0,:-1]
-            self.D.data[2,:-1] = self.D.data[2,1:]
-            self.D.data[0,0] = 0
-            self.D.data[2,-1] = 0
         del sa_V, sa_U
 
         # ret = self.D.dot(V.flat)
@@ -485,17 +488,9 @@ cdef class BandedOperator(object):
         print
         print "Device array: ", d_V.show()
         print
-        self.D.data[0,:-1] = self.D.data[0,1:]
-        self.D.data[2,1:] = self.D.data[2,:-1]
-        self.D.data[0,-1] = 0
-        self.D.data[2,0] = 0
-        self.emigrate("solve2 0")
+        self.emigrate_tri("solve2 0")
         self.thisptr_tri.solve(deref(d_V))
-        self.immigrate("solve2 0")
-        self.D.data[0,1:] = self.D.data[0,:-1]
-        self.D.data[2,:-1] = self.D.data[2,1:]
-        self.D.data[0,0] = 0
-        self.D.data[2,-1] = 0
+        self.immigrate_tri("solve2 0")
         if V.ndim == 2:
             d_V.reshape(V.shape[0], V.shape[1])
             ret = from_SizedArray_2(deref(d_V))

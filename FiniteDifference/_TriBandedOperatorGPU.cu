@@ -151,6 +151,10 @@ SizedArray<double> *_TriBandedOperator::apply(SizedArray<double> &V) {
     const unsigned N = V.size;
     thrust::device_vector<double> in(V.data);
     thrust::device_vector<double> out(N);
+    if (!is_tridiagonal) {
+        DIE("Can only apply tridiagonal operators when on the GPU.");
+    }
+
 
     if (axis == 0) {
         // Transpose somehow
@@ -307,6 +311,9 @@ bool _TriBandedOperator::is_folded() {
 
 int _TriBandedOperator::solve(SizedArray<double> &V) {
     FULLTRACE;
+    if (!is_tridiagonal) {
+        DIE("Can only solve tridiagonal systems when on the GPU.");
+    }
     verify_diag_ptrs();
 
     /* std::cout << "Begin C Solve\n"; */
