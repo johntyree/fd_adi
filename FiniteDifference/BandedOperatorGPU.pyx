@@ -146,6 +146,7 @@ cdef class BandedOperator(object):
 
         del self.thisptr_csr
         self.thisptr_csr = <_CSRBandedOperator *> 0
+
         self.location = LOCATION_PYTHON
 
 
@@ -848,11 +849,11 @@ cdef class BandedOperator(object):
             B = self.copy()
 
         if self.location != LOCATION_GPU:
-            B.emigrate("addscalar B 0")
+            B.emigrate("add_scalar B 0")
 
         B.thisptr_tri.add_scalar(other)
 
-        B.immigrate("addscalar B 0")
+        B.immigrate("add_scalar B 0")
 
         return B
 

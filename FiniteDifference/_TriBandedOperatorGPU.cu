@@ -292,6 +292,10 @@ void _TriBandedOperator::add_scalar(double val) {
     int begin = has_low_dirichlet;
     int end = block_len-1 - has_high_dirichlet;
 
+    /* LOG("has_low("<<has_low_dirichlet<<") " */
+        /* "has_high("<<has_high_dirichlet<<") " */
+        /* "blocklen("<<block_len<<") "); */
+
     thrust::transform_if(
             &diags.data[diags.idx(main_diag, 0)],
             &diags.data[diags.idx(main_diag, 0)] + operator_rows,

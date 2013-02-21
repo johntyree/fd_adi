@@ -942,12 +942,7 @@ class BandedOperator_test(unittest.TestCase):
 
         B2 = FD.BO.for_vector(vec, scheme='backward', derivative=2, order=2)
         C2 = FD.BO.for_vector(vec, scheme='center', derivative=2, order=2)
-        try:
-            B2.add(C2, inplace=True)
-        except ValueError:
-            pass
-        else:
-            raise AssertionError("In place addition should fail for different sized operators.")
+        npt.assert_raises(ValueError, lambda: B2.add(C2, inplace=True))
 
 
     def test_mul(self):
@@ -1006,10 +1001,20 @@ class BandedOperator_test(unittest.TestCase):
         oldB2 = B2.copy()
 
         newB2 = B2.add(1.0)
-        oldB2.D.data[tuple(oldB2.D.offsets).index(0)] += 1.0  # Manually add 1 to main diag
+
+        # Manually add 1 to main diag
+        oldB2.D.data[tuple(oldB2.D.offsets).index(0)] += 1.0
 
         assert newB2 is not B2 # Created a new operator
         assert newB2.D.data is not B2.D.data # With new underlying data
+
+        # print "New:"
+        # fp(newB2.D.data)
+        # print "Old:"
+        # fp(oldB2.D.data)
+        # print "diff:"
+        # fp(newB2.D.data - oldB2.D.data)
+
         npt.assert_array_equal(newB2.D.data, oldB2.D.data) # Operations were the same
         # NO numpy assert here. We need "not equal"
         assert (newB2.D.data != origB2.D.data).any() # Operations changed our operator
