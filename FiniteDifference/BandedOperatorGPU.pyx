@@ -403,21 +403,21 @@ cdef class BandedOperator(object):
             V[...,-1] = self.dirichlet[1]
 
         cdef SizedArray[double] *sa_V = to_SizedArray(V.copy(order='C'), "apply2 sa_V(V)")
-        print to_string(deref(sa_V))
+        # print to_string(deref(sa_V))
         cdef SizedArray[double] *sa_U
         self.emigrate("apply2")
         if self.thisptr_tri:
             sa_U = self.thisptr_tri.apply(deref(sa_V))
         else:
             sa_U = self.thisptr_csr.apply(deref(sa_V))
-        print to_string(deref(sa_U))
+        # print to_string(deref(sa_U))
         ret = from_SizedArray(deref(sa_U)).reshape(-1)
         self.immigrate("apply2")
         del sa_V, sa_U
 
         # ret = self.D.dot(V.flat)
         if self._is_folded():
-            print "apply folded!"
+            # print "apply folded!"
             ret = self.fold_vector(ret, unfold=True)
 
         if self.R is not None:
@@ -466,8 +466,7 @@ cdef class BandedOperator(object):
 
     cpdef solve2(self, np.ndarray V, overwrite=False):
         cdef np.ndarray ret
-        print
-        print "Solve 2 Begin"
+        # print "Solve 2 Begin"
         if not overwrite:
             V = V.copy()
         t = range(V.ndim)
@@ -488,13 +487,13 @@ cdef class BandedOperator(object):
             # print "solve Folded"
             V0 = self.fold_vector(V0)
 
-        print "Host array size:", V0.size, V0.shape
-        print "Orig array size:", V.size, V.shape[0], V.shape[1]
+        # print "Host array size:", V0.size, V0.shape
+        # print "Orig array size:", V.size, V.shape[0], V.shape[1]
         cdef SizedArray[double] *d_V = to_SizedArray(V0, "solve2 domain V0")
-        print "Device array ptr: ", to_string(d_V)
-        print
-        print "Device array: ", d_V.show()
-        print
+        # print "Device array ptr: ", to_string(d_V)
+        # print
+        # print "Device array: ", d_V.show()
+        # print
         self.emigrate_tri("solve2 0")
         self.thisptr_tri.solve(deref(d_V))
         self.immigrate_tri("solve2 0")
@@ -503,7 +502,7 @@ cdef class BandedOperator(object):
             ret = from_SizedArray_2(deref(d_V))
         else:
             ret = from_SizedArray(deref(d_V))
-        print "After solve Device array: ", d_V.show()
+        # print "After solve Device array: ", d_V.show()
         del d_V
 
         t = range(V.ndim)

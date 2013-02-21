@@ -78,7 +78,6 @@ class BarrierOption_test(unittest.TestCase):
         npt.assert_array_equal(self.state, res)
 
 
-
 class Cpp_test(unittest.TestCase):
 
     def setUp(self):
