@@ -156,11 +156,13 @@ cdef class BandedOperator(object):
         assert self.thisptr_tri != <void *>0
         self.D.data = from_SizedArray_2(self.thisptr_tri.diags)
 
-        if self.is_tridiagonal():
-            self.D.data[0,1:] = self.D.data[0,:-1]
-            self.D.data[2,:-1] = self.D.data[2,1:]
-            self.D.data[0,0] = 0
-            self.D.data[2,-1] = 0
+        for row, o in enumerate(self.D.offsets):
+            if o > 0:
+                self.D.data[row,o:] = self.D.data[row,:-o]
+                self.D.data[row,:o] = 0
+            if o < 0:
+                self.D.data[row,:o] = self.D.data[row,-o:]
+                self.D.data[row,o:] = 0
 
         if self.thisptr_tri.has_residual:
             self.R = from_SizedArray(self.thisptr_tri.R)
@@ -209,12 +211,16 @@ cdef class BandedOperator(object):
         if tag:
             print "Emigrate Tri:", tag, to_string(self.thisptr_tri)
         assert not (self.thisptr_tri)
+
         # We have to shift the offsets between scipy and cublas
-        if self.is_tridiagonal():
-            self.D.data[0,:-1] = self.D.data[0,1:]
-            self.D.data[2,1:] = self.D.data[2,:-1]
-            self.D.data[0,-1] = 0
-            self.D.data[2,0] = 0
+        for row, o in enumerate(self.D.offsets):
+            if o > 0:
+                self.D.data[row,:-o] = self.D.data[row,o:]
+                self.D.data[row,-o:] = 0
+            if o < 0:
+                self.D.data[row,-o:] = self.D.data[row,:o]
+                self.D.data[row,:-o] = 0
+
         cdef:
             SizedArray[double] *diags = to_SizedArray(self.D.data, "data")
             SizedArray[double] *R = to_SizedArray(self.R, "R")

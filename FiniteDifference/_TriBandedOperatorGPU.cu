@@ -391,16 +391,16 @@ void _TriBandedOperator::vectorized_scale(SizedArray<double> &vector) {
     for (Py_ssize_t row = 0; row < noffsets; ++row) {
         int o = offsets.get(row);
         if (o >= 0) { // upper diags
-            thrust::transform(diags.data.begin() + diags.idx(row, o),
-                    diags.data.begin() + diags.idx(row, 0) + operator_rows,
+            thrust::transform(diags.data.begin() + diags.idx(row, 0),
+                    diags.data.begin() + diags.idx(row, 0) + operator_rows - o,
                     v.begin(),
-                    diags.data.begin() + diags.idx(row,o),
+                    diags.data.begin() + diags.idx(row, 0),
                     thrust::multiplies<REAL_t>());
         } else { // lower diags
-            thrust::transform(diags.data.begin() + diags.idx(row, 0),
-                    diags.data.begin() + diags.idx(row, 0) + operator_rows + o,
+            thrust::transform(diags.data.begin() + diags.idx(row, -o),
+                    diags.data.begin() + diags.idx(row, 0) + operator_rows,
                     v.begin() + -o,
-                    diags.data.begin() + diags.idx(row, 0),
+                    diags.data.begin() + diags.idx(row, -o),
                     thrust::multiplies<REAL_t>());
         }
     }
