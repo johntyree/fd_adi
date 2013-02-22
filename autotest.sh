@@ -19,4 +19,12 @@ onmodify () {
     done )
 }
 
-onmodify . "touch FiniteDifference/_GPU_Code.cu; python setup.py nosetests --failed --rednose --verbosity=3 --with-id $@ || echo -ne '\a'"
+
+CMD=""
+if [ "$1" == '--force' ]; then
+    shift
+    CMD+="touch FiniteDifference/_GPU_Code.cu;"
+fi
+CMD+="python setup.py nosetests --failed --rednose --verbosity=3 --with-id $@ || echo -ne '\a';"
+
+onmodify . $CMD
