@@ -152,7 +152,10 @@ class Cpp_test(unittest.TestCase):
 
     def test_tri_apply_axis_0(self):
         B0  = self.F.operators[0]
+        print "B0 data"
         fp(B0.D.data)
+        print "B0 dirichlet"
+        print B0.dirichlet
         R0 = B0.R.copy()
         ref = B0.apply(self.v2)
         tst = B0.apply2(self.v2.copy())
@@ -190,9 +193,11 @@ class Cpp_test(unittest.TestCase):
         tst = B01.apply2(self.v2.copy())
         npt.assert_array_equal(ref, tst)
 
+
     def test_csr_apply_random(self):
-        B = self.F.operators[0]
+        B = self.F.operators[0] # Because we aren't transposing.
         B.R = None
+        B.axis = 1
         B.dirichlet = (None, None)
         B.csr = True
         for i in range(5):

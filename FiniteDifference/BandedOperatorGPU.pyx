@@ -391,16 +391,16 @@ cdef class BandedOperator(object):
     cpdef apply2(self, np.ndarray V, overwrite=False):
         if not overwrite:
             V = V.copy()
-        t = range(V.ndim)
-        utils.rolllist(t, self.axis, V.ndim-1)
-        V = np.transpose(V, axes=t)
+        # t = range(V.ndim)
+        # utils.rolllist(t, self.axis, V.ndim-1)
+        # V = np.transpose(V, axes=t)
 
-        if self.dirichlet[0] is not None:
-            # print "Setting V[0,:] to", self.dirichlet[0]
-            V[...,0] = self.dirichlet[0]
-        if self.dirichlet[1] is not None:
-            # print "Setting V[-1,:] to", self.dirichlet[-1]
-            V[...,-1] = self.dirichlet[1]
+        # if self.dirichlet[0] is not None:
+            # # print "Setting V[0,:] to", self.dirichlet[0]
+            # V[...,0] = self.dirichlet[0]
+        # if self.dirichlet[1] is not None:
+            # # print "Setting V[-1,:] to", self.dirichlet[-1]
+            # V[...,-1] = self.dirichlet[1]
 
         cdef SizedArray[double] *sa_V = to_SizedArray(V.copy(order='C'), "apply2 sa_V(V)")
         # print to_string(deref(sa_V))

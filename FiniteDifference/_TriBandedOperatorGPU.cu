@@ -149,27 +149,35 @@ SizedArray<double> *_TriBandedOperator::apply(SizedArray<double> &V) {
     using std::cout;
     using std::endl;
     const unsigned N = V.size;
-    thrust::device_vector<double> in(V.data);
     thrust::device_vector<double> out(N);
+
+    thrust::device_vector<double> &in = V.data;
     if (!is_tridiagonal) {
         DIE("Can only apply tridiagonal operators when on the GPU.");
     }
 
 
-    if (axis == 0) {
-        // Transpose somehow
-    }
-
     if (has_low_dirichlet) {
         /* print "Setting V[0,:] to", self.dirichlet[0] */
         // Some kind of thrust thing?
         /* V[...,0] = low_dirichlet[i] */
+        thrust::copy(low_dirichlet.data.begin(),
+                low_dirichlet.data.end(),
+                in.begin());
     }
     if (has_high_dirichlet) {
         /* print "Setting V[0,:] to", self.dirichlet[0] */
         // Some kind of thrust thing?
         /* V[...,-1] = high_dirichlet[i] */
+        thrust::copy(high_dirichlet.data.begin(),
+                high_dirichlet.data.end(),
+                in.end() - V.shape[1]);
     }
+
+    if (axis == 0) {
+        V.transpose(1);
+    }
+
 
     if (is_folded()) {
         /* ret = fold_vector(self.D.dot(V.flat), unfold=True) */
@@ -194,16 +202,21 @@ SizedArray<double> *_TriBandedOperator::apply(SizedArray<double> &V) {
     SizedArray<double> *U = new SizedArray<double>(out,
             V.ndim, V.shape, "CPP Solve U from V");
 
-    if (has_residual) {
-        /* ret += self.R; */
-    }
+    /* if (has_residual) { */
+        /* thrust::transform(U->data.begin(), U->data.end(), */
+                /* R.data.begin(), */
+                /* U->data.begin(), */
+                /* thrust::plus<double>()); */
+    /* } */
 
     /* ret = ret.reshape(V.shape) */
 
     /* t = range(V.ndim) */
     /* utils.rolllist(t, V.ndim-1, self.axis) */
 
-    // Transpose back
+    /* if (axis == 0) { */
+        /* U.transpose(); */
+    /* } */
     /* return ret; */
     FULLTRACE;
     return U;
