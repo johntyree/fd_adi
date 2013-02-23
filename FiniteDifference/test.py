@@ -150,12 +150,11 @@ class Cpp_test(unittest.TestCase):
             v2 = np.arange(shape[0]*shape[1], dtype=float).reshape(shape)
             npt.assert_array_equal(v2.T, FD.BO.test_SizedArray_transpose(v2.copy()))
 
+
     def test_tri_apply_axis_0(self):
         B0  = self.F.operators[0]
-        print "B0 data"
-        fp(B0.D.data)
-        print "B0 dirichlet"
-        print B0.dirichlet
+        # print "B0 data"
+        # fp(B0.D.data)
         R0 = B0.R.copy()
         ref = B0.apply(self.v2)
         tst = B0.apply2(self.v2.copy())
@@ -165,7 +164,8 @@ class Cpp_test(unittest.TestCase):
 
     def test_tri_apply_axis_1(self):
         B1  = self.F.operators[1]
-        fp(B1.D.data)
+        # print "B1 data"
+        # fp(B1.D.data)
         R1 = B1.R.copy()
         ref = B1.apply(self.v2)
         tst = B1.apply2(self.v2.copy())
@@ -208,6 +208,7 @@ class Cpp_test(unittest.TestCase):
             ref = B.apply(v)
             tst = B.apply2(v)
             npt.assert_array_almost_equal(ref, tst, decimal=8)
+
 
     def test_csr_scale(self):
         B = self.F.operators[0]
