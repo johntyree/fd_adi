@@ -25,6 +25,6 @@ if [ "$1" == '--force' ]; then
     shift
     CMD+="touch FiniteDifference/_GPU_Code.cu;"
 fi
-CMD+="python setup.py nosetests --failed --rednose --verbosity=3 --with-id $@ || echo -ne '\a';"
+CMD+="python setup.py build_ext --inplace && nosetests --failed --rednose --verbosity=3 --with-id $@ || echo -ne '\a';"
 
 onmodify . $CMD
