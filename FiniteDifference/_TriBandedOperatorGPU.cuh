@@ -32,6 +32,8 @@ class _TriBandedOperator {
         void vectorized_scale(SizedArray<double> &vector);
         void add_operator(_TriBandedOperator &other);
         void fold_vector(GPUVec<double> &vector, bool);
+        void diagonalize();
+        void fold_bottom(bool);
 
         _TriBandedOperator(
             SizedArray<double> &data,

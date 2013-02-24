@@ -72,6 +72,7 @@ cdef extern from "_TriBandedOperatorGPU.cuh":
         void add_scalar(double val)
         void vectorized_scale(SizedArray[double] &vector)
         void add_operator(_TriBandedOperator &other)
+        void diagonalize()
         int solve(SizedArray[double] &)
         SizedArray[int] offsets
         SizedArray[double] diags

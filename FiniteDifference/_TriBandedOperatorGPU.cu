@@ -396,12 +396,9 @@ struct curry : public thrust::unary_function<Tuple, typename OP::result_type> {
 };
 
 template <typename Tuple, typename Result>
-struct fold_it : public thrust::unary_function<Tuple, Result> {
-
+struct add_multiply3 : public thrust::unary_function<Tuple, Result> {
     Result direction;
-
-    fold_it(Result x) : direction(x) {}
-
+    add_multiply3(Result x) : direction(x) {}
     __host__ __device__
     Result operator()(Tuple t) {
         using thrust::get;
@@ -413,7 +410,11 @@ struct fold_it : public thrust::unary_function<Tuple, Result> {
 void _TriBandedOperator::fold_vector(GPUVec<double> &vector, bool unfold) {
     FULLTRACE;
 
-    typedef thrust::device_vector<REAL_t>::iterator Iterator;
+    using thrust::make_zip_iterator;
+    using thrust::make_tuple;
+
+    typedef GPUVec<REAL_t>::iterator Iterator;
+    typedef thrust::tuple<REAL_t,REAL_t,REAL_t> REALTuple;
 
     strided_range<Iterator> u0(vector.begin(), vector.end(), block_len);
     strided_range<Iterator> u1(vector.begin()+1, vector.end(), block_len);
@@ -421,15 +422,7 @@ void _TriBandedOperator::fold_vector(GPUVec<double> &vector, bool unfold) {
     strided_range<Iterator> un(vector.begin()+block_len-1, vector.end(), block_len);
     strided_range<Iterator> un1(vector.begin()+block_len-2, vector.end(), block_len);
 
-    using thrust::make_zip_iterator;
-    using thrust::make_tuple;
-    using thrust::get;
-
-    typedef thrust::tuple<REAL_t,REAL_t,REAL_t> REALTuple;
-    typedef thrust::device_vector<REAL_t>::iterator Iterator;
-
     LOG("has_top_factors("<<has_top_factors<<") has_bottom_factors("<<has_bottom_factors<<")");
-
     // Top fold
     if (has_top_factors) {
         /* LOG("Folding top. direction("<<unfold<<") top_factors("<<top_factors<<")"); */
@@ -437,7 +430,7 @@ void _TriBandedOperator::fold_vector(GPUVec<double> &vector, bool unfold) {
             make_zip_iterator(make_tuple(u0.begin(), u1.begin(), top_factors.data.begin())),
             make_zip_iterator(make_tuple(u0.end(), u1.end(), top_factors.data.end())),
             u0.begin(),
-            fold_it<REALTuple, REAL_t>(unfold ? -1 : 1));
+            add_multiply3<REALTuple, REAL_t>(unfold ? -1 : 1));
     }
 
     if (has_bottom_factors) {
@@ -446,12 +439,126 @@ void _TriBandedOperator::fold_vector(GPUVec<double> &vector, bool unfold) {
             make_zip_iterator(make_tuple(un.begin(), un1.begin(), bottom_factors.data.begin())),
             make_zip_iterator(make_tuple(un.end(), un1.end(), bottom_factors.data.end())),
             un.begin(),
-            fold_it<REALTuple, REAL_t>(unfold ? -1 : 1));
+            add_multiply3<REALTuple, REAL_t>(unfold ? -1 : 1));
     }
 
     FULLTRACE;
 }
 
+
+/*
+ * cpdef diagonalize(self):
+ *     # This is an ugly heuristic
+ *     top = 0
+ *     bot = len(self.D.offsets)
+ *     if 2 in self.D.offsets:
+ *         self.foldtop()
+ *         top += 1
+ *     if -2 in self.D.offsets:
+ *         self.foldbottom()
+ *         bot -= 1
+ *     self.solve_banded_offsets = (1,1)
+ *     self.D = scipy.sparse.dia_matrix((self.D.data[top:bot],
+ *                                       self.D.offsets[top:bot]),
+ *                                      shape=self.shape)
+ */
+
+void _TriBandedOperator::diagonalize() {
+    FULLTRACE;
+
+    FULLTRACE;
+}
+
+/*
+ * cpdef fold_bottom(self, unfold=False):
+ *     d = self.D.data
+ *     m = get_int_index(self.D.offsets, 0)
+ *     for i in [1, 0,-1, -2]:
+ *         if self.D.offsets[m-i] != i:
+ *             raise ValueError("Operator data is the wrong shape. Requires "
+ *                     "contiguous offsets (1, 0, -1, -2).")
+ *     blocks = self.blocks
+ *     block_len = self.shape[0] // blocks
+ *     if not unfold:
+ *         self.bottom_factors = np.empty(blocks)
+ *     for b in range(blocks):
+ *         cn1 = m-1, (b+1)*block_len - 1
+ *         bn  = m,   (b+1)*block_len - 1
+ *         bn1 = m,   (b+1)*block_len - 1 - 1
+ *         an  = m+1, (b+1)*block_len - 1 - 1
+ *         an1 = m+1, (b+1)*block_len - 1 - 2
+ *         zn  = m+2, (b+1)*block_len - 1 - 2
+ *         # print "Block %i %s, %s: d[zn] = %f, d[an1] = %f" % (b, zn, an1, d[zn], d[an1])
+ *         # print "Second row:", d[an1], d[bn1], d[cn1]
+ *         # print "Bottom row:", d[zn], d[an], d[bn]
+ *         if unfold:
+ *             d[zn] -= d[an1] * self.bottom_factors[b]
+ *             d[an] -= d[bn1] * self.bottom_factors[b]
+ *             d[bn] -= d[cn1] * self.bottom_factors[b]
+ *         else:
+ *             self.bottom_factors[b] = -d[zn] / d[an1] if d[an1] != 0 else 0
+ *             d[zn] += d[an1] * self.bottom_factors[b]
+ *             d[an] += d[bn1] * self.bottom_factors[b]
+ *             d[bn] += d[cn1] * self.bottom_factors[b]
+ *     if unfold:
+ *         self.bottom_factors = None
+ */
+
+template <typename Tuple, typename Result>
+struct fold_operator : public thrust::unary_function<Tuple, Result> {
+    bool unfold;
+    fold_operator(bool x) : unfold(x) {}
+    __host__ __device__
+    void operator()(Tuple t) {
+        using thrust::get;
+        REAL_t &an   = get<0>(t);
+        REAL_t &an1  = get<1>(t);
+        REAL_t &bn   = get<2>(t);
+        REAL_t &bn1  = get<3>(t);
+        REAL_t &cn1  = get<4>(t);
+        REAL_t &fact = get<5>(t);
+        if (unfold) {
+            an -= bn1 * fact;
+            bn -= cn1 * fact;
+            fact *= an1;
+        } else {
+            fact = an1 == 0 ? 0 : fact / -an1;
+            an += bn1 * fact;
+            bn += cn1 * fact;
+        }
+    }
+};
+
+void _TriBandedOperator::fold_bottom(bool unfold) {
+    FULLTRACE;
+
+    typedef thrust::tuple<REAL_t,REAL_t,REAL_t,REAL_t,REAL_t,REAL_t> REALTuple;
+    typedef thrust::device_ptr<REAL_t> Ptr;
+
+    strided_range<Ptr> cn1(sup+(block_len-1)  , sup+operator_rows, block_len);
+    strided_range<Ptr> bn (mid+(block_len-1)  , mid+operator_rows, block_len);
+    strided_range<Ptr> bn1(mid+(block_len-1)-1, mid+operator_rows, block_len);
+    strided_range<Ptr> an (sub+(block_len-1)-1, sub+operator_rows, block_len);
+    strided_range<Ptr> an1(sub+(block_len-1)-2, sub+operator_rows, block_len);
+
+    thrust::for_each(
+        make_zip_iterator(
+            make_tuple(
+                an.begin(), an1.begin(),
+                bn.begin(), bn1.begin(),
+                            cn1.begin(),
+                bottom_factors.data.begin())),
+        make_zip_iterator(
+            make_tuple(
+                an.end(), an1.end(),
+                bn.end(), bn1.end(),
+                            cn1.end(),
+                bottom_factors.data.end())),
+        fold_operator<REALTuple, REAL_t>(unfold));
+
+    has_bottom_factors = !unfold;
+    FULLTRACE;
+}
 
 
 void _TriBandedOperator::vectorized_scale(SizedArray<double> &vector) {
