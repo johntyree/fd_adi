@@ -1203,6 +1203,7 @@ cdef inline from_SizedArray(SizedArray[double] &v):
     return s
 
 cdef inline from_SizedArray_2(SizedArray[double] &v):
+    assert v.ndim == 2, ("Using from_SizedArray_2 on an array of dim %s" % v.ndim)
     cdef np.ndarray[double, ndim=2] s = np.empty((v.shape[0], v.shape[1]), dtype=float)
     cdef int i, j
     for i in range(v.shape[0]):
