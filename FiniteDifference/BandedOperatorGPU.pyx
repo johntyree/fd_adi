@@ -243,6 +243,8 @@ cdef class BandedOperator(object):
                 , self.blocks
                 , self.dirichlet[1] is not None
                 , self.dirichlet[0] is not None
+                , self.top_factors is not None
+                , self.bottom_factors is not None
                 , self.R is not None
                 )
 

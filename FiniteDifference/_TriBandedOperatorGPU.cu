@@ -13,6 +13,7 @@
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/zip_iterator.h>
 #include "tiled_range.h"
+#include "strided_range.h"
 
 #include <algorithm>
 #include <cstdlib>
@@ -63,6 +64,8 @@ _TriBandedOperator::_TriBandedOperator(
         Py_ssize_t blocks,
         bool has_high_dirichlet,
         bool has_low_dirichlet,
+        bool has_top_factors,
+        bool has_bottom_factors,
         bool has_residual
         ) :
     diags(data),
@@ -82,6 +85,8 @@ _TriBandedOperator::_TriBandedOperator(
     sub(diags.data.ptr() + 2*operator_rows),
     has_high_dirichlet(has_high_dirichlet),
     has_low_dirichlet(has_low_dirichlet),
+    has_top_factors(has_top_factors),
+    has_bottom_factors(has_bottom_factors),
     has_residual(has_residual),
     is_tridiagonal(offsets.size == 3 && main_diag != -1)
     {
@@ -317,7 +322,7 @@ void _TriBandedOperator::add_scalar(double val) {
 }
 
 bool _TriBandedOperator::is_folded() {
-    return false;
+    return has_top_factors || has_bottom_factors;
 }
 
 
@@ -356,6 +361,97 @@ int _TriBandedOperator::solve(SizedArray<double> &V) {
     FULLTRACE;
     return 0;
 }
+
+/*
+ * cpdef fold_vector(self, double[:] v, unfold=False):
+ *     cdef int direction, u0, u1, un ,un1
+ *     blocks = self.blocks
+ *     block_len = self.shape[0] // blocks
+ *
+ *     for b in range(blocks):
+ *         u0 = b*block_len
+ *         u1 = u0 + 1
+ *         un = (b+1)*block_len - 1
+ *         un1 = un - 1
+ *         # print u0, u1, un1, un
+ *         # print "[%f, %f .. %f, %f]" % (v[u0], v[u1], v[un1], v[un])
+ *         direction = -1 if unfold else 1
+ *         if self.top_factors is not None:
+ *             v[u0] += direction * v[u1]  * self.top_factors[b]
+ *         if self.bottom_factors is not None:
+ *             v[un] += direction * v[un1] * self.bottom_factors[b]
+ *     return np.asarray(v)
+ */
+
+template <typename Tuple, typename OP>
+struct curry : public thrust::unary_function<Tuple, typename OP::result_type> {
+
+    OP f;
+
+    __host__ __device__
+    typename OP::result_type operator()(Tuple t) {
+        using thrust::get;
+        return  f(get<0>(t), get<1>(t));
+    }
+};
+
+template <typename Tuple, typename Result>
+struct fold_it : public thrust::unary_function<Tuple, Result> {
+
+    Result direction;
+
+    fold_it(Result x) : direction(x) {}
+
+    __host__ __device__
+    Result operator()(Tuple t) {
+        using thrust::get;
+        return  get<0>(t) + direction * get<1>(t) * get<2>(t);
+    }
+};
+
+
+void _TriBandedOperator::fold_vector(GPUVec<double> &vector, bool unfold) {
+    FULLTRACE;
+
+    typedef thrust::device_vector<REAL_t>::iterator Iterator;
+
+    strided_range<Iterator> u0(vector.begin(), vector.end(), block_len);
+    strided_range<Iterator> u1(vector.begin()+1, vector.end(), block_len);
+
+    strided_range<Iterator> un(vector.begin()+block_len-1, vector.end(), block_len);
+    strided_range<Iterator> un1(vector.begin()+block_len-2, vector.end(), block_len);
+
+    using thrust::make_zip_iterator;
+    using thrust::make_tuple;
+    using thrust::get;
+
+    typedef thrust::tuple<REAL_t,REAL_t,REAL_t> REALTuple;
+    typedef thrust::device_vector<REAL_t>::iterator Iterator;
+
+    LOG("has_top_factors("<<has_top_factors<<") has_bottom_factors("<<has_bottom_factors<<")");
+
+    // Top fold
+    if (has_top_factors) {
+        /* LOG("Folding top. direction("<<unfold<<") top_factors("<<top_factors<<")"); */
+        thrust::transform(
+            make_zip_iterator(make_tuple(u0.begin(), u1.begin(), top_factors.data.begin())),
+            make_zip_iterator(make_tuple(u0.end(), u1.end(), top_factors.data.end())),
+            u0.begin(),
+            fold_it<REALTuple, REAL_t>(unfold ? -1 : 1));
+    }
+
+    if (has_bottom_factors) {
+        /* LOG("Folding bottom. direction("<<unfold<<") bottom_factors("<<bottom_factors<<")"); */
+        thrust::transform(
+            make_zip_iterator(make_tuple(un.begin(), un1.begin(), bottom_factors.data.begin())),
+            make_zip_iterator(make_tuple(un.end(), un1.end(), bottom_factors.data.end())),
+            un.begin(),
+            fold_it<REALTuple, REAL_t>(unfold ? -1 : 1));
+    }
+
+    FULLTRACE;
+}
+
 
 
 void _TriBandedOperator::vectorized_scale(SizedArray<double> &vector) {

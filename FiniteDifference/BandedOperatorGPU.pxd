@@ -89,6 +89,8 @@ cdef extern from "_TriBandedOperatorGPU.cuh":
             Py_ssize_t blocks,
             cbool has_high_dirichlet,
             cbool has_low_dirichlet,
+            cbool has_top_factors,
+            cbool has_bottom_factors,
             cbool has_residual
         )
 

@@ -31,6 +31,7 @@ class _TriBandedOperator {
         void add_scalar(double val);
         void vectorized_scale(SizedArray<double> &vector);
         void add_operator(_TriBandedOperator &other);
+        void fold_vector(GPUVec<double> &vector, bool);
 
         _TriBandedOperator(
             SizedArray<double> &data,
@@ -45,6 +46,8 @@ class _TriBandedOperator {
             Py_ssize_t blocks,
             bool has_high_dirichlet,
             bool has_low_dirichlet,
+            bool has_top_factors,
+            bool has_bottom_factors,
             bool has_residual
             );
 
@@ -52,6 +55,8 @@ class _TriBandedOperator {
         bool has_residual;
         bool has_high_dirichlet;
         bool has_low_dirichlet;
+        bool has_top_factors;
+        bool has_bottom_factors;
         bool is_tridiagonal;
 
     private:
