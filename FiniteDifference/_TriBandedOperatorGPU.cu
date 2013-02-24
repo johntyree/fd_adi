@@ -149,9 +149,10 @@ SizedArray<double> *_TriBandedOperator::apply(SizedArray<double> &V) {
     using std::cout;
     using std::endl;
     const unsigned N = V.size;
-    thrust::device_vector<double> out(N);
+    GPUVec<REAL_t> out(N);
 
-    thrust::device_vector<double> &in = V.data;
+    GPUVec<REAL_t> &in = V.data;
+
     if (!is_tridiagonal) {
         DIE("Can only apply tridiagonal operators when on the GPU.");
     }
@@ -179,15 +180,10 @@ SizedArray<double> *_TriBandedOperator::apply(SizedArray<double> &V) {
     }
 
 
-    if (is_folded()) {
-        /* ret = fold_vector(self.D.dot(V.flat), unfold=True) */
-    } else {
-        /* ret = self.D.dot(V.flat) */
-    }
 
-    thrust::device_vector<double> a(sub, sub+N);
-    thrust::device_vector<double> b(mid, mid+N);
-    thrust::device_vector<double> c(sup, sup+N);
+    GPUVec<REAL_t> a(sub, sub+N);
+    GPUVec<REAL_t> b(mid, mid+N);
+    GPUVec<REAL_t> c(sup, sup+N);
 
     out[0] = b[0]*in[0] + c[0]*in[1];
     thrust::transform(
