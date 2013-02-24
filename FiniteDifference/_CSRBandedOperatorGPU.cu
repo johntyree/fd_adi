@@ -134,7 +134,7 @@ void _CSRBandedOperator::vectorized_scale(SizedArray<double> &vector) {
     typedef thrust::device_vector<REAL_t>::iterator Iterator;
 
     repeated_range<Iterator> v(vector.data.begin(), vector.data.end(), operator_rows / vsize);
-
+    /* This can be optimized by noting that we only use the row_ind and can make do with project_1st(). */
     thrust::transform(data.begin(), data.end(),
         thrust::make_permutation_iterator(v.begin(),
             thrust::make_transform_iterator(

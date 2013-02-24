@@ -174,12 +174,13 @@ class Cpp_test(unittest.TestCase):
 
 
     def test_csr_apply_0(self):
-        vec = np.arange(10, dtype=float)
+        vec = np.arange(30, dtype=float)
         B = BOG.for_vector(vec)
         ref = B.apply(vec)
         print B.D.tocsr().data
         print B.D.tocsr().indptr
         print B.D.tocsr().indices
+        B.use_csr_format()
         tst = B.apply2(vec)
         npt.assert_array_equal(ref, tst)
 
