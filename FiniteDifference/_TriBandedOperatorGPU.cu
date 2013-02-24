@@ -200,25 +200,25 @@ SizedArray<double> *_TriBandedOperator::apply(SizedArray<double> &V) {
     );
     out[N-1] = a[N-1]*in[N-2] + b[N-1]*in[N-1];
 
+    if (is_folded()) {
+        fold_vector(out, true);
+    }
+
+
+    if (has_residual) {
+        thrust::transform(out.begin(), out.end(),
+                R.data.begin(),
+                out.begin(),
+                thrust::plus<double>());
+    }
+
+    // TODO: We can transpose `out` straight into U
     SizedArray<double> *U = new SizedArray<double>(out,
             V.ndim, V.shape, "CPP Solve U from V");
 
-    /* if (has_residual) { */
-        /* thrust::transform(U->data.begin(), U->data.end(), */
-                /* R.data.begin(), */
-                /* U->data.begin(), */
-                /* thrust::plus<double>()); */
-    /* } */
-
-    /* ret = ret.reshape(V.shape) */
-
-    /* t = range(V.ndim) */
-    /* utils.rolllist(t, V.ndim-1, self.axis) */
-
-    /* if (axis == 0) { */
-        /* U.transpose(); */
-    /* } */
-    /* return ret; */
+    if (axis == 0) {
+        U->transpose(1);
+    }
     FULLTRACE;
     return U;
 }

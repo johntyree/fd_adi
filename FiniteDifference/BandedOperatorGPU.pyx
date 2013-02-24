@@ -413,24 +413,29 @@ cdef class BandedOperator(object):
         else:
             sa_U = self.thisptr_csr.apply(deref(sa_V))
         # print to_string(deref(sa_U))
-        ret = from_SizedArray(deref(sa_U)).reshape(-1)
+        if sa_U.ndim == 2:
+            ret = from_SizedArray_2(deref(sa_U))
+        else:
+            ret = from_SizedArray(deref(sa_U))
         self.immigrate("apply2")
         del sa_V, sa_U
 
         # ret = self.D.dot(V.flat)
-        if self._is_folded():
+        # if self._is_folded():
             # print "apply folded!"
-            ret = self.fold_vector(ret, unfold=True)
+            # print self.top_factors
+            # print self.bottom_factors
+            # ret = self.fold_vector(ret, unfold=True)
 
-        if self.R is not None:
-            ret += self.R
+        # if self.R is not None:
+            # ret += self.R
 
-        if V.ndim == 2:
-            ret = ret.reshape((V.shape[0], V.shape[1]))
+        # if V.ndim == 2:
+            # ret = ret.reshape((V.shape[0], V.shape[1]))
 
-        t = range(V.ndim)
-        utils.rolllist(t, V.ndim-1, self.axis)
-        ret = np.transpose(ret, axes=t)
+        # t = range(V.ndim)
+        # utils.rolllist(t, V.ndim-1, self.axis)
+        # ret = np.transpose(ret, axes=t)
 
         return ret
 
