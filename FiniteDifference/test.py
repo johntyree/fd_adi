@@ -13,6 +13,7 @@ import scipy.sparse
 import scipy.linalg as spl
 
 import utils
+from utils import todia
 from visualize import fp
 # def fp(*x, **y):
     # pass
@@ -1927,13 +1928,6 @@ def compose(*funcs):
         return x
     newf.__name__ = ' ∘ '.join(reversed(names))
     return newf
-
-def todia(A):
-    d = scipy.sparse.dia_matrix(A)
-    d.data = d.data[::-1]
-    d.offsets = d.offsets[::-1]
-    return d
-
 
 def foldMatFor(A, blocks):
     l = A.shape[0] // blocks

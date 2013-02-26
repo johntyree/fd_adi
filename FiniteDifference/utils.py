@@ -146,6 +146,12 @@ def sinh_space(exact, high, density, size, force_exact=True):
             print "Boy, this is terrible."
     return space
 
+def todia(A):
+    d = scipy.sparse.dia_matrix(A)
+    d.data = d.data[::-1]
+    d.offsets = d.offsets[::-1]
+    return d
+
 
 def exponential_space(low, exact, high, ex, size, force_exact=True):
     """
