@@ -138,11 +138,12 @@ class Cpp_test(unittest.TestCase):
 
     def test_migrate_01(self):
         B = self.F.operators[(0,1)]
-        ref = B.copy()
         B.use_csr_format()
+        ref = B.copy()
         B.emigrate("B test 01")
         B.D.data *= 0
         B.immigrate("B test 01")
+        npt.assert_array_equal(ref.D.todense(), B.D.todense())
         assert ref == B
 
 
