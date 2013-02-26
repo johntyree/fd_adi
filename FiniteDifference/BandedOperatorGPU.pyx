@@ -100,22 +100,39 @@ cdef class BandedOperator(object):
                 print "%s:" % attr,  getattr(self, attr), getattr(other, attr)
                 return false
 
-        if ((self.shape == other.shape)
-                and (self.D.offsets == other.D.offsets).all()
-                and (no_nan(self.top_factors) == no_nan(other.top_factors)).all()
-                and (no_nan(self.bottom_factors) == no_nan(other.bottom_factors)).all()
-                and (no_nan(self.deltas) == no_nan(other.deltas)).all()
-                and (self.R == other.R).all()
-                and (self.D.data == other.D.data).all()):
+        if self.csr:
+            offsets = True
+            top_factors = bottom_factors = True
+            R = True
+        else:
+            offsets        = (self.D.offsets == other.D.offsets).all()
+            top_factors    = (no_nan(self.top_factors) == no_nan(other.top_factors)).all()
+            bottom_factors = (no_nan(self.bottom_factors) == no_nan(other.bottom_factors)).all()
+            R              = (self.R == other.R).all()
+
+        mat_type = self.csr == other.csr
+        deltas         = (no_nan(self.deltas) == no_nan(other.deltas)).all()
+        Ddata          = (self.D.data == other.D.data).all()
+        shape          = (self.shape == other.shape)
+
+        if (mat_type
+            and shape
+            and offsets
+            and top_factors
+            and bottom_factors
+            and deltas
+            and R
+            and Ddata):
             return true
         else:
-            print "shape", (self.shape == other.shape)
-            print "offsets", (self.D.offsets == other.D.offsets).all()
-            print "top_fact", (no_nan(self.top_factors) == no_nan(other.top_factors)).all()
-            print "bot_fact", (no_nan(self.bottom_factors) == no_nan(other.bottom_factors)).all()
-            print "deltas", (no_nan(self.deltas) == no_nan(other.deltas)).all()
-            print "R", (self.R == other.R).all()
-            print "Data", (self.D.data == other.D.data).all()
+            print "mat_type", mat_type
+            print "shape", shape
+            print "offsets", offsets
+            print "top_fact", top_factors
+            print "bot_fact", bottom_factors
+            print "deltas", deltas
+            print "R", R
+            print "Data", Ddata
             return false
 
 
