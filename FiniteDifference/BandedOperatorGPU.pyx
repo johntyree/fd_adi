@@ -286,32 +286,34 @@ cdef class BandedOperator(object):
         self.thisptr_tri = <_TriBandedOperator *> 0
         self.location = LOCATION_PYTHON
 
-
-
-
     cpdef diagonalize2(self):
         # This is an ugly heuristic
         block_len = self.shape[0] / self.blocks
         top = 0
         bot = len(self.D.offsets)
         if 2 in self.D.offsets:
-            self.fold_top()
             top += 1
-        if -2 in self.D.offsets:
-            self.bottom_factors = self.D.data[-1,block_len-2::block_len]
-            print "Collected off-tridiag points as bottom_factors"
-            print self.blocks, len(self.bottom_factors)
-            print self.bottom_factors
-            self.D.data[-1,block_len-2::block_len] = 0
-            self.D = utils.todia(self.D)
-            self.emigrate_tri("diagonalize")
-            self.thisptr_tri.fold_bottom(False)
-            self.immigrate_tri("diagonalize")
+            # self.fold_top()
+            self.top_factors = self.D.data[0,2::block_len]
+            self.D = scipy.sparse.dia_matrix((self.D.data[top:],
+                                            self.D.offsets[top:]),
+                                            shape=self.shape)
             bot -= 1
+            top = 0
+        if -2 in self.D.offsets:
+            self.bottom_factors = self.D.data[-1,block_len-3::block_len]
+            bot -= 1
+            self.D = scipy.sparse.dia_matrix((self.D.data[:bot],
+                                            self.D.offsets[:bot]),
+                                            shape=self.shape)
+
+        if (tuple(self.D.offsets) != (1, 0, -1)):
+            print self.D.data
+            assert False
+        self.emigrate_tri("diagonalize")
+        self.thisptr_tri.diagonalize()
+        self.immigrate_tri("diagonalize")
         self.solve_banded_offsets = (1,1)
-        self.D = scipy.sparse.dia_matrix((self.D.data[top:bot],
-                                          self.D.offsets[top:bot]),
-                                          shape=self.shape)
 
 
     cpdef diagonalize(self):

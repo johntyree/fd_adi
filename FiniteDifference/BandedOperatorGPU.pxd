@@ -78,6 +78,7 @@ cdef extern from "_TriBandedOperatorGPU.cuh":
         void add_operator(_TriBandedOperator &other)
         void diagonalize()
         void fold_bottom(cbool unfold)
+        void fold_top(cbool unfold)
         int solve(SizedArray[double] &)
         SizedArray[int] offsets
         SizedArray[double] bottom_factors
@@ -148,6 +149,7 @@ cdef class BandedOperator(object):
     cpdef diagonalize(self)
     cpdef diagonalize2(self)
     cpdef undiagonalize(self)
+    cpdef undiagonalize2(self)
     cpdef fold_bottom(self, unfold=*)
     cpdef fold_top(self, unfold=*)
     cpdef fold_vector(self, double[:] v, unfold=*)

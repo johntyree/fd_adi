@@ -1265,13 +1265,74 @@ class Operator_Folding_test(unittest.TestCase):
         npt.assert_array_equal(self.B.D.data, self.blockdiamat.data)
         npt.assert_array_equal(self.blockdiamat.dot(self.vec), self.B.apply(self.vec))
 
+    def test_diagonalize2(self):
+        mat = self.B.D.data.view().reshape(-1)
+        zeros = mat == 0
+        mat[:] = np.arange(self.B.D.data.size)
+        mat[zeros] = 0
+        B = self.B.copy()
+        print "ref pre"
+        fp(self.B.D)
+        fp(self.B.D.data)
+
+        print "Collected off-tridiag points as bottom_factors"
+        block_len = B.shape[0] / B.blocks
+        bottom_factors = B.D.data[-1,block_len-3::block_len]
+        print B.blocks, len(bottom_factors)
+        print bottom_factors
+
+        self.B.diagonalize()
+        B.diagonalize2()
+        print "ref mid"
+        fp(self.B.D)
+        fp(self.B.D.data)
+        print "tst mid"
+        fp(B.D)
+        fp(B.D.data)
+        B.undiagonalize()
+        npt.assert_(not B.is_tridiagonal())
+        print "ref after"
+        fp(self.B.D)
+        fp(self.B.D.data)
+        print "tst"
+        fp(B.D)
+        fp(B.D.data)
+        print "ref top"
+        fp(self.B.top_factors)
+        print "tst top"
+        fp(B.top_factors)
+        print "ref bot"
+        fp(self.B.bottom_factors)
+        print "tst bot"
+        fp(B.bottom_factors)
+        npt.assert_array_equal(self.B.D.data, B.D.data, err_msg="Diagonalize roundtrip doesn't preserve operator matrix.")
+        npt.assert_(B == self.B, msg="Diagonalize roundtrip doesn't preserve operator.")
+        assert False
+
+
+
 
     def test_diagonalize(self):
         B = self.B.copy()
+        print "ref pre"
+        fp(self.B.D)
+        fp(self.B.D.data)
+        print "tst"
+        fp(B.D)
+        fp(B.D.data)
         B.diagonalize()
+        print "tst mid"
+        fp(B.D)
+        fp(B.D.data)
         B.undiagonalize()
         npt.assert_(not B.is_tridiagonal())
-        npt.assert_array_equal(B.D.data, self.B.D.data, err_msg="Diagonalize roundtrip doesn't preserve operator matrix.")
+        print "ref after"
+        fp(self.B.D)
+        fp(self.B.D.data)
+        print "tst"
+        fp(B.D)
+        fp(B.D.data)
+        npt.assert_array_equal(self.B.D.data, B.D.data, err_msg="Diagonalize roundtrip doesn't preserve operator matrix.")
         npt.assert_(B == self.B, msg="Diagonalize roundtrip doesn't preserve operator.")
 
 
