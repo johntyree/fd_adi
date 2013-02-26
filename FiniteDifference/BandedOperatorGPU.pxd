@@ -45,6 +45,8 @@ cdef extern from "VecArray.h":
 cdef extern from "_CSRBandedOperatorGPU.cuh":
 
     cdef cppclass _CSRBandedOperator:
+        Py_ssize_t operator_rows
+        Py_ssize_t blocks
         GPUVec[double] data
         GPUVec[int] row_ptr
         GPUVec[int] row_ind

@@ -14,6 +14,8 @@ class _CSRBandedOperator {
         GPUVec<int> row_ptr;
         GPUVec<int> row_ind;
         GPUVec<int> col_ind;
+        Py_ssize_t operator_rows;
+        Py_ssize_t blocks;
         std::string name;
 
         SizedArray<double> *apply(SizedArray<double> &);
@@ -30,8 +32,6 @@ class _CSRBandedOperator {
             );
 
     private:
-        Py_ssize_t operator_rows;
-        Py_ssize_t blocks;
         Py_ssize_t block_len;
         Py_ssize_t nnz;
         cusparseHandle_t handle;
