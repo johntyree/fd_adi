@@ -1280,9 +1280,9 @@ class Operator_Folding_test(unittest.TestCase):
 
         # Folding and unfolding
         Btop = B.copy()
-        Btop.foldtop()
+        Btop.fold_top()
         Bbottom = B.copy()
-        Bbottom.foldbottom()
+        Bbottom.fold_bottom()
         B.diagonalize()
 
         v = np.asarray(Bbottom.fold_vector(vec.copy()))
@@ -1321,7 +1321,7 @@ class Operator_Folding_test(unittest.TestCase):
 
         # Explicit
         Btop = Borig.copy()
-        Btop.foldtop()
+        Btop.fold_top()
         npt.assert_array_equal(Btop.D.data[1:], topblocktridiamat.data, err_msg="Bottom op and mat not equal.")
         assert Btop.is_folded()
         assert not Btop.is_tridiagonal()
@@ -1335,7 +1335,7 @@ class Operator_Folding_test(unittest.TestCase):
         bvec = vec.copy()
 
         Bbottom = Borig.copy()
-        Bbottom.foldbottom()
+        Bbottom.fold_bottom()
         npt.assert_array_equal(Bbottom.D.data[:-1], bottomblocktridiamat.data, err_msg="Bottom op and mat not equal.")
         assert Bbottom.is_folded()
         assert not Bbottom.is_tridiagonal()
@@ -1375,7 +1375,7 @@ class Operator_Folding_test(unittest.TestCase):
         ref = vec.copy()
         ivec = vec.copy()
         B = Borig.copy()
-        B.foldtop()
+        B.fold_top()
         for i in range(loops):
             ivec = inv(topblocktridiamat.todense()).dot(topblockx.dot(ivec)).A[0]
             ref = scipy.linalg.solve_banded((2,2), blockdiamat.data, ref)
@@ -1404,7 +1404,7 @@ class Operator_Folding_test(unittest.TestCase):
         ref = vec.copy()
         ivec = vec.copy()
         B = Borig.copy()
-        B.foldbottom()
+        B.fold_bottom()
         for i in range(loops):
             ivec = inv(bottomblocktridiamat.todense()).dot(bottomblockx.dot(ivec)).A[0]
             ref = scipy.linalg.solve_banded((2,2), blockdiamat.data, ref)

@@ -257,15 +257,15 @@ cdef class BandedOperator(object):
         top = 0
         bot = len(self.D.offsets)
         if 2 in self.D.offsets:
-            self.foldtop()
+            self.fold_top()
             top += 1
         if -2 in self.D.offsets:
-            self.foldbottom()
+            self.fold_bottom()
             bot -= 1
         self.solve_banded_offsets = (1,1)
         self.D = scipy.sparse.dia_matrix((self.D.data[top:bot],
                                           self.D.offsets[top:bot]),
-                                         shape=self.shape)
+                                          shape=self.shape)
 
 
     cpdef undiagonalize(self):
@@ -279,15 +279,15 @@ cdef class BandedOperator(object):
             data[to] += self.D.data[fro]
         self.D = scipy.sparse.dia_matrix((data, offsets), shape=self.shape)
         if self.top_factors is not None:
-            self.foldtop(unfold=True)
+            self.fold_top(unfold=True)
             self.top_factors = None
         if self.bottom_factors is not None:
-            self.foldbottom(unfold=True)
+            self.fold_bottom(unfold=True)
             self.bottom_factors = None
         self.solve_banded_offsets = (abs(min(offsets)), abs(max(offsets)))
 
 
-    cpdef foldbottom(self, unfold=False):
+    cpdef fold_bottom(self, unfold=False):
         d = self.D.data
         m = get_int_index(self.D.offsets, 0)
         for i in [1, 0,-1, -2]:
@@ -321,7 +321,7 @@ cdef class BandedOperator(object):
             self.bottom_factors = None
 
 
-    cpdef foldtop(self, unfold=False):
+    cpdef fold_top(self, unfold=False):
         d = self.D.data
         m = get_int_index(self.D.offsets, 0)
         for i in [2, 1, 0,-1]:

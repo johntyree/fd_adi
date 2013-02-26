@@ -68,13 +68,18 @@ cdef extern from "_TriBandedOperatorGPU.cuh":
         void view()
         cbool is_folded()
         cbool has_residual
+        cbool has_bottom_factors
+        cbool has_top_factors
         SizedArray[double] *apply(SizedArray[double] &)
         void add_scalar(double val)
         void vectorized_scale(SizedArray[double] &vector)
         void add_operator(_TriBandedOperator &other)
         void diagonalize()
+        void fold_bottom(cbool unfold)
         int solve(SizedArray[double] &)
         SizedArray[int] offsets
+        SizedArray[double] bottom_factors
+        SizedArray[double] top_factors
         SizedArray[double] diags
         SizedArray[double] R
         _TriBandedOperator(
@@ -140,8 +145,8 @@ cdef class BandedOperator(object):
     cdef  immigrate_csr(self, tag=*)
     cpdef diagonalize(self)
     cpdef undiagonalize(self)
-    cpdef foldbottom(self, unfold=*)
-    cpdef foldtop(self, unfold=*)
+    cpdef fold_bottom(self, unfold=*)
+    cpdef fold_top(self, unfold=*)
     cpdef fold_vector(self, double[:] v, unfold=*)
     cpdef cbool is_tridiagonal(self)
     cpdef use_csr_format(self, cbool b=*)
