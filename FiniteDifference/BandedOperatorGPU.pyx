@@ -127,59 +127,17 @@ cdef class BandedOperator(object):
     cpdef use_csr_format(self, cbool b=True):
         self.csr = b
 
-    cpdef immigrate(self, tag=""):
-        if self.is_cross_derivative():
-            self.immigrate_csr(tag)
-        else:
-            self.immigrate_tri(tag)
-
-    cdef immigrate_csr(self, tag=""):
-        if tag:
-            print "Immigrate CSR:", tag, to_string(self.thisptr_csr)
-        assert (self.thisptr_csr)
-        self.use_csr_format()
-        csr = self.D.tocsr()
-
-        csr.data = from_GPUVec(self.thisptr_csr.data)
-        csr.indices = from_GPUVec_i(self.thisptr_csr.col_ind)
-        csr.indptr = from_GPUVec_i(self.thisptr_csr.row_ptr)
-
-        del self.thisptr_csr
-        self.thisptr_csr = <_CSRBandedOperator *> 0
-
-        self.location = LOCATION_PYTHON
-
-
-    cdef immigrate_tri(self, tag=""):
-        if tag:
-            print "Immigrate Tri:", tag, to_string(self.thisptr_tri)
-        assert self.thisptr_tri != <void *>0
-        self.D.data = from_SizedArray_2(self.thisptr_tri.diags)
-
-        for row, o in enumerate(self.D.offsets):
-            if o > 0:
-                self.D.data[row,o:] = self.D.data[row,:-o]
-                self.D.data[row,:o] = 0
-            if o < 0:
-                self.D.data[row,:o] = self.D.data[row,-o:]
-                self.D.data[row,o:] = 0
-
-        if self.thisptr_tri.has_residual:
-            self.R = from_SizedArray(self.thisptr_tri.R)
-        else:
-            assert self.R is None, ("We used to have a residual..."
-                                    "but now it's gone!")
-        del self.thisptr_tri
-        self.thisptr_tri = <_TriBandedOperator *> 0
-        self.location = LOCATION_PYTHON
-
-
     cpdef emigrate(self, tag=""):
         if self.is_cross_derivative():
             return self.emigrate_csr(tag)
         else:
             return self.emigrate_tri(tag)
 
+    cpdef immigrate(self, tag=""):
+        if self.is_cross_derivative():
+            self.immigrate_csr(tag)
+        else:
+            self.immigrate_tri(tag)
 
     cdef emigrate_csr(self, tag=""):
         if tag:
@@ -205,6 +163,28 @@ cdef class BandedOperator(object):
 
         self.location = LOCATION_GPU
         del data, row_ptr, row_ind, col_ind
+
+    cdef immigrate_csr(self, tag=""):
+        if tag:
+            print "Immigrate CSR:", tag, to_string(self.thisptr_csr)
+        assert (self.thisptr_csr)
+        self.use_csr_format()
+        csr = self.D.tocsr()
+
+        data = from_GPUVec(self.thisptr_csr.data)
+        indices = from_GPUVec_i(self.thisptr_csr.col_ind)
+        indptr = from_GPUVec_i(self.thisptr_csr.row_ptr)
+
+        print "Data from csr on GPU"
+        print data
+
+        shp = (self.thisptr_csr.operator_rows,self.thisptr_csr.operator_rows)
+        self.D = scipy.sparse.csr_matrix((data, indices, indptr), shape=shp)
+
+        del self.thisptr_csr
+        self.thisptr_csr = <_CSRBandedOperator *> 0
+
+        self.location = LOCATION_PYTHON
 
 
     cdef emigrate_tri(self, tag=""):
@@ -250,6 +230,67 @@ cdef class BandedOperator(object):
 
         self.location = LOCATION_GPU
         del diags, offsets, R, high_dirichlet, low_dirichlet, top_factors, bottom_factors
+
+    cdef immigrate_tri(self, tag=""):
+        if tag:
+            print "Immigrate Tri:", tag, to_string(self.thisptr_tri)
+        assert self.thisptr_tri != <void *>0
+        self.D.data = from_SizedArray_2(self.thisptr_tri.diags)
+
+        # block_len = self.D.shape[0] / self.blocks
+        # bots = from_SizedArray(self.thisptr_tri.bottom_factors)
+        # if self.thisptr_tri.has_bottom_factors:
+            # self.bottom_factors = bots
+        # else:
+            # if -2 in self.D.offsets:
+                # self.D.data[-1,block_len-1::block_len] = bots
+
+
+
+        # Shift because of scipy/cublas row configuration
+        for row, o in enumerate(self.D.offsets):
+            if o > 0:
+                self.D.data[row,o:] = self.D.data[row,:-o]
+                self.D.data[row,:o] = 0
+            if o < 0:
+                self.D.data[row,:o] = self.D.data[row,-o:]
+                self.D.data[row,o:] = 0
+
+        if self.thisptr_tri.has_residual:
+            self.R = from_SizedArray(self.thisptr_tri.R)
+        else:
+            assert self.R is None, ("We used to have a residual..."
+                                    "but now it's gone!")
+        del self.thisptr_tri
+        self.thisptr_tri = <_TriBandedOperator *> 0
+        self.location = LOCATION_PYTHON
+
+
+
+
+    cpdef diagonalize2(self):
+        # This is an ugly heuristic
+        block_len = self.shape[0] / self.blocks
+        top = 0
+        bot = len(self.D.offsets)
+        if 2 in self.D.offsets:
+            self.fold_top()
+            top += 1
+        if -2 in self.D.offsets:
+            self.bottom_factors = self.D.data[-1,block_len-2::block_len]
+            print "Collected off-tridiag points as bottom_factors"
+            print self.blocks, len(self.bottom_factors)
+            print self.bottom_factors
+            self.D.data[-1,block_len-2::block_len] = 0
+            self.D = utils.todia(self.D)
+            self.emigrate_tri("diagonalize")
+            self.thisptr_tri.fold_bottom(False)
+            self.immigrate_tri("diagonalize")
+            bot -= 1
+        self.solve_banded_offsets = (1,1)
+        self.D = scipy.sparse.dia_matrix((self.D.data[top:bot],
+                                          self.D.offsets[top:bot]),
+                                          shape=self.shape)
 
 
     cpdef diagonalize(self):

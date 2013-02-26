@@ -146,6 +146,7 @@ cdef class BandedOperator(object):
     cdef  immigrate_tri(self, tag=*)
     cdef  immigrate_csr(self, tag=*)
     cpdef diagonalize(self)
+    cpdef diagonalize2(self)
     cpdef undiagonalize(self)
     cpdef fold_bottom(self, unfold=*)
     cpdef fold_top(self, unfold=*)
