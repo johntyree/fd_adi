@@ -137,7 +137,11 @@ cdef class BandedOperator(object):
 
 
     cpdef copy(self):
+        if self.csr:
+            self.D = self.D.todia()
         B = BandedOperator((self.D.data, self.D.offsets), residual=self.R, inplace=False)
+        if self.csr:
+            B.D = B.D.tocsr()
         B.copy_meta_data(self)
         return B
 
