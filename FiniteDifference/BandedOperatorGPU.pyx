@@ -315,6 +315,14 @@ cdef class BandedOperator(object):
         self.immigrate_tri("diagonalize")
         self.solve_banded_offsets = (1,1)
 
+    cpdef undiagonalize2(self):
+        self.emigrate_tri("undiagonalize")
+        if self.thisptr_tri.has_top_factors:
+            self.thisptr_tri.fold_top(True)
+        if self.thisptr_tri.has_bottom_factors:
+            self.thisptr_tri.fold_bottom(True)
+        self.immigrate_tri("undiagonalize")
+
 
     cpdef diagonalize(self):
         # This is an ugly heuristic

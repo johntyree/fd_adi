@@ -1290,21 +1290,22 @@ class Operator_Folding_test(unittest.TestCase):
         fp(B.D)
         fp(B.D.data)
         B.undiagonalize()
+        self.B.undiagonalize()
         npt.assert_(not B.is_tridiagonal())
         print "ref after"
         fp(self.B.D)
         fp(self.B.D.data)
-        print "tst"
+        print "tst after"
         fp(B.D)
         fp(B.D.data)
         print "ref top"
-        fp(self.B.top_factors)
+        fp(self.B.top_factors or np.array([np.nan]))
         print "tst top"
-        fp(B.top_factors)
+        fp(B.top_factors or np.array([np.nan]))
         print "ref bot"
-        fp(self.B.bottom_factors)
+        fp(self.B.bottom_factors or np.array([np.nan]))
         print "tst bot"
-        fp(B.bottom_factors)
+        fp(B.bottom_factors or np.array([np.nan]))
         npt.assert_array_equal(self.B.D.data, B.D.data, err_msg="Diagonalize roundtrip doesn't preserve operator matrix.")
         npt.assert_(B == self.B, msg="Diagonalize roundtrip doesn't preserve operator.")
         assert False
