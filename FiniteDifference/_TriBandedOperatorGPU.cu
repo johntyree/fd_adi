@@ -427,11 +427,18 @@ void _TriBandedOperator::fold_vector(GPUVec<double> &vector, bool unfold) {
 
 void _TriBandedOperator::diagonalize() {
     FULLTRACE;
-    TRACE;
     if (bottom_is_folded) fold_bottom();
     if (top_is_folded) fold_top();
     FULLTRACE;
 }
+
+void _TriBandedOperator::undiagonalize() {
+    FULLTRACE;
+    if (bottom_is_folded) fold_bottom(true);
+    if (top_is_folded) fold_top(true);
+    FULLTRACE;
+}
+
 
 template <typename Tuple>
 struct fold_operator : public thrust::unary_function<Tuple, void> {

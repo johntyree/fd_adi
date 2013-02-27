@@ -33,6 +33,7 @@ class _TriBandedOperator {
         void add_operator(_TriBandedOperator &other);
         void fold_vector(GPUVec<double> &vector, bool);
         void diagonalize();
+        void undiagonalize();
         void fold_bottom(bool = false);
         void fold_top(bool = false);
 
