@@ -23,13 +23,13 @@ cdef class BandedOperator(object):
         solve_banded_offsets
         unsigned int blocks
         shape
-        cbool csr
+        cbool is_mixed_derivative
         top_factors, bottom_factors
         cbool top_is_folded
         cbool bottom_is_folded
 
 
-    cdef inline cbool _is_folded(self)
+    cpdef cbool is_folded(self)
 
     cpdef copy(self)
     cpdef diagonalize(self)
@@ -40,8 +40,6 @@ cdef class BandedOperator(object):
     cpdef cbool is_tridiagonal(self)
     cpdef apply(self, V, overwrite=*)
     cpdef solve(self, V, overwrite=*)
-    cpdef use_csr_format(self, cbool b=*)
-    cpdef cbool is_cross_derivative(self)
     cpdef applyboundary(self, boundary, mesh)
     cpdef splice_with(self, begin, at, inplace=*)
     cpdef add_operator(BandedOperator self, BandedOperator other, cbool inplace=*)

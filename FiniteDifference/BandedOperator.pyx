@@ -30,7 +30,7 @@ cdef class BandedOperator(object):
             U2 = L.I * (U1 - R) --> U2 = B.solve(U1)
         """
 
-        self.attrs = ('derivative', 'csr', 'order', 'axis',
+        self.attrs = ('derivative', 'is_mixed_derivative', 'order', 'axis',
                       'deltas', 'dirichlet', 'blocks', 'top_factors',
                       'bottom_factors', 'top_is_folded', 'bottom_is_folded')
         data, offsets = data_offsets
@@ -62,7 +62,7 @@ cdef class BandedOperator(object):
         self.top_factors = None
         self.bottom_factors = None
         self.axis = axis
-        self.csr = False
+        self.is_mixed_derivative = False
 
 
     # def __dealloc__(self):
@@ -94,19 +94,13 @@ cdef class BandedOperator(object):
                 print "%s:" % attr,  getattr(self, attr), getattr(other, attr)
                 return false
 
-        if self.csr:
-            offsets = True
-            top_factors = bottom_factors = True
-            R = True
-        else:
-            if self.D.offsets.shape != other.D.offsets.shape:
-                print "Offset mismatch", self.D.offsets, other.D.offsets
-            offsets        = np.array_equal(self.D.offsets, other.D.offsets)
-            top_factors    = np.array_equal(no_nan(self.top_factors), no_nan(other.top_factors))
-            bottom_factors = np.array_equal(no_nan(self.bottom_factors), no_nan(other.bottom_factors))
-            R              = np.array_equal(self.R, other.R)
-
-        mat_type = self.csr == other.csr
+        if self.D.offsets.shape != other.D.offsets.shape:
+            print "Offset mismatch", self.D.offsets, other.D.offsets
+        offsets        = np.array_equal(self.D.offsets, other.D.offsets)
+        top_factors    = np.array_equal(no_nan(self.top_factors), no_nan(other.top_factors))
+        bottom_factors = np.array_equal(no_nan(self.bottom_factors), no_nan(other.bottom_factors))
+        R              = np.array_equal(self.R, other.R)
+        mat_type = self.is_mixed_derivative == other.is_mixed_derivative
         deltas         = np.array_equal(no_nan(self.deltas), no_nan(other.deltas))
         Ddata          = np.array_equal(self.D.data, other.D.data)
         shape          = np.array_equal(self.shape, other.shape)
@@ -133,11 +127,7 @@ cdef class BandedOperator(object):
 
 
     cpdef copy(self):
-        if self.csr:
-            self.D = self.D.todia()
         B = BandedOperator((self.D.data, self.D.offsets), residual=self.R, inplace=False)
-        if self.csr:
-            B.D = B.D.tocsr()
         B.copy_meta_data(self)
         return B
 
@@ -270,13 +260,8 @@ cdef class BandedOperator(object):
         return np.asarray(v)
 
 
-    cdef inline cbool _is_folded(self):
+    cpdef cbool is_folded(self):
         return self.top_is_folded or self.bottom_is_folded
-    def is_folded(self):
-        return self._is_folded()
-
-    cpdef cbool is_cross_derivative(self):
-        return self.csr
 
 
     cpdef cbool is_tridiagonal(self):
@@ -299,7 +284,7 @@ cdef class BandedOperator(object):
             # print "Setting V[-1,:] to", self.dirichlet[-1]
             V[...,-1] = self.dirichlet[1]
 
-        if self._is_folded():
+        if self.is_folded():
             # print "apply folded!"
             ret = self.fold_vector(self.D.dot(V.flat), unfold=True)
         else:
@@ -334,7 +319,7 @@ cdef class BandedOperator(object):
         else:
             V0 = V.ravel()
 
-        if self._is_folded():
+        if self.is_folded():
             # print "solve Folded"
             V0 = self.fold_vector(V0)
 
@@ -347,9 +332,6 @@ cdef class BandedOperator(object):
         ret = np.transpose(ret, axes=t)
 
         return ret
-
-    cpdef use_csr_format(self, cbool b=True):
-        self.csr = b
 
     # @cython.boundscheck(False)
     cpdef applyboundary(self, boundary, mesh):
@@ -590,7 +572,7 @@ cdef class BandedOperator(object):
         # Verify that they are compatible
         if self.shape[1] != other.shape[1]:
             raise ValueError("Both operators must have the same length")
-        if self._is_folded() or other._is_folded():
+        if self.is_folded() or other.is_folded():
             raise ValueError("Cannot add diagonalized operators.")
         # If we're adding it directly to this one
         if inplace:
