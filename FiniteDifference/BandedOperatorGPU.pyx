@@ -213,7 +213,7 @@ cdef class BandedOperator(object):
 
     cdef emigrate_tri(self, tag=""):
         if tag:
-            print "Emigrate Tri:", tag, to_string(self.thisptr_tri)
+            print "Emigrate Tri:", tag, to_string(self.thisptr_tri), "offsets", self.D.offsets
         assert not (self.thisptr_tri)
 
         self.scipy_to_cublas()
@@ -396,20 +396,17 @@ cdef class BandedOperator(object):
             to = get_int_index(offsets, o)
             data[to] += self.D.data[fro]
         self.D = scipy.sparse.dia_matrix((data, offsets), shape=self.shape)
-        print "Before undiagonalizing"
-        print (self.D.data)
         if self.top_factors is not None:
-            print "top factors"
             self.fold_top(unfold=True)
             self.top_factors = None
         if self.bottom_factors is not None:
-            print "bottom factors"
             self.fold_bottom(unfold=True)
             self.bottom_factors = None
         self.solve_banded_offsets = (abs(min(offsets)), abs(max(offsets)))
 
 
     cpdef fold_bottom(self, unfold=False):
+        print "Folding bottom"
         d = self.D.data
         m = get_int_index(self.D.offsets, 0)
         for i in [1, 0,-1, -2]:

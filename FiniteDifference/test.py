@@ -131,9 +131,12 @@ class Cpp_test(unittest.TestCase):
     def test_migrate_1(self):
         B = self.F.operators[1]
         ref = B.copy()
+        print "bottom_is_folded", B.bottom_is_folded
+        print type(B.D)
         B.emigrate("B test 1")
         B.D.data *= 0
         B.immigrate("B test 1")
+        print type(B.D)
         assert ref == B
 
     def test_migrate_01(self):
@@ -1289,6 +1292,10 @@ class Operator_Folding_test(unittest.TestCase):
         print "tst mid"
         fp(B.D)
         fp(B.D.data)
+
+        npt.assert_array_equal(self.B.D.data, B.D.data, err_msg="Diagonalize alone doesn't preserve operator matrix.")
+        npt.assert_(B == self.B, msg="Diagonalize alone doesn't preserve operator.")
+
         B.undiagonalize()
         self.B.undiagonalize()
         npt.assert_(not B.is_tridiagonal())
@@ -1306,9 +1313,8 @@ class Operator_Folding_test(unittest.TestCase):
         fp(self.B.bottom_factors or np.array([np.nan]))
         print "tst bot"
         fp(B.bottom_factors or np.array([np.nan]))
-        npt.assert_array_equal(self.B.D.data, B.D.data, err_msg="Diagonalize roundtrip doesn't preserve operator matrix.")
-        npt.assert_(B == self.B, msg="Diagonalize roundtrip doesn't preserve operator.")
-        assert False
+        npt.assert_array_equal(self.B.D.data, B.D.data, err_msg="Undiagonalize roundtrip doesn't preserve operator matrix.")
+        npt.assert_(B == self.B, msg="Undiagonalize roundtrip doesn't preserve operator.")
 
 
 
