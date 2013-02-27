@@ -186,9 +186,6 @@ cdef class BandedOperator(object):
             an  = m+1, (b+1)*block_len - 1 - 1
             an1 = m+1, (b+1)*block_len - 1 - 2
             zn  = m+2, (b+1)*block_len - 1 - 2
-            # print "Block %i %s, %s: d[zn] = %f, d[an1] = %f" % (b, zn, an1, d[zn], d[an1])
-            # print "Second row:", d[an1], d[bn1], d[cn1]
-            # print "Bottom row:", d[zn], d[an], d[bn]
             if unfold:
                 d[zn] -= d[an1] * self.bottom_factors[b]
                 d[an] -= d[bn1] * self.bottom_factors[b]
@@ -222,9 +219,6 @@ cdef class BandedOperator(object):
             c0 = m-1, b*block_len + 1
             c1 = m-1, b*block_len + 2
             d0 = m-2, b*block_len + 2
-            # print "Block %i %s, %s: d[d0] = %f, d[c1] = %f" % (b, d0, c1, d[d0], d[c1])
-            # print "Top row   :", d[b0], d[c0], d[d0]
-            # print "Second row:", d[a1], d[b1], d[c1]
             if unfold:
                 d[d0] -= d[c1] * self.top_factors[b]
                 d[c0] -= d[b1] * self.top_factors[b]
@@ -250,8 +244,6 @@ cdef class BandedOperator(object):
             u1 = u0 + 1
             un = (b+1)*block_len - 1
             un1 = un - 1
-            # print u0, u1, un1, un
-            # print "[%f, %f .. %f, %f]" % (v[u0], v[u1], v[un1], v[un])
             direction = -1 if unfold else 1
             if self.top_factors is not None:
                 v[u0] += direction * v[u1]  * self.top_factors[b]
