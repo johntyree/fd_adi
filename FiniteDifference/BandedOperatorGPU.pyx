@@ -21,7 +21,7 @@ from cython.operator import dereference as deref
 
 cdef class BandedOperator(object):
 
-    def __init__(self, other = None):
+    def __init__(self, other=None, tag="Constructor"):
     # def __init__(self, data_offsets, residual=None, int inplace=True,
             # int derivative=1, int order=2, deltas=None, int axis=0):
         """
@@ -36,7 +36,7 @@ cdef class BandedOperator(object):
                       'blocks', 'top_is_folded', 'bottom_is_folded')
 
         if other:
-            self.emigrate(other, "Constructor")
+            self.emigrate(other, tag)
 
     # def __dealloc__(self):
         # if (self.thisptr_tri):
