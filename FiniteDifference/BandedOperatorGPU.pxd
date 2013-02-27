@@ -160,7 +160,6 @@ cdef class BandedOperator(object):
     cpdef fold_top(self, unfold=*)
     cpdef fold_vector(self, double[:] v, unfold=*)
     cpdef cbool is_tridiagonal(self)
-    cpdef use_csr_format(self, cbool b=*)
     cpdef cbool is_cross_derivative(self)
     cpdef apply(self, V, overwrite=*)
     cpdef apply2(self, np.ndarray V, overwrite=*)

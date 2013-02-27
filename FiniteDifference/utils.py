@@ -495,3 +495,25 @@ def rolllist(l, fromindex, toindex):
     other elements."""
     n = l.pop(fromindex)
     l.insert(toindex, n)
+
+
+def foldMatFor(A, blocks):
+    l = A.shape[0] // blocks
+    data = np.zeros((3, A.shape[0]))
+    data[1, :] = 1
+    offsets = (1, 0, -1)
+    m = len(A.offsets) // 2
+    for b in range(blocks):
+        data[0, b*l+1] = -A.data[m-2,b*l+2] / A.data[m-1,b*l+2] if A.data[m-1,b*l+2] else 0
+        data[2, (b+1)*l-2] = -A.data[m+2,(b+1)*l-3] / A.data[m+1,(b+1)*l-3] if A.data[m+2,(b+1)*l-3] else 0
+        d = scipy.sparse.dia_matrix((data, offsets), shape=A.shape)
+    return d
+
+
+def block_repeat(B, blocks):
+    B = B.copy()
+    B.D = scipy.sparse.dia_matrix((np.tile(B.D.data, blocks), B.D.offsets), [x*blocks for x in B.shape])
+    B.R = np.tile(B.R, blocks)
+    B.blocks = blocks
+    B.shape = tuple(x*blocks for x in B.shape)
+    return B

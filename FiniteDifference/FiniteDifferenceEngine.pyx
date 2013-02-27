@@ -27,8 +27,11 @@ import scipy.linalg as spl
 
 import itertools as it
 
-import BandedOperatorGPU as BO
-cimport BandedOperatorGPU as BO
+import BandedOperatorGPU as BOG
+cimport BandedOperatorGPU as BOG
+
+import BandedOperator as BO
+cimport BandedOperator as BO
 BandedOperator = BO.BandedOperator
 
 from visualize import fp
@@ -548,7 +551,7 @@ cdef class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
             BB = flatten_tensor_aligned(Bbs, check=False)
             BM = flatten_tensor_aligned(Bms, check=False)
             templates[d] = BP + BM + BB
-            templates[d].use_csr_format()
+            # templates[d].use_csr_format()
         self.simple_operators = templates
         self.scale_and_combine_operators()
         return mixed_derivs

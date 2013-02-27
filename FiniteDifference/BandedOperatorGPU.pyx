@@ -148,9 +148,6 @@ cdef class BandedOperator(object):
         B.copy_meta_data(self)
         return B
 
-    cpdef use_csr_format(self, cbool b=True):
-        self.csr = b
-
     cpdef emigrate(self, tag=""):
         if self.is_cross_derivative():
             return self.emigrate_csr(tag)
@@ -394,6 +391,7 @@ cdef class BandedOperator(object):
                                           self.D.offsets[top:bot]),
                                           shape=self.shape)
 
+
     cpdef undiagonalize(self):
         data = np.zeros((5, self.shape[0]))
         offsets = np.array((2, 1, 0, -1, -2), dtype=np.int32)
@@ -484,6 +482,7 @@ cdef class BandedOperator(object):
         self.top_is_folded = not unfold
         if unfold:
             self.top_factors = None
+
 
     cpdef fold_vector(self, double[:] v, unfold=False):
         cdef int direction, u0, u1, un ,un1
@@ -1001,6 +1000,13 @@ cdef class BandedOperator(object):
 
 
     cpdef vectorized_scale(self, np.ndarray vector) except +:
+        """
+        @vector@ is the correpsonding mesh vector of the current dimension.
+
+        Also applies to the residual vector self.R.
+
+        See FiniteDifferenceEngine.coefficients.
+        """
 
         if self.location != LOCATION_GPU:
             self.emigrate()

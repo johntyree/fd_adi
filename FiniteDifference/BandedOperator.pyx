@@ -30,7 +30,9 @@ cdef class BandedOperator(object):
             U2 = L.I * (U1 - R) --> U2 = B.solve(U1)
         """
 
-        self.attrs = ('derivative', 'order', 'axis', 'deltas', 'dirichlet', 'blocks', 'top_factors', 'bottom_factors')
+        self.attrs = ('derivative', 'csr', 'order', 'axis',
+                      'deltas', 'dirichlet', 'blocks', 'top_factors',
+                      'bottom_factors', 'top_is_folded', 'bottom_is_folded')
         data, offsets = data_offsets
         assert data.shape[1] > 3, "Vector too short to use finite differencing."
         if not inplace:
@@ -49,8 +51,9 @@ cdef class BandedOperator(object):
             raise ValueError("Residual vector has wrong shape: got %i,"
                              "expected %i." % (residual.shape[0], size))
 
-        # NB: When adding something here, also add to BandedOperator.attrs
+        # XXX: When adding something here, also add to BandedOperator.attrs
         self.blocks = 1
+        self.top_is_folded = self.bottom_is_folded = False
         self.derivative = derivative
         self.order = order
         self.deltas = deltas if deltas is not None else np.array([np.nan])
@@ -59,6 +62,12 @@ cdef class BandedOperator(object):
         self.top_factors = None
         self.bottom_factors = None
         self.axis = axis
+        self.csr = False
+
+
+    # def __dealloc__(self):
+        # if (self.thisptr_tri):
+            # del self.thisptr_tri
 
     def copy_meta_data(self, other, **kwargs):
         for attr in self.attrs:
@@ -85,27 +94,50 @@ cdef class BandedOperator(object):
                 print "%s:" % attr,  getattr(self, attr), getattr(other, attr)
                 return false
 
-        if ((self.shape == other.shape)
-                and (self.D.offsets == other.D.offsets).all()
-                and (no_nan(self.top_factors) == no_nan(other.top_factors)).all()
-                and (no_nan(self.bottom_factors) == no_nan(other.bottom_factors)).all()
-                and (no_nan(self.deltas) == no_nan(other.deltas)).all()
-                and (self.R == other.R).all()
-                and (self.D.data == other.D.data).all()):
+        if self.csr:
+            offsets = True
+            top_factors = bottom_factors = True
+            R = True
+        else:
+            if self.D.offsets.shape != other.D.offsets.shape:
+                print "Offset mismatch", self.D.offsets, other.D.offsets
+            offsets        = np.array_equal(self.D.offsets, other.D.offsets)
+            top_factors    = np.array_equal(no_nan(self.top_factors), no_nan(other.top_factors))
+            bottom_factors = np.array_equal(no_nan(self.bottom_factors), no_nan(other.bottom_factors))
+            R              = np.array_equal(self.R, other.R)
+
+        mat_type = self.csr == other.csr
+        deltas         = np.array_equal(no_nan(self.deltas), no_nan(other.deltas))
+        Ddata          = np.array_equal(self.D.data, other.D.data)
+        shape          = np.array_equal(self.shape, other.shape)
+
+        if (mat_type
+            and shape
+            and offsets
+            and top_factors
+            and bottom_factors
+            and deltas
+            and R
+            and Ddata):
             return true
         else:
-            print "shape", (self.shape == other.shape)
-            print "offsets", (self.D.offsets == other.D.offsets).all()
-            print "top_fact", (no_nan(self.top_factors) == no_nan(other.top_factors)).all()
-            print "bot_fact", (no_nan(self.bottom_factors) == no_nan(other.bottom_factors)).all()
-            print "deltas", (no_nan(self.deltas) == no_nan(other.deltas)).all()
-            print "R", (self.R == other.R).all()
-            print "Data", (self.D.data == other.D.data).all()
+            print "mat_type", mat_type
+            print "shape", shape
+            print "offsets", offsets
+            print "top_fact", top_factors
+            print "bot_fact", bottom_factors
+            print "deltas", deltas
+            print "R", R
+            print "Data", Ddata
             return false
 
 
     cpdef copy(self):
+        if self.csr:
+            self.D = self.D.todia()
         B = BandedOperator((self.D.data, self.D.offsets), residual=self.R, inplace=False)
+        if self.csr:
+            B.D = B.D.tocsr()
         B.copy_meta_data(self)
         return B
 
@@ -115,10 +147,10 @@ cdef class BandedOperator(object):
         top = 0
         bot = len(self.D.offsets)
         if 2 in self.D.offsets:
-            self.foldtop()
+            self.fold_top()
             top += 1
         if -2 in self.D.offsets:
-            self.foldbottom()
+            self.fold_bottom()
             bot -= 1
         self.solve_banded_offsets = (1,1)
         self.D = scipy.sparse.dia_matrix((self.D.data[top:bot],
@@ -137,15 +169,16 @@ cdef class BandedOperator(object):
             data[to] += self.D.data[fro]
         self.D = scipy.sparse.dia_matrix((data, offsets), shape=self.shape)
         if self.top_factors is not None:
-            self.foldtop(unfold=True)
+            self.fold_top(unfold=True)
             self.top_factors = None
         if self.bottom_factors is not None:
-            self.foldbottom(unfold=True)
+            self.fold_bottom(unfold=True)
             self.bottom_factors = None
         self.solve_banded_offsets = (abs(min(offsets)), abs(max(offsets)))
 
 
-    cpdef foldbottom(self, unfold=False):
+    cpdef fold_bottom(self, unfold=False):
+        print "Folding bottom"
         d = self.D.data
         m = get_int_index(self.D.offsets, 0)
         for i in [1, 0,-1, -2]:
@@ -175,11 +208,13 @@ cdef class BandedOperator(object):
                 d[zn] += d[an1] * self.bottom_factors[b]
                 d[an] += d[bn1] * self.bottom_factors[b]
                 d[bn] += d[cn1] * self.bottom_factors[b]
+
+        self.bottom_is_folded = not unfold
         if unfold:
             self.bottom_factors = None
 
 
-    cpdef foldtop(self, unfold=False):
+    cpdef fold_top(self, unfold=False):
         d = self.D.data
         m = get_int_index(self.D.offsets, 0)
         for i in [2, 1, 0,-1]:
@@ -209,11 +244,13 @@ cdef class BandedOperator(object):
                 d[d0] += d[c1] * self.top_factors[b]
                 d[c0] += d[b1] * self.top_factors[b]
                 d[b0] += d[a1] * self.top_factors[b]
+
+        self.top_is_folded = not unfold
         if unfold:
             self.top_factors = None
 
 
-    cpdef fold_vector(self, REAL_t[:] v, unfold=False):
+    cpdef fold_vector(self, double[:] v, unfold=False):
         cdef int direction, u0, u1, un ,un1
         blocks = self.blocks
         block_len = self.shape[0] // blocks
@@ -234,9 +271,12 @@ cdef class BandedOperator(object):
 
 
     cdef inline cbool _is_folded(self):
-        return self.top_factors is not None or self.bottom_factors is not None
+        return self.top_is_folded or self.bottom_is_folded
     def is_folded(self):
         return self._is_folded()
+
+    cpdef cbool is_cross_derivative(self):
+        return self.csr
 
 
     cpdef cbool is_tridiagonal(self):
@@ -308,6 +348,8 @@ cdef class BandedOperator(object):
 
         return ret
 
+    cpdef use_csr_format(self, cbool b=True):
+        self.csr = b
 
     # @cython.boundscheck(False)
     cpdef applyboundary(self, boundary, mesh):
@@ -317,16 +359,16 @@ cdef class BandedOperator(object):
         data are the packed diagonals and residual is the residual vector.
         """
         B = self
-        cdef REAL_t[:,:] Bdata = B.D.data
-        cdef REAL_t[:] R
+        cdef double[:,:] Bdata = B.D.data
+        cdef double[:] R
         if B.R is None:
             R = np.zeros(B.shape[0])
         else:
             R = B.R
         # cdef int lower_type, upper_type
-        # cdef REAL_t lower_val, upper_val
+        # cdef double lower_val, upper_val
         cdef int m = get_int_index(B.D.offsets, 0)
-        cdef REAL_t [:] d = B.deltas
+        cdef double [:] d = B.deltas
         cdef double recip_denom
         cdef double fst_deriv
         derivative = B.derivative
@@ -526,17 +568,16 @@ cdef class BandedOperator(object):
             return self.add_scalar(val, True)
 
 
-    # TODO: This needs to be faster
     cpdef add_operator(BandedOperator self, BandedOperator other, cbool inplace=False):
         """
         Add a second BandedOperator to this one.
         Does not alter self.R, the residual vector.
         """
-        cdef REAL_t[:,:] data = self.D.data
+        cdef double[:,:] data = self.D.data
         cdef int[:] selfoffsets = np.array(self.D.offsets)
         cdef int[:] otheroffsets = np.array(other.D.offsets)
         cdef unsigned int num_otheroffsets = otheroffsets.shape[0]
-        cdef np.ndarray[REAL_t, ndim=2] newdata
+        cdef np.ndarray[double, ndim=2] newdata
         cdef int[:] Boffsets
         cdef int o
         cdef unsigned int i
@@ -620,9 +661,11 @@ cdef class BandedOperator(object):
 
     cpdef add_scalar(self, float other, cbool inplace=False):
         """
-        Add a scalar to the main diagonal or
+        Add a scalar to the main diagonal
         Does not alter self.R, the residual vector.
         """
+        cdef BandedOperator B
+
         if inplace:
             B = self
         else:
@@ -652,7 +695,7 @@ cdef class BandedOperator(object):
 
 
     # @cython.boundscheck(False)
-    cpdef vectorized_scale(self, REAL_t[:] vector):
+    cpdef vectorized_scale(self, np.ndarray vector) except +:
         """
         @vector@ is the correpsonding mesh vector of the current dimension.
 
@@ -663,9 +706,10 @@ cdef class BandedOperator(object):
         cdef unsigned int operator_rows = self.shape[0]
         cdef unsigned int blocks = self.blocks
         cdef unsigned int block_len = operator_rows / blocks
-        cdef int [:] offsets = np.array(self.D.offsets)
-        cdef REAL_t [:] R = self.R
-        cdef REAL_t[:,:] data = self.D.data
+        print type(self.D)
+        cdef int[:] offsets = np.array(self.D.offsets)
+        cdef double[:] R = self.R
+        cdef double[:,:] data = self.D.data
         cdef unsigned int noffsets = len(self.D.offsets)
         cdef signed int o
         cdef unsigned int i, j, begin, end, vbegin
@@ -742,7 +786,7 @@ cdef inline int sign(int i):
         return 1
 
 # @cython.boundscheck(False)
-cdef inline unsigned int get_real_index(REAL_t[:] haystack, REAL_t needle):
+cdef inline unsigned int get_real_index(double[:] haystack, double needle) except +:
     cdef unsigned int length = haystack.shape[0]
     for i in range(length):
         if needle == haystack[i]:
@@ -751,7 +795,7 @@ cdef inline unsigned int get_real_index(REAL_t[:] haystack, REAL_t needle):
 
 
 # @cython.boundscheck(False)
-cdef inline unsigned int get_int_index(int[:] haystack, int needle):
+cdef inline unsigned int get_int_index(int[:] haystack, int needle) except +:
     cdef unsigned int length = haystack.shape[0]
     for i in range(length):
         if needle == haystack[i]:
