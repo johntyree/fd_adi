@@ -185,6 +185,6 @@ cpdef backwardcoeffs(deltas, derivative=*, order=*, force_bandwidth=*)
 
 cdef inline int sign(int i)
 
-cdef inline unsigned int get_real_index(double[:] haystack, double needle)
-cdef inline unsigned int get_int_index(int[:] haystack, int needle)
+cdef inline unsigned int get_real_index(double[:] haystack, double needle) except +
+cdef inline unsigned int get_int_index(int[:] haystack, int needle) except +
 

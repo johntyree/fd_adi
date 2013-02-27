@@ -1053,7 +1053,7 @@ cdef inline int sign(int i):
         return 1
 
 # @cython.boundscheck(False)
-cdef inline unsigned int get_real_index(double[:] haystack, double needle):
+cdef inline unsigned int get_real_index(double[:] haystack, double needle) except +:
     cdef unsigned int length = haystack.shape[0]
     for i in range(length):
         if needle == haystack[i]:
@@ -1062,7 +1062,7 @@ cdef inline unsigned int get_real_index(double[:] haystack, double needle):
 
 
 # @cython.boundscheck(False)
-cdef inline unsigned int get_int_index(int[:] haystack, int needle):
+cdef inline unsigned int get_int_index(int[:] haystack, int needle) except +:
     cdef unsigned int length = haystack.shape[0]
     for i in range(length):
         if needle == haystack[i]:
