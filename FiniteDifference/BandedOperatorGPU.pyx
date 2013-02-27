@@ -258,16 +258,6 @@ cdef class BandedOperator(object):
         assert self.thisptr_tri != <void *>0
         self.D.data = from_SizedArray_2(self.thisptr_tri.diags)
 
-        # block_len = self.D.shape[0] / self.blocks
-        # bots = from_SizedArray(self.thisptr_tri.bottom_factors)
-        # if self.thisptr_tri.has_bottom_factors:
-            # self.bottom_factors = bots
-        # else:
-            # if -2 in self.D.offsets:
-                # self.D.data[-1,block_len-1::block_len] = bots
-
-
-
         # Shift because of scipy/cublas row configuration
         for row, o in enumerate(self.D.offsets):
             if o > 0:
@@ -276,6 +266,49 @@ cdef class BandedOperator(object):
             if o < 0:
                 self.D.data[row,:o] = self.D.data[row,-o:]
                 self.D.data[row,o:] = 0
+
+        # block_len = self.D.shape[0] / self.blocks
+        # bots = from_SizedArray(self.thisptr_tri.bottom_factors)
+        # if self.thisptr_tri.has_bottom_factors:
+            # self.bottom_factors = bots
+        # else:
+            # self.bottom_factors = None
+
+        # tops = from_SizedArray(self.thisptr_tri.top_factors)
+        # if self.thisptr_tri.has_top_factors:
+            # self.top_factors = tops
+        # else:
+            # self.top_factors = None
+
+        # #Make it 5 wide first, then shrink later with todia()
+        # data = np.zeros((5, self.shape[0]))
+        # offsets = np.array(tuple(-np.arange(5)+2), dtype=np.int32)
+        # selfoffsets = self.D.offsets
+
+        # for i in range(selfoffsets.shape[0]):
+            # o = selfoffsets[i]
+            # fro = get_int_index(selfoffsets, o)
+            # to = get_int_index(offsets, o)
+            # data[to] += self.D.data[fro]
+
+        # if self.top_factors is not None:
+            # print "offsets", self.D.offsets, offsets
+            # print "top_factors", self.top_factors
+            # print self.D.data
+            # assert 2 in offsets
+            # data[0,2::block_len] = tops
+        # if self.bottom_factors is not None:
+            # assert -2 in offsets
+            # data[-1,block_len-3::block_len] = bots
+
+        # if data[2,0] == 0:
+            # data[2,0] = np.inf
+        # self.D = scipy.sparse.dia_matrix((data, offsets), shape=self.shape)
+        # self.D = utils.todia(self.D.tocoo())
+        # c = get_int_index(self.D.offsets, 0)
+        # if self.D.data[c,0] == np.inf:
+            # self.D.data[c,0] = 0
+        # self.solve_banded_offsets = (abs(min(self.D.offsets)), abs(max(self.D.offsets)))
 
         if self.thisptr_tri.has_residual:
             self.R = from_SizedArray(self.thisptr_tri.R)
@@ -293,7 +326,6 @@ cdef class BandedOperator(object):
         bot = len(self.D.offsets)
         if 2 in self.D.offsets:
             top += 1
-            # self.fold_top()
             self.top_factors = self.D.data[0,2::block_len]
             self.D = scipy.sparse.dia_matrix((self.D.data[top:],
                                             self.D.offsets[top:]),
@@ -339,7 +371,6 @@ cdef class BandedOperator(object):
                                           self.D.offsets[top:bot]),
                                           shape=self.shape)
 
-
     cpdef undiagonalize(self):
         data = np.zeros((5, self.shape[0]))
         offsets = np.array((2, 1, 0, -1, -2), dtype=np.int32)
@@ -350,10 +381,14 @@ cdef class BandedOperator(object):
             to = get_int_index(offsets, o)
             data[to] += self.D.data[fro]
         self.D = scipy.sparse.dia_matrix((data, offsets), shape=self.shape)
+        print "Before undiagonalizing"
+        print (self.D.data)
         if self.top_factors is not None:
+            print "top factors"
             self.fold_top(unfold=True)
             self.top_factors = None
         if self.bottom_factors is not None:
+            print "bottom factors"
             self.fold_bottom(unfold=True)
             self.bottom_factors = None
         self.solve_banded_offsets = (abs(min(offsets)), abs(max(offsets)))

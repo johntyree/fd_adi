@@ -362,27 +362,6 @@ int _TriBandedOperator::solve(SizedArray<double> &V) {
     return 0;
 }
 
-/*
- * cpdef fold_vector(self, double[:] v, unfold=False):
- *     cdef int direction, u0, u1, un ,un1
- *     blocks = self.blocks
- *     block_len = self.shape[0] // blocks
- *
- *     for b in range(blocks):
- *         u0 = b*block_len
- *         u1 = u0 + 1
- *         un = (b+1)*block_len - 1
- *         un1 = un - 1
- *         # print u0, u1, un1, un
- *         # print "[%f, %f .. %f, %f]" % (v[u0], v[u1], v[un1], v[un])
- *         direction = -1 if unfold else 1
- *         if self.top_factors is not None:
- *             v[u0] += direction * v[u1]  * self.top_factors[b]
- *         if self.bottom_factors is not None:
- *             v[un] += direction * v[un1] * self.bottom_factors[b]
- *     return np.asarray(v)
- */
-
 template <typename Tuple, typename OP>
 struct curry : public thrust::unary_function<Tuple, typename OP::result_type> {
 
@@ -445,23 +424,6 @@ void _TriBandedOperator::fold_vector(GPUVec<double> &vector, bool unfold) {
     FULLTRACE;
 }
 
-
-/*
- * cpdef diagonalize(self):
- *     # This is an ugly heuristic
- *     top = 0
- *     bot = len(self.D.offsets)
- *     if 2 in self.D.offsets:
- *         self.foldtop()
- *         top += 1
- *     if -2 in self.D.offsets:
- *         self.foldbottom()
- *         bot -= 1
- *     self.solve_banded_offsets = (1,1)
- *     self.D = scipy.sparse.dia_matrix((self.D.data[top:bot],
- *                                       self.D.offsets[top:bot]),
- *                                      shape=self.shape)
- */
 
 void _TriBandedOperator::diagonalize() {
     FULLTRACE;
