@@ -144,6 +144,8 @@ cdef class BandedOperator(object):
     cpdef emigrate(self, tag=*)
     cdef  emigrate_tri(self, tag=*)
     cdef  emigrate_csr(self, tag=*)
+    cdef  scipy_to_cublas(self)
+    cdef  cublas_to_scipy(self)
     cpdef immigrate(self, tag=*)
     cdef  immigrate_tri(self, tag=*)
     cdef  immigrate_csr(self, tag=*)

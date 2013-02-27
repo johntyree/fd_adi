@@ -213,14 +213,7 @@ cdef class BandedOperator(object):
             print "Emigrate Tri:", tag, to_string(self.thisptr_tri)
         assert not (self.thisptr_tri)
 
-        # We have to shift the offsets between scipy and cublas
-        for row, o in enumerate(self.D.offsets):
-            if o > 0:
-                self.D.data[row,:-o] = self.D.data[row,o:]
-                self.D.data[row,-o:] = 0
-            if o < 0:
-                self.D.data[row,-o:] = self.D.data[row,:o]
-                self.D.data[row,:-o] = 0
+        self.scipy_to_cublas()
 
         cdef:
             SizedArray[double] *diags = to_SizedArray(self.D.data, "data")
@@ -252,12 +245,7 @@ cdef class BandedOperator(object):
         self.location = LOCATION_GPU
         del diags, offsets, R, high_dirichlet, low_dirichlet, top_factors, bottom_factors
 
-    cdef immigrate_tri(self, tag=""):
-        if tag:
-            print "Immigrate Tri:", tag, to_string(self.thisptr_tri)
-        assert self.thisptr_tri != <void *>0
-        self.D.data = from_SizedArray_2(self.thisptr_tri.diags)
-
+    cdef cublas_to_scipy(self):
         # Shift because of scipy/cublas row configuration
         for row, o in enumerate(self.D.offsets):
             if o > 0:
@@ -266,6 +254,26 @@ cdef class BandedOperator(object):
             if o < 0:
                 self.D.data[row,:o] = self.D.data[row,-o:]
                 self.D.data[row,o:] = 0
+
+    cdef scipy_to_cublas(self):
+        # We have to shift the offsets between scipy and cublas
+        for row, o in enumerate(self.D.offsets):
+            if o > 0:
+                self.D.data[row,:-o] = self.D.data[row,o:]
+                self.D.data[row,-o:] = 0
+            if o < 0:
+                self.D.data[row,-o:] = self.D.data[row,:o]
+                self.D.data[row,:-o] = 0
+
+
+
+    cdef immigrate_tri(self, tag=""):
+        if tag:
+            print "Immigrate Tri:", tag, to_string(self.thisptr_tri)
+        assert self.thisptr_tri != <void *>0
+        self.D.data = from_SizedArray_2(self.thisptr_tri.diags)
+
+        self.cublas_to_scipy()
 
         # block_len = self.D.shape[0] / self.blocks
         # bots = from_SizedArray(self.thisptr_tri.bottom_factors)
