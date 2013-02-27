@@ -248,6 +248,7 @@ cdef class BandedOperator(object):
         self.location = LOCATION_GPU
         del diags, offsets, R, high_dirichlet, low_dirichlet, top_factors, bottom_factors
 
+
     cdef cublas_to_scipy(self):
         # Shift because of scipy/cublas row configuration
         for row, o in enumerate(self.D.offsets):
@@ -267,7 +268,6 @@ cdef class BandedOperator(object):
             if o < 0:
                 self.D.data[row,-o:] = self.D.data[row,:o]
                 self.D.data[row,:-o] = 0
-
 
 
     cdef immigrate_tri(self, tag=""):
