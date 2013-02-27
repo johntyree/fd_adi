@@ -64,8 +64,8 @@ _TriBandedOperator::_TriBandedOperator(
         Py_ssize_t blocks,
         bool has_high_dirichlet,
         bool has_low_dirichlet,
-        bool has_top_factors,
-        bool has_bottom_factors,
+        bool top_is_folded,
+        bool bottom_is_folded,
         bool has_residual
         ) :
     diags(data),
@@ -85,8 +85,8 @@ _TriBandedOperator::_TriBandedOperator(
     sub(diags.data.ptr() + 2*operator_rows),
     has_high_dirichlet(has_high_dirichlet),
     has_low_dirichlet(has_low_dirichlet),
-    has_top_factors(has_top_factors),
-    has_bottom_factors(has_bottom_factors),
+    top_is_folded(top_is_folded),
+    bottom_is_folded(bottom_is_folded),
     has_residual(has_residual),
     is_tridiagonal(offsets.size == 3 && main_diag != -1)
     {
@@ -322,7 +322,7 @@ void _TriBandedOperator::add_scalar(double val) {
 }
 
 bool _TriBandedOperator::is_folded() {
-    return has_top_factors || has_bottom_factors;
+    return top_is_folded || bottom_is_folded;
 }
 
 
@@ -401,9 +401,9 @@ void _TriBandedOperator::fold_vector(GPUVec<double> &vector, bool unfold) {
     strided_range<Iterator> un(vector.begin()+block_len-1, vector.end(), block_len);
     strided_range<Iterator> un1(vector.begin()+block_len-2, vector.end(), block_len);
 
-    LOG("has_top_factors("<<has_top_factors<<") has_bottom_factors("<<has_bottom_factors<<")");
+    LOG("top_is_folded("<<top_is_folded<<") bottom_is_folded("<<bottom_is_folded<<")");
     // Top fold
-    if (has_top_factors) {
+    if (top_is_folded) {
         /* LOG("Folding top. direction("<<unfold<<") top_factors("<<top_factors<<")"); */
         thrust::transform(
             make_zip_iterator(make_tuple(u0.begin(), u1.begin(), top_factors.data.begin())),
@@ -412,7 +412,7 @@ void _TriBandedOperator::fold_vector(GPUVec<double> &vector, bool unfold) {
             add_multiply3<REALTuple, REAL_t>(unfold ? -1 : 1));
     }
 
-    if (has_bottom_factors) {
+    if (bottom_is_folded) {
         /* LOG("Folding bottom. direction("<<unfold<<") bottom_factors("<<bottom_factors<<")"); */
         thrust::transform(
             make_zip_iterator(make_tuple(un.begin(), un1.begin(), bottom_factors.data.begin())),
@@ -428,8 +428,8 @@ void _TriBandedOperator::fold_vector(GPUVec<double> &vector, bool unfold) {
 void _TriBandedOperator::diagonalize() {
     FULLTRACE;
     TRACE;
-    if (has_bottom_factors) fold_bottom();
-    if (has_top_factors) fold_top();
+    if (bottom_is_folded) fold_bottom();
+    if (top_is_folded) fold_top();
     FULLTRACE;
 }
 
@@ -491,7 +491,7 @@ void _TriBandedOperator::fold_top(bool unfold) {
         fold_operator<REALTuple>(unfold)
     );
 
-    has_top_factors = !unfold;
+    top_is_folded = !unfold;
     FULLTRACE;
 }
 
@@ -527,7 +527,7 @@ void _TriBandedOperator::fold_bottom(bool unfold) {
         fold_operator<REALTuple>(unfold)
     );
 
-    has_bottom_factors = !unfold;
+    bottom_is_folded = !unfold;
     FULLTRACE;
 }
 

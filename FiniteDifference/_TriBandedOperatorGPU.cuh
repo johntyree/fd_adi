@@ -49,8 +49,8 @@ class _TriBandedOperator {
             Py_ssize_t blocks,
             bool has_high_dirichlet,
             bool has_low_dirichlet,
-            bool has_top_factors,
-            bool has_bottom_factors,
+            bool top_is_folded,
+            bool bottom_is_folded,
             bool has_residual
             );
 
@@ -58,8 +58,8 @@ class _TriBandedOperator {
         bool has_residual;
         bool has_high_dirichlet;
         bool has_low_dirichlet;
-        bool has_top_factors;
-        bool has_bottom_factors;
+        bool top_is_folded;
+        bool bottom_is_folded;
         bool is_tridiagonal;
 
     private:

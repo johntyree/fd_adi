@@ -38,7 +38,7 @@ cdef class BandedOperator(object):
 
         self.attrs = ('derivative', 'location', 'csr', 'order', 'axis',
                       'deltas', 'dirichlet', 'blocks', 'top_factors',
-                      'bottom_factors')
+                      'bottom_factors', 'top_is_folded', 'bottom_is_folded')
         data, offsets = data_offsets
         assert data.shape[1] > 3, "Vector too short to use finite differencing."
         if not inplace:
@@ -59,6 +59,7 @@ cdef class BandedOperator(object):
 
         # XXX: When adding something here, also add to BandedOperator.attrs
         self.blocks = 1
+        self.top_is_folded = self.bottom_is_folded = False
         self.derivative = derivative
         self.order = order
         self.deltas = deltas if deltas is not None else np.array([np.nan])
@@ -272,6 +273,10 @@ cdef class BandedOperator(object):
             print "Immigrate Tri:", tag, to_string(self.thisptr_tri)
         assert self.thisptr_tri != <void *>0
         self.D.data = from_SizedArray_2(self.thisptr_tri.diags)
+        self.top_is_folded = self.thisptr_tri.top_is_folded
+        self.bottom_is_folded = self.thisptr_tri.bottom_is_folded
+
+        block_len = self.D.shape[0] / self.blocks
 
         self.cublas_to_scipy()
 
@@ -357,9 +362,9 @@ cdef class BandedOperator(object):
 
     cpdef undiagonalize2(self):
         self.emigrate_tri("undiagonalize")
-        if self.thisptr_tri.has_top_factors:
+        if self.thisptr_tri.top_is_folded:
             self.thisptr_tri.fold_top(True)
-        if self.thisptr_tri.has_bottom_factors:
+        if self.thisptr_tri.bottom_is_folded:
             self.thisptr_tri.fold_bottom(True)
         self.immigrate_tri("undiagonalize")
 
@@ -432,6 +437,8 @@ cdef class BandedOperator(object):
                 d[zn] += d[an1] * self.bottom_factors[b]
                 d[an] += d[bn1] * self.bottom_factors[b]
                 d[bn] += d[cn1] * self.bottom_factors[b]
+
+        self.bottom_is_folded = not unfold
         if unfold:
             self.bottom_factors = None
 
@@ -466,9 +473,10 @@ cdef class BandedOperator(object):
                 d[d0] += d[c1] * self.top_factors[b]
                 d[c0] += d[b1] * self.top_factors[b]
                 d[b0] += d[a1] * self.top_factors[b]
+
+        self.top_is_folded = not unfold
         if unfold:
             self.top_factors = None
-
 
     cpdef fold_vector(self, double[:] v, unfold=False):
         cdef int direction, u0, u1, un ,un1
@@ -491,7 +499,7 @@ cdef class BandedOperator(object):
 
 
     cdef inline cbool _is_folded(self):
-        return self.top_factors is not None or self.bottom_factors is not None
+        return self.top_is_folded or self.bottom_is_folded
     def is_folded(self):
         return self._is_folded()
 

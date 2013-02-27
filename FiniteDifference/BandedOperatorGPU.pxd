@@ -70,8 +70,8 @@ cdef extern from "_TriBandedOperatorGPU.cuh":
         void view()
         cbool is_folded()
         cbool has_residual
-        cbool has_bottom_factors
-        cbool has_top_factors
+        cbool bottom_is_folded
+        cbool top_is_folded
         SizedArray[double] *apply(SizedArray[double] &)
         void add_scalar(double val)
         void vectorized_scale(SizedArray[double] &vector)
@@ -99,8 +99,8 @@ cdef extern from "_TriBandedOperatorGPU.cuh":
             Py_ssize_t blocks,
             cbool has_high_dirichlet,
             cbool has_low_dirichlet,
-            cbool has_top_factors,
-            cbool has_bottom_factors,
+            cbool top_is_folded,
+            cbool bottom_is_folded,
             cbool has_residual
         )
 
@@ -134,6 +134,9 @@ cdef class BandedOperator(object):
         shape
         cbool csr
         top_factors, bottom_factors
+        cbool top_is_folded
+        cbool bottom_is_folded
+
 
     cdef _TriBandedOperator *thisptr_tri
     cdef _CSRBandedOperator *thisptr_csr
