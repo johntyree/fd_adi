@@ -1096,10 +1096,10 @@ class BandedOperator_test(unittest.TestCase):
                 # print X1.shape, oldX1.shape
                 # print (X1.D.offsets, oldX1.offsets),  "%s+%s (dv %i) idx %i" % (sch0, sch1, dv, idx)
                 assert X1.axis == axis
-                assert (X1.D.todense() == oldX1.todense()).all(),  "%s+%s (dv %i) idx %i" % (sch0, sch1, dv, idx)
-                assert (X1.D.offsets == oldX1.offsets).all(),  "%s+%s (dv %i) idx %i" % (sch0, sch1, dv, idx)
+                assert np.array_equal(X1.D.todense() == oldX1.todense()),  "%s+%s (dv %i) idx %i" % (sch0, sch1, dv, idx)
+                assert np.array_equal(X1.D.offsets == oldX1.offsets),  "%s+%s (dv %i) idx %i" % (sch0, sch1, dv, idx)
                 assert (X1.D.data.shape == oldX1.data.shape),  "%s+%s (dv %i) idx %i" % (sch0, sch1, dv, idx)
-                assert (X1.D.data == oldX1.data).all(),  "%s+%s (dv %i) idx %i" % (sch0, sch1, dv, idx)
+                assert np.array_equal(X1.D.data == oldX1.data),  "%s+%s (dv %i) idx %i" % (sch0, sch1, dv, idx)
 
 
     def test_splice_same(self):
@@ -1141,10 +1141,10 @@ class BandedOperator_test(unittest.TestCase):
                     # print
                     # print X12.shape, manualX12.shape
                     # print (X12.D.offsets, manualX12.offsets[::-1]),  "%s+%s (dv %i) idx %i" % (sch0, sch1, dv, idx)
-                    assert (X12.D.todense() == manualX12.todense()).all(),  "%s+%s (dv %i) idx %i" % (sch0, sch1, dv, idx)
-                    assert (X12.D.offsets == manualX12.offsets[::-1]).all(),  "%s+%s (dv %i) idx %i" % (sch0, sch1, dv, idx)
+                    assert np.array_equal(X12.D.todense() == manualX12.todense()),  "%s+%s (dv %i) idx %i" % (sch0, sch1, dv, idx)
+                    assert np.array_equal(X12.D.offsets == manualX12.offsets[::-1]),  "%s+%s (dv %i) idx %i" % (sch0, sch1, dv, idx)
                     assert (X12.D.data.shape == manualX12.data.shape),  "%s+%s (dv %i) idx %i" % (sch0, sch1, dv, idx)
-                    assert (X12.D.data == manualX12.data[::-1]).all(),  "%s+%s (dv %i) idx %i" % (sch0, sch1, dv, idx)
+                    assert np.array_equal(X12.D.data == manualX12.data[::-1]),  "%s+%s (dv %i) idx %i" % (sch0, sch1, dv, idx)
 
 
     def test_splice_different(self):
@@ -1185,10 +1185,10 @@ class BandedOperator_test(unittest.TestCase):
                     # print
                     # print X12.shape, manualX12.shape
                     # print (X12.D.offsets, manualX12.offsets[::-1]),  "%s+%s (dv %i) idx %i" % (sch0, sch1, dv, idx)
-                    assert (X12.D.todense() == manualX12.todense()).all(),  "%s+%s (dv %i) idx %i" % (sch0, sch1, dv, idx)
-                    assert (X12.D.offsets == manualX12.offsets[::-1]).all(),  "%s+%s (dv %i) idx %i" % (sch0, sch1, dv, idx)
+                    assert np.array_equal(X12.D.todense() == manualX12.todense()),  "%s+%s (dv %i) idx %i" % (sch0, sch1, dv, idx)
+                    assert np.array_equal(X12.D.offsets == manualX12.offsets[::-1]),  "%s+%s (dv %i) idx %i" % (sch0, sch1, dv, idx)
                     assert (X12.D.data.shape == manualX12.data.shape),  "%s+%s (dv %i) idx %i" % (sch0, sch1, dv, idx)
-                    assert (X12.D.data == manualX12.data[::-1]).all(),  "%s+%s (dv %i) idx %i" % (sch0, sch1, dv, idx)
+                    assert np.array_equal(X12.D.data == manualX12.data[::-1]),  "%s+%s (dv %i) idx %i" % (sch0, sch1, dv, idx)
 
 
 class Operator_Folding_test(unittest.TestCase):
@@ -1395,8 +1395,8 @@ class Operator_Folding_test(unittest.TestCase):
             bvec = topblockxI.dot(topblocktridiamat.dot(bvec))
             vec = Btop.apply(vec)
             npt.assert_array_almost_equal(bvec, vec, err_msg="Bottom Loop: %s" % i)
-            npt.assert_((vec == vec).all()) # for NaNs
-            npt.assert_((bvec == bvec).all()) # for NaNs
+            np.assert_array_equal(vec, vec) # for NaNs
+            np.assert_array_equal(bvec, bvec) # for NaNs
         vec = self.vec.copy()
         bvec = vec.copy()
 
@@ -1409,8 +1409,8 @@ class Operator_Folding_test(unittest.TestCase):
             bvec = bottomblockxI.dot(bottomblocktridiamat.dot(bvec))
             vec = Bbottom.apply(vec)
             npt.assert_array_almost_equal(bvec, vec, err_msg="Bottom Loop: %s" % i)
-            npt.assert_((vec == vec).all()) # for NaNs
-            npt.assert_((bvec == bvec).all()) # for NaNs
+            np.assert_array_equal(vec, vec) # for NaNs
+            np.assert_array_equal(bvec, bvec) # for NaNs
         vec = self.vec.copy()
         bvec = vec.copy()
 
@@ -1421,8 +1421,8 @@ class Operator_Folding_test(unittest.TestCase):
             bvec = blockxI.dot(blocktridiamat.dot(bvec))
             vec = B.apply(vec)
             npt.assert_array_equal(bvec, vec)
-            npt.assert_((vec == vec).all())
-            npt.assert_((bvec == bvec).all())
+            np.assert_array_equal(vec, vec)
+            np.assert_array_equal(bvec, bvec)
         vec = self.vec.copy()
         bvec = vec.copy()
 

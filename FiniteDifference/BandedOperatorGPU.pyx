@@ -106,15 +106,17 @@ cdef class BandedOperator(object):
             top_factors = bottom_factors = True
             R = True
         else:
-            offsets        = (self.D.offsets == other.D.offsets).all()
-            top_factors    = (no_nan(self.top_factors) == no_nan(other.top_factors)).all()
-            bottom_factors = (no_nan(self.bottom_factors) == no_nan(other.bottom_factors)).all()
-            R              = (self.R == other.R).all()
+            if self.D.offsets.shape != other.D.offsets.shape:
+                print "Offset mismatch", self.D.offsets, other.D.offsets
+            offsets        = np.array_equal(self.D.offsets, other.D.offsets)
+            top_factors    = np.array_equal(no_nan(self.top_factors), no_nan(other.top_factors))
+            bottom_factors = np.array_equal(no_nan(self.bottom_factors), no_nan(other.bottom_factors))
+            R              = np.array_equal(self.R, other.R)
 
         mat_type = self.csr == other.csr
-        deltas         = (no_nan(self.deltas) == no_nan(other.deltas)).all()
-        Ddata          = (self.D.data == other.D.data).all()
-        shape          = (self.shape == other.shape)
+        deltas         = np.array_equal(no_nan(self.deltas), no_nan(other.deltas))
+        Ddata          = np.array_equal(self.D.data, other.D.data)
+        shape          = np.array_equal(self.shape, other.shape)
 
         if (mat_type
             and shape
