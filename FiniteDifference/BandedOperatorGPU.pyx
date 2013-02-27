@@ -282,48 +282,56 @@ cdef class BandedOperator(object):
 
         self.cublas_to_scipy()
 
-        # block_len = self.D.shape[0] / self.blocks
-        # bots = from_SizedArray(self.thisptr_tri.bottom_factors)
-        # if self.thisptr_tri.has_bottom_factors:
-            # self.bottom_factors = bots
-        # else:
-            # self.bottom_factors = None
+        center = 1
+        bottom = 2
+        bots = from_SizedArray(self.thisptr_tri.bottom_factors)
+        tops = from_SizedArray(self.thisptr_tri.top_factors)
 
-        # tops = from_SizedArray(self.thisptr_tri.top_factors)
-        # if self.thisptr_tri.has_top_factors:
-            # self.top_factors = tops
-        # else:
-            # self.top_factors = None
+        if self.bottom_is_folded:
+            self.bottom_factors = bots
+        else:
+            bottom += 1
+            self.bottom_factors = None
 
-        # #Make it 5 wide first, then shrink later with todia()
-        # data = np.zeros((5, self.shape[0]))
-        # offsets = np.array(tuple(-np.arange(5)+2), dtype=np.int32)
-        # selfoffsets = self.D.offsets
+        if self.top_is_folded:
+            self.top_factors = tops
+        else:
+            center += 1
+            bottom += 1
+            self.top_factors = None
 
-        # for i in range(selfoffsets.shape[0]):
-            # o = selfoffsets[i]
-            # fro = get_int_index(selfoffsets, o)
-            # to = get_int_index(offsets, o)
-            # data[to] += self.D.data[fro]
+        selfoffsets = self.D.offsets
 
-        # if self.top_factors is not None:
-            # print "offsets", self.D.offsets, offsets
-            # print "top_factors", self.top_factors
-            # print self.D.data
-            # assert 2 in offsets
-            # data[0,2::block_len] = tops
-        # if self.bottom_factors is not None:
-            # assert -2 in offsets
-            # data[-1,block_len-3::block_len] = bots
+        if (self.thisptr_tri.top_is_folded
+            or self.thisptr_tri.bottom_is_folded):
+            print "Claims to be folded",
+            print self.thisptr_tri.top_is_folded, self.thisptr_tri.bottom_is_folded
+            offsets = -np.arange(bottom+1, dtype=np.int32)+center
+            data = np.zeros((bottom+1, self.shape[0]))
+            for i in range(selfoffsets.shape[0]):
+                o = selfoffsets[i]
+                fro = get_int_index(selfoffsets, o)
+                to = get_int_index(offsets, o)
+                data[to] += self.D.data[fro]
+            self.D = scipy.sparse.dia_matrix((data, offsets), shape=self.shape)
+            if not self.top_is_folded:
+                assert offsets[0] == 2
+                data[0,2::block_len] = tops
+            if not self.bottom_is_folded:
+                assert offsets[-1] == -2
+                data[-1,block_len-3::block_len] = bots
+        else:
+            data = self.D.data
+            offsets = self.D.offsets
 
         # if data[2,0] == 0:
             # data[2,0] = np.inf
-        # self.D = scipy.sparse.dia_matrix((data, offsets), shape=self.shape)
         # self.D = utils.todia(self.D.tocoo())
         # c = get_int_index(self.D.offsets, 0)
         # if self.D.data[c,0] == np.inf:
             # self.D.data[c,0] = 0
-        # self.solve_banded_offsets = (abs(min(self.D.offsets)), abs(max(self.D.offsets)))
+
+        self.solve_banded_offsets = (abs(min(self.D.offsets)), abs(max(self.D.offsets)))
 
         if self.thisptr_tri.has_residual:
             self.R = from_SizedArray(self.thisptr_tri.R)
