@@ -489,9 +489,9 @@ struct fold_operator : public thrust::unary_function<Tuple, void> {
         if (unfold) {
             get<c0>(t) -= get<b1>(t) * get<fact>(t);
             get<b0>(t) -= get<a1>(t) * get<fact>(t);
-            get<fact>(t) *= get<c1>(t);
+            get<fact>(t) *= -get<c1>(t);
         } else {
-            get<fact>(t) = (get<c1>(t) == 0) ? 0 : (get<fact>(t) / -get<c1>(t));
+            get<fact>(t) = get<c1>(t) == 0 ? 0 : -get<fact>(t) / get<c1>(t);
             get<c0>(t) += get<b1>(t) * get<fact>(t);
             get<b0>(t) += get<a1>(t) * get<fact>(t);
         }
