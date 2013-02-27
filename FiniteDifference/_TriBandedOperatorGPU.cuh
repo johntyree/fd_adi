@@ -62,13 +62,13 @@ class _TriBandedOperator {
         bool top_is_folded;
         bool bottom_is_folded;
         bool is_tridiagonal;
+        Py_ssize_t operator_rows;
+        Py_ssize_t blocks;
+        Py_ssize_t block_len;
 
     private:
         unsigned int axis;
         Py_ssize_t main_diag;
-        Py_ssize_t operator_rows;
-        Py_ssize_t blocks;
-        Py_ssize_t block_len;
         thrust::device_ptr<double> sup, mid, sub;
         cusparseHandle_t handle;
         cusparseStatus_t status;
