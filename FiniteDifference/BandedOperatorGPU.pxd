@@ -76,6 +76,7 @@ cdef extern from "_TriBandedOperatorGPU.cuh":
         void add_scalar(double val)
         void vectorized_scale(SizedArray[double] &vector)
         void add_operator(_TriBandedOperator &other)
+        Py_ssize_t operator_rows
         void undiagonalize()
         void diagonalize()
         void fold_bottom(cbool unfold)
@@ -121,19 +122,11 @@ cdef extern from "_TriBandedOperatorGPU.cuh":
 cdef class BandedOperator(object):
     cdef public:
         attrs
-        location
         axis
         derivative
         order
-        D
-        R
-        deltas
-        dirichlet
-        solve_banded_offsets
-        unsigned int blocks
-        shape
-        cbool csr
-        top_factors, bottom_factors
+        blocks
+        cbool is_mixed_derivative
         cbool top_is_folded
         cbool bottom_is_folded
 
@@ -141,49 +134,34 @@ cdef class BandedOperator(object):
     cdef _TriBandedOperator *thisptr_tri
     cdef _CSRBandedOperator *thisptr_csr
 
-    cdef inline cbool _is_folded(self)
+    cpdef cbool is_folded(self)
+
+    cdef inline no_mixed(self)
 
     cpdef copy(self)
-    cpdef emigrate(self, tag=*)
-    cdef  emigrate_tri(self, tag=*)
-    cdef  emigrate_csr(self, tag=*)
-    cdef  scipy_to_cublas(self)
-    cdef  cublas_to_scipy(self)
+    cpdef emigrate(self, other, tag=*)
+    cdef  emigrate_tri(self, other, tag=*)
+    cdef  emigrate_csr(self, other, tag=*)
     cpdef immigrate(self, tag=*)
     cdef  immigrate_tri(self, tag=*)
     cdef  immigrate_csr(self, tag=*)
     cpdef diagonalize(self)
-    cpdef diagonalize2(self)
     cpdef undiagonalize(self)
-    cpdef undiagonalize2(self)
     cpdef fold_bottom(self, unfold=*)
     cpdef fold_top(self, unfold=*)
-    cpdef fold_vector(self, double[:] v, unfold=*)
-    cpdef cbool is_tridiagonal(self)
-    cpdef cbool is_cross_derivative(self)
-    cpdef apply(self, V, overwrite=*)
-    cpdef apply2(self, np.ndarray V, overwrite=*)
-    cpdef solve(self, V, overwrite=*)
-    cpdef solve2(self, np.ndarray V, overwrite=*)
-    cpdef applyboundary(self, boundary, mesh)
-    cpdef splice_with(self, begin, at, inplace=*)
-    cpdef add_operator(BandedOperator self, BandedOperator other, cbool inplace=*)
-    cpdef add_scalar(self, float other, cbool inplace=*)
+    cpdef apply(self, np.ndarray V, overwrite=*)
+    cpdef solve(self, np.ndarray V, overwrite=*)
+    cpdef add_operator(BandedOperator self, BandedOperator other)
+    cpdef add_scalar(self, float other)
     cpdef vectorized_scale(self, np.ndarray arr) except +
-    cpdef scale(self, func)
 
     cpdef mul(self, val, inplace=*)
     cpdef add(self, val, inplace=*)
-
-cpdef for_vector(vector, scheme=*, derivative=*, order=*, residual=*, force_bandwidth=*, axis=*)
-cpdef check_derivative(d)
-cpdef check_order(order)
-cpdef forwardcoeffs(deltas, derivative=*, order=*, force_bandwidth=*)
-cpdef centercoeffs(deltas, derivative=*, order=*, force_bandwidth=*)
-cpdef backwardcoeffs(deltas, derivative=*, order=*, force_bandwidth=*)
 
 cdef inline int sign(int i)
 
 cdef inline unsigned int get_real_index(double[:] haystack, double needle) except +
 cdef inline unsigned int get_int_index(int[:] haystack, int needle) except +
 
+cdef  scipy_to_cublas(B)
+cdef  cublas_to_scipy(B)
