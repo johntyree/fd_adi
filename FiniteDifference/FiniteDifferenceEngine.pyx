@@ -551,7 +551,7 @@ cdef class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
             BB = flatten_tensor_aligned(Bbs, check=False)
             BM = flatten_tensor_aligned(Bms, check=False)
             templates[d] = BP + BM + BB
-            # templates[d].use_csr_format()
+            templates[d].is_mixed_derivative = True
         self.simple_operators = templates
         self.scale_and_combine_operators()
         return mixed_derivs
