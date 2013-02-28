@@ -39,9 +39,13 @@ cdef class BandedOperator(object):
         if other:
             self.emigrate(other, tag)
 
-    # def __dealloc__(self):
-        # if (self.thisptr_tri):
-            # del self.thisptr_tri
+    def __dealloc__(self):
+        if self.is_mixed_derivative:
+            assert self.thisptr_csr
+            del self.thisptr_csr
+        else:
+            assert self.thisptr_tri
+            del self.thisptr_tri
 
     def copy_meta_data(self, other, **kwargs):
         for attr in self.attrs:
