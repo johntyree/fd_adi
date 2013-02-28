@@ -77,6 +77,8 @@ cdef extern from "_TriBandedOperatorGPU.cuh":
         void vectorized_scale(SizedArray[double] &vector)
         void add_operator(_TriBandedOperator &other)
         Py_ssize_t operator_rows
+        Py_ssize_t block_len
+        Py_ssize_t blocks
         void undiagonalize()
         void diagonalize()
         void fold_bottom(cbool unfold)
