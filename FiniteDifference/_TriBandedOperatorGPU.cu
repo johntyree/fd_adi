@@ -54,7 +54,6 @@ int find_index(T haystack, U needle, int max) {
 _TriBandedOperator::_TriBandedOperator(
         SizedArray<double> &data,
         SizedArray<double> &R,
-        SizedArray<int> &offsets,
         SizedArray<double> &high_dirichlet,
         SizedArray<double> &low_dirichlet,
         SizedArray<double> &top_factors,
@@ -70,13 +69,12 @@ _TriBandedOperator::_TriBandedOperator(
         ) :
     diags(data),
     R(R),
-    offsets(offsets),
     high_dirichlet(high_dirichlet),
     low_dirichlet(low_dirichlet),
     top_factors(top_factors),
     bottom_factors(bottom_factors),
     axis(axis),
-    main_diag(find_index(offsets.data, 0, offsets.size)),
+    main_diag(1),
     operator_rows(operator_rows),
     blocks(blocks),
     block_len(operator_rows / blocks),
@@ -87,8 +85,7 @@ _TriBandedOperator::_TriBandedOperator(
     has_low_dirichlet(has_low_dirichlet),
     top_is_folded(top_is_folded),
     bottom_is_folded(bottom_is_folded),
-    has_residual(has_residual),
-    is_tridiagonal(offsets.size == 3 && main_diag != -1)
+    has_residual(has_residual)
     {
         verify_diag_ptrs();
         status = cusparseCreate(&handle);
@@ -104,10 +101,6 @@ void _TriBandedOperator::verify_diag_ptrs() {
     }
     if (main_diag == -1) {
         /* LOG("No main diag means not tridiagonal, hopefully."); */
-        return;
-    }
-    if (offsets.size != 3) {
-        /* LOG("Not tridiagonal. Skipping diag ptrs check."); */
         return;
     }
     int idx;
@@ -249,23 +242,9 @@ void _TriBandedOperator::add_operator(_TriBandedOperator &other) {
     int begin = has_low_dirichlet;
     int end = block_len-1 - has_high_dirichlet;
     int o, to, fro;
-    for (int i = 0; i < other.offsets.size; i++) {
-        fro = i;
-        o = other.offsets.get(i);
-        to = find_index(offsets.data, o, offsets.size);
-        if (offsets.get(to) != o) {
-            std::cout << std::endl;
-            std::cout << "to: " << to << "(";
-            /* print_array(&offsets(0), offsets.size); */
-            std::cout << offsets.data;
-            std::cout << ")";
-            std::cout << "fro: " << fro << "(";
-            std::cout << other.offsets.data;
-            /* print_array(&other.offsets(0), other.offsets.size); */
-            std::cout << ")" << std::endl;
-            assert(offsets.get(to) == o);
-        }
-        /* LOG("Adding offset " << o << "."); */
+    for (int i = 0; i < 3; ++i) {
+        fro = to = i;
+        o = 1-i;
         if (o == 0) {
             thrust::transform_if(
                     &diags.data[diags.idx(to, 0)],
@@ -542,7 +521,6 @@ void _TriBandedOperator::fold_bottom(bool unfold) {
 void _TriBandedOperator::vectorized_scale(SizedArray<double> &vector) {
     FULLTRACE;
     Py_ssize_t vsize = vector.size;
-    Py_ssize_t noffsets = offsets.size;
     Py_ssize_t block_len = operator_rows / blocks;
 
     typedef thrust::device_vector<REAL_t>::iterator Iterator;
@@ -557,6 +535,10 @@ void _TriBandedOperator::vectorized_scale(SizedArray<double> &vector) {
      * LOG("diags.name("<<diags.name<<")");
      * LOG("diags.idx(0,op)("<<diags.idx(0,0)+operator_rows<<")");
      */
+
+    if (is_folded()) {
+        DIE("Cannot scale diagonalized operator.");
+    }
 
     if (operator_rows % vsize != 0) {
         DIE("Vector length does not divide "
@@ -578,8 +560,8 @@ void _TriBandedOperator::vectorized_scale(SizedArray<double> &vector) {
         }
     }
 
-    for (Py_ssize_t row = 0; row < noffsets; ++row) {
-        int o = offsets.get(row);
+    for (Py_ssize_t row = 0; row < 3; ++row) {
+        int o = 1 - row;
         if (o >= 0) { // upper diags
             thrust::transform(diags.data.begin() + diags.idx(row, 0),
                     diags.data.begin() + diags.idx(row, 0) + operator_rows - o,

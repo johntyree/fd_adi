@@ -84,7 +84,6 @@ cdef extern from "_TriBandedOperatorGPU.cuh":
         void fold_bottom(cbool unfold)
         void fold_top(cbool unfold)
         int solve(SizedArray[double] &)
-        SizedArray[int] offsets
         SizedArray[double] bottom_factors
         SizedArray[double] top_factors
         SizedArray[double] diags
@@ -92,7 +91,6 @@ cdef extern from "_TriBandedOperatorGPU.cuh":
         _TriBandedOperator(
             SizedArray[double] data,
             SizedArray[double] R,
-            SizedArray[int] offsets,
             SizedArray[double] high_dirichlet,
             SizedArray[double] low_dirichlet,
             SizedArray[double] top_factors,

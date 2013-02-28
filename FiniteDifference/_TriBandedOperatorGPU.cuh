@@ -22,7 +22,6 @@ class _TriBandedOperator {
         SizedArray<double> low_dirichlet;
         SizedArray<double> top_factors;
         SizedArray<double> bottom_factors;
-        SizedArray<int> offsets;
 
         void verify_diag_ptrs();
         bool is_folded();
@@ -40,7 +39,6 @@ class _TriBandedOperator {
         _TriBandedOperator(
             SizedArray<double> &data,
             SizedArray<double> &R,
-            SizedArray<int> &offsets,
             SizedArray<double> &high_dirichlet,
             SizedArray<double> &low_dirichlet,
             SizedArray<double> &top_factors,

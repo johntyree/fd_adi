@@ -22,8 +22,6 @@ from cython.operator import dereference as deref
 cdef class BandedOperator(object):
 
     def __init__(self, other=None, tag="Constructor"):
-    # def __init__(self, data_offsets, residual=None, int inplace=True,
-            # int derivative=1, int order=2, deltas=None, int axis=0):
         """
         A linear operator for discrete derivatives.
         Consist of a banded matrix (B.D) and a residual vector (B.R) for things
@@ -67,13 +65,9 @@ cdef class BandedOperator(object):
                 return false
 
         if self.is_mixed_derivative:
-            offsets = True
             top_factors = bottom_factors = True
             R = True
         else:
-            if self.D.offsets.shape != other.D.offsets.shape:
-                print "Offset mismatch", self.D.offsets, other.D.offsets
-            offsets        = np.array_equal(self.D.offsets, other.D.offsets)
             top_factors    = np.array_equal(no_nan(self.top_factors), no_nan(other.top_factors))
             bottom_factors = np.array_equal(no_nan(self.bottom_factors), no_nan(other.bottom_factors))
             R              = np.array_equal(self.R, other.R)
@@ -85,7 +79,6 @@ cdef class BandedOperator(object):
 
         if (mat_type
             and shape
-            and offsets
             and top_factors
             and bottom_factors
             and deltas
@@ -95,7 +88,6 @@ cdef class BandedOperator(object):
         else:
             print "mat_type", mat_type
             print "shape", shape
-            print "offsets", offsets
             print "top_fact", top_factors
             print "bot_fact", bottom_factors
             print "deltas", deltas
@@ -185,7 +177,6 @@ cdef class BandedOperator(object):
         cdef:
             SizedArray[double] *diags = to_SizedArray(other.D.data, "data")
             SizedArray[double] *R = to_SizedArray(other.R, "R")
-            SizedArray[int] *offsets = to_SizedArray_i(np.asarray(other.D.offsets), "Offsets")
             SizedArray[double] *low_dirichlet = to_SizedArray(np.atleast_1d(other.dirichlet[0] or [0.0]), "low_dirichlet")
             SizedArray[double] *high_dirichlet = to_SizedArray(np.atleast_1d(other.dirichlet[1] or [0.0]), "high_dirichlet")
             SizedArray[double] *top_factors = to_SizedArray(np.atleast_1d(other.top_factors if other.top_factors is not None else [0.0]), "top_factors")
@@ -194,7 +185,6 @@ cdef class BandedOperator(object):
         self.thisptr_tri = new _TriBandedOperator(
                   deref(diags)
                 , deref(R)
-                , deref(offsets)
                 , deref(high_dirichlet)
                 , deref(low_dirichlet)
                 , deref(top_factors)
@@ -209,7 +199,7 @@ cdef class BandedOperator(object):
                 , other.R is not None
                 )
 
-        del diags, offsets, R, high_dirichlet, low_dirichlet, top_factors, bottom_factors
+        del diags, R, high_dirichlet, low_dirichlet, top_factors, bottom_factors
 
     cdef immigrate_tri(self, tag=""):
         if tag:
