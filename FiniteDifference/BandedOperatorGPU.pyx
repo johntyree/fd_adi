@@ -228,7 +228,7 @@ cdef class BandedOperator(object):
             print "Immigrate Tri:", tag, to_string(self.thisptr_tri)
         assert self.thisptr_tri != <void *>0
         data = from_SizedArray_2(self.thisptr_tri.diags)
-        selfoffsets = np.array((1,0,-1))
+        selfoffsets = np.array((1,0,-1), dtype=np.int32)
 
         if self.thisptr_tri.has_residual:
             R = from_SizedArray(self.thisptr_tri.R)
