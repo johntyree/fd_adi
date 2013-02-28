@@ -34,12 +34,12 @@ cdef extern from "VecArray.h":
         Py_ssize_t ndim
         Py_ssize_t[8] shape
         cpp_string name
-        SizedArray(T*, int, np.npy_intp*, cpp_string name)
-        T get(int i)
-        T get(int i, int j)
-        void reshape(Py_ssize_t h, Py_ssize_t w)
-        void flatten()
-        void transpose(int)
+        SizedArray(T*, int, np.npy_intp*, cpp_string name) except +
+        T get(int i) except +
+        T get(int i, int j) except +
+        void reshape(Py_ssize_t h, Py_ssize_t w) except +
+        void flatten() except +
+        void transpose(int) except +
         cpp_string show()
 
 cdef extern from "_CSRBandedOperatorGPU.cuh":
@@ -51,8 +51,8 @@ cdef extern from "_CSRBandedOperatorGPU.cuh":
         GPUVec[int] row_ptr
         GPUVec[int] row_ind
         GPUVec[int] col_ind
-        SizedArray[double] *apply(SizedArray[double] &)
-        void vectorized_scale(SizedArray[double] &vector)
+        SizedArray[double] *apply(SizedArray[double] &) except +
+        void vectorized_scale(SizedArray[double] &vector) except +
 
         _CSRBandedOperator(
             SizedArray[double] &data,
@@ -62,28 +62,27 @@ cdef extern from "_CSRBandedOperatorGPU.cuh":
             Py_ssize_t operator_rows,
             Py_ssize_t blocks,
             cpp_string name
-        )
+        ) except +
 
 cdef extern from "_TriBandedOperatorGPU.cuh":
 
     cdef cppclass _TriBandedOperator:
-        void view()
-        cbool is_folded()
+        cbool is_folded() except +
         cbool has_residual
         cbool bottom_is_folded
         cbool top_is_folded
-        SizedArray[double] *apply(SizedArray[double] &)
-        void add_scalar(double val)
-        void vectorized_scale(SizedArray[double] &vector)
-        void add_operator(_TriBandedOperator &other)
+        SizedArray[double] *apply(SizedArray[double] &) except +
+        void add_scalar(double val) except +
+        void vectorized_scale(SizedArray[double] &vector) except +
+        void add_operator(_TriBandedOperator &other) except +
         Py_ssize_t operator_rows
         Py_ssize_t block_len
         Py_ssize_t blocks
-        void undiagonalize()
-        void diagonalize()
-        void fold_bottom(cbool unfold)
-        void fold_top(cbool unfold)
-        int solve(SizedArray[double] &)
+        void undiagonalize() except +
+        void diagonalize() except +
+        void fold_bottom(cbool unfold) except +
+        void fold_top(cbool unfold) except +
+        int solve(SizedArray[double] &) except +
         SizedArray[double] bottom_factors
         SizedArray[double] top_factors
         SizedArray[double] high_dirichlet,
@@ -107,7 +106,7 @@ cdef extern from "_TriBandedOperatorGPU.cuh":
             cbool top_is_folded,
             cbool bottom_is_folded,
             cbool has_residual
-        )
+        ) except +
 
 
     void cout(SizedArray[int] *a)
@@ -158,7 +157,7 @@ cdef class BandedOperator(object):
     cpdef solve(self, np.ndarray V, overwrite=*)
     cpdef add_operator(BandedOperator self, BandedOperator other)
     cpdef add_scalar(self, float other)
-    cpdef vectorized_scale(self, np.ndarray arr) except +
+    cpdef vectorized_scale(self, np.ndarray arr)
 
     cpdef mul(self, val, inplace=*)
     cpdef add(self, val, inplace=*)

@@ -445,7 +445,7 @@ cdef class BandedOperator(object):
         return
 
 
-    cpdef vectorized_scale(self, np.ndarray vector) except +:
+    cpdef vectorized_scale(self, np.ndarray vector):
         """
         @vector@ is the correpsonding mesh vector of the current dimension.
 
