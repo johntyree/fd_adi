@@ -480,18 +480,20 @@ cdef class SizedArrayPtr(object):
     def __init__(self, a=None, tag="Unknown"):
         if a is not None:
             self.from_numpy(a, tag)
+            print "imported from numpy in constructor"
 
     cdef store(self, SizedArray[double] *p, cpp_string tag="Unknown"):
         if self.p:
             raise RuntimeError("SizedArrayPtr is single assignment")
         self.p = new SizedArray[double](deref(p))
-        print "Storing %s:" % tag, to_string(p)
+        print "SAPtr -> Storing %s:" % tag, to_string(p)
 
     cpdef from_numpy(self, np.ndarray a, cpp_string tag="Unknown"):
         if self.p:
+            print "SizedArrayPtr is single assignment"
             raise RuntimeError("SizedArrayPtr is single assignment")
         self.p = to_SizedArray(a, tag)
-        print "Storing %s:" % tag, to_string(self.p)
+        print "Numpy -> Storing %s: %s" % (tag, to_string(self.p))
 
     cpdef to_numpy(self):
         print "Converting", to_string(deref(self.p))

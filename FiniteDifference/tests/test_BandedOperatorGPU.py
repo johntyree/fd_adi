@@ -29,7 +29,7 @@ from FiniteDifference.heston import HestonBarrierOption
 class Cpp_test(unittest.TestCase):
 
     def setUp(self):
-        print "Setting up Params for CPP tests"
+        # print "Setting up Params for CPP tests"
         shape = (4,4)
         self.v1 = np.arange(shape[0]*shape[1], dtype=float)**2
         self.v2 = self.v1.copy()
@@ -51,15 +51,15 @@ class Cpp_test(unittest.TestCase):
         schemes = {}
 
         self.G = Grid.Grid([np.arange(shape[0]), np.arange(shape[1])], lambda x, y: (x*shape[1]+y)**2)
-        print self.G
+        # print self.G
         self.F = FD.FiniteDifferenceEngineADI(self.G, coefficients=coeffs,
                 boundaries=bounds, schemes=schemes, force_bandwidth=None)
-        print "Setting up FDE for CPP tests"
+        # print "Setting up FDE for CPP tests"
         self.F.init()
         self.F.operators[0].R = np.arange(self.G.size, dtype=float)
         self.F.operators[1].R = np.arange(self.G.size, dtype=float)
         self.F.operators[1].diagonalize()
-        print "Setup complete for CPP test"
+        # print "Setup complete for CPP test"
 
     def test_SizedArray_roundtrip(self):
         npt.assert_array_equal(self.v1, FD.BOG.test_SizedArray1_roundtrip(self.v1.copy()))
@@ -77,7 +77,6 @@ class Cpp_test(unittest.TestCase):
     def test_migrate_1(self):
         B = self.F.operators[1]
         ref = B.copy()
-        print "bottom_is_folded", B.bottom_is_folded
         B = BOG.BandedOperator(B, "test 0")
         B = B.immigrate("test 0")
         assert ref == B
@@ -87,10 +86,8 @@ class Cpp_test(unittest.TestCase):
         fp(B.D)
         B.D = B.D.tocoo().todia()
         ref = B.copy()
-        print type(B.D)
         B = BOG.BandedOperator(B, "test 01")
         B = B.immigrate("test 01")
-        print type(B.D)
         npt.assert_array_equal(ref.D.todense(), B.D.todense())
         assert ref == B
 
@@ -174,22 +171,22 @@ class Cpp_test(unittest.TestCase):
         B = BOG.BandedOperator(B)
         B.vectorized_scale(np.arange(B.operator_rows, dtype=float))
         B = B.immigrate()
-        fp(ref)
-        print
-        fp(B.D)
-        print
-        fp(B.D - ref)
+        # fp(ref)
+        # print
+        # fp(B.D)
+        # print
+        # fp(B.D - ref)
         npt.assert_array_equal(ref, B.D.todense())
 
 
     def test_copy_tri(self):
         ref = self.F.operators[0]
         tst = BOG.BandedOperator(ref).copy().immigrate()
-        fp(ref.D)
-        print
-        fp(tst.D)
-        print
-        fp(tst.D - ref.D)
+        # fp(ref.D)
+        # print
+        # fp(tst.D)
+        # print
+        # fp(tst.D - ref.D)
         npt.assert_array_equal(ref.D.todense(), tst.D.todense())
         npt.assert_equal(tst, ref)
 
@@ -198,11 +195,11 @@ class Cpp_test(unittest.TestCase):
         ref = self.F.operators[(0,1)]
         tst = BOG.BandedOperator(ref).copy().immigrate()
         ref.D = ref.D.tocoo().todia()
-        fp(ref.D)
-        print
-        fp(tst.D)
-        print
-        fp(tst.D - ref.D)
+        # fp(ref.D)
+        # print
+        # fp(tst.D)
+        # print
+        # fp(tst.D - ref.D)
         npt.assert_array_equal(ref.D.todense(), tst.D.todense())
         npt.assert_equal(tst, ref)
 
@@ -303,24 +300,24 @@ class Operator_Folding_test(unittest.TestCase):
         mat[:] = np.arange(self.B.D.data.size)
         mat[zeros] = 0
         B = self.B.copy()
-        print "ref pre"
-        fp(self.B.D)
-        fp(self.B.D.data)
+        # print "ref pre"
+        # fp(self.B.D)
+        # fp(self.B.D.data)
 
-        print "Collected off-tridiag points as bottom_factors"
+        # print "Collected off-tridiag points as bottom_factors"
         block_len = B.shape[0] / B.blocks
         bottom_factors = B.D.data[-1,block_len-3::block_len]
-        print B.blocks, len(bottom_factors)
-        print bottom_factors
+        # print B.blocks, len(bottom_factors)
+        # print bottom_factors
 
         self.B.diagonalize()
         B.diagonalize()
-        print "ref mid"
-        fp(self.B.D)
-        fp(self.B.D.data)
-        print "tst mid"
-        fp(B.D)
-        fp(B.D.data)
+        # print "ref mid"
+        # fp(self.B.D)
+        # fp(self.B.D.data)
+        # print "tst mid"
+        # fp(B.D)
+        # fp(B.D.data)
 
         npt.assert_array_equal(self.B.D.data, B.D.data, err_msg="Diagonalize alone doesn't preserve operator matrix.")
         npt.assert_(B == self.B, msg="Diagonalize alone doesn't preserve operator.")
@@ -328,20 +325,20 @@ class Operator_Folding_test(unittest.TestCase):
         B.undiagonalize()
         self.B.undiagonalize()
         npt.assert_(not B.is_tridiagonal())
-        print "ref after"
-        fp(self.B.D)
-        fp(self.B.D.data)
-        print "tst after"
-        fp(B.D)
-        fp(B.D.data)
-        print "ref top"
-        fp(self.B.top_factors or np.array([np.nan]))
-        print "tst top"
-        fp(B.top_factors or np.array([np.nan]))
-        print "ref bot"
-        fp(self.B.bottom_factors or np.array([np.nan]))
-        print "tst bot"
-        fp(B.bottom_factors or np.array([np.nan]))
+        # print "ref after"
+        # fp(self.B.D)
+        # fp(self.B.D.data)
+        # print "tst after"
+        # fp(B.D)
+        # fp(B.D.data)
+        # print "ref top"
+        # fp(self.B.top_factors or np.array([np.nan]))
+        # print "tst top"
+        # fp(B.top_factors or np.array([np.nan]))
+        # print "ref bot"
+        # fp(self.B.bottom_factors or np.array([np.nan]))
+        # print "tst bot"
+        # fp(B.bottom_factors or np.array([np.nan]))
         npt.assert_array_equal(self.B.D.data, B.D.data, err_msg="Undiagonalize roundtrip doesn't preserve operator matrix.")
         npt.assert_(B == self.B, msg="Undiagonalize roundtrip doesn't preserve operator.")
 
