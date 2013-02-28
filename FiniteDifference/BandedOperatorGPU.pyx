@@ -159,7 +159,6 @@ cdef class BandedOperator(object):
         if tag:
             print "Immigrate CSR:", tag, to_string(self.thisptr_csr)
         assert (self.thisptr_csr)
-        csr = self.D.tocsr()
 
         data = from_GPUVec(self.thisptr_csr.data)
         indices = from_GPUVec_i(self.thisptr_csr.col_ind)
@@ -169,7 +168,15 @@ cdef class BandedOperator(object):
         print data
 
         shp = (self.thisptr_csr.operator_rows,self.thisptr_csr.operator_rows)
-        self.D = scipy.sparse.csr_matrix((data, indices, indptr), shape=shp)
+        mat = scipy.sparse.csr_matrix((data, indices, indptr), shape=shp).todia()
+
+        cdef BO B = BO((mat.data,mat.offsets), residual=None, inplace=False,
+            deltas=self.deltas,
+            derivative=self.derivative,
+            order=self.order,
+            axis=self.axis)
+        return B
+
 
 
 
