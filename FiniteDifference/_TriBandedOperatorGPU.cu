@@ -148,6 +148,7 @@ SizedArray<double> *_TriBandedOperator::apply(SizedArray<double> &V) {
     using std::endl;
     const unsigned N = V.size;
     GPUVec<REAL_t> out(N);
+    SizedArray<double> *U;
 
     GPUVec<REAL_t> &in = V.data;
 
@@ -195,7 +196,7 @@ SizedArray<double> *_TriBandedOperator::apply(SizedArray<double> &V) {
     }
 
     // TODO: We can transpose `out` straight into U
-    SizedArray<double> *U = new SizedArray<double>(out,
+    U = new SizedArray<double>(out,
             V.ndim, V.shape, "CPP Solve U from V");
 
     if (axis == 0) {

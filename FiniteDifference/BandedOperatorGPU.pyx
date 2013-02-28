@@ -344,23 +344,24 @@ cdef class BandedOperator(object):
 
 
     cpdef apply(self, np.ndarray V, overwrite=False):
-        cdef np.ndarray ret
-        if not overwrite:
-            V = V.copy()
 
-        cdef SizedArray[double] *sa_V = to_SizedArray(V.copy(order='C'), "apply sa_V(V)")
-        cdef SizedArray[double] *sa_U
+        cdef SizedArrayPtr sa_V = SizedArrayPtr(V)
+        cdef SizedArrayPtr sa_U = SizedArrayPtr()
+
+        # if not overwrite:
+            # sa_V.store(new SizedArray[double](deref(V.p)), "Cloned in apply: " + V.tag)
+        # else:
+            # sa_V = V
+
         if self.thisptr_tri:
-            sa_U = self.thisptr_tri.apply(deref(sa_V))
+            sa_U.store(self.thisptr_tri.apply(deref(sa_V.p)))
         else:
-            sa_U = self.thisptr_csr.apply(deref(sa_V))
-        if sa_U.ndim == 2:
-            ret = from_SizedArray_2(deref(sa_U))
-        else:
-            ret = from_SizedArray(deref(sa_U))
-        del sa_V, sa_U
+            sa_U.store(self.thisptr_csr.apply(deref(sa_V.p)))
 
-        return ret
+        V = sa_U.to_numpy()
+
+        del sa_U, sa_V
+        return V
 
 
     cpdef solve(self, np.ndarray V, overwrite=False):
@@ -489,15 +490,20 @@ cdef class BandedOperator(object):
 
 
 cdef class SizedArrayPtr(object):
-    cdef store(self, SizedArray[double] *p, cpp_string tag="Unknown"):
-        self.p = new SizedArray[double](deref(p))
-        print "Storing %s:" % tag, to_string(p)
 
     def __init__(self, a=None, tag="Unknown"):
         if a is not None:
             self.from_numpy(a, tag)
 
+    cdef store(self, SizedArray[double] *p, cpp_string tag="Unknown"):
+        if self.p:
+            raise RuntimeError("SizedArrayPtr is single assignment")
+        self.p = new SizedArray[double](deref(p))
+        print "Storing %s:" % tag, to_string(p)
+
     cpdef from_numpy(self, np.ndarray a, cpp_string tag="Unknown"):
+        if self.p:
+            raise RuntimeError("SizedArrayPtr is single assignment")
         self.p = to_SizedArray(a, tag)
         print "Storing %s:" % tag, to_string(self.p)
 
