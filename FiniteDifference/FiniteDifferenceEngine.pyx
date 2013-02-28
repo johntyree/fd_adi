@@ -156,7 +156,7 @@ cdef class FiniteDifferenceEngine(object):
 
     def emigrate(self, tag=""):
         for op, B in self.operators.items():
-            self.operator_rows[op] = BOG.BandedOperatorGPU(B)
+            self.operators[op] = BOG.BandedOperator(B)
 
 
     def solve(self):
