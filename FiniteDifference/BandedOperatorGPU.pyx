@@ -148,10 +148,10 @@ cdef class BandedOperator(object):
             SizedArray[int] *col_ind = to_SizedArray_i(csr.indices, "col_ind")
 
         self.thisptr_csr = new _CSRBandedOperator(
-                  deref(data)
-                , deref(row_ptr)
-                , deref(row_ind)
-                , deref(col_ind)
+                  data.data
+                , row_ptr.data
+                , row_ind.data
+                , col_ind.data
                 , other.D.shape[0]
                 , other.blocks
                 , tag
