@@ -88,7 +88,6 @@ class Cpp_test(unittest.TestCase):
     def test_migrate_01(self):
         raise unittest.SkipTest
         B = self.F.operators[(0,1)]
-        B.use_csr_format()
         ref = B.copy()
         B.emigrate("B test 01")
         B.D.data *= 0
@@ -135,7 +134,7 @@ class Cpp_test(unittest.TestCase):
         print B.D.tocsr().data
         print B.D.tocsr().indptr
         print B.D.tocsr().indices
-        B.use_csr_format()
+        B.is_mixed_derivative = True
         tst = B.apply(vec)
         npt.assert_array_equal(ref, tst)
 
@@ -156,13 +155,14 @@ class Cpp_test(unittest.TestCase):
         B.R = None
         B.axis = 1
         B.dirichlet = (None, None)
-        B.csr = True
+        B.is_mixed_derivative = True
         for i in range(5):
             sz = np.random.randint(3, 20)
             B.D = scipy.sparse.csr_matrix(np.random.random((sz*sz,sz*sz)))
+            BG = BOG.BandedOperator.immigrate(B)
             v = np.random.random((sz, sz))
             ref = B.apply(v)
-            tst = B.apply(v)
+            tst = BG.apply(v)
             npt.assert_array_almost_equal(ref, tst, decimal=8)
 
 
