@@ -144,60 +144,49 @@ struct zipdot3 : thrust::binary_function<const Triple &, const Triple &, REAL_t>
 
 SizedArray<double> *_TriBandedOperator::apply(SizedArray<double> &V) {
     FULLTRACE;
-    using std::cout;
-    using std::endl;
+    verify_diag_ptrs();
     const unsigned N = V.size;
-    GPUVec<REAL_t> out(N);
-    SizedArray<double> *U;
-
-    GPUVec<REAL_t> &in = V.data;
+    SizedArray<double> *U = new SizedArray<double>(N, "U from V apply");
+    U->ndim = V.ndim;
+    U->shape[0] = V.shape[0];
+    U->shape[1] = V.shape[1];
+    U->sanity_check();
 
     if (has_low_dirichlet) {
         thrust::copy(low_dirichlet.data.begin(),
                 low_dirichlet.data.end(),
-                in.begin());
+                V.data.begin());
     }
     if (has_high_dirichlet) {
         thrust::copy(high_dirichlet.data.begin(),
                 high_dirichlet.data.end(),
-                in.end() - V.shape[1]);
+                V.data.end() - V.shape[1]);
     }
 
     if (axis == 0) {
         V.transpose(1);
     }
 
-
-
-    GPUVec<REAL_t> a(sub, sub+N);
-    GPUVec<REAL_t> b(mid, mid+N);
-    GPUVec<REAL_t> c(sup, sup+N);
-
-    out[0] = b[0]*in[0] + c[0]*in[1];
+    U->data[0] = mid[0]*V.data[0] + sup[0]*V.data[1];
     thrust::transform(
-        thrust::make_zip_iterator(thrust::make_tuple(a.begin()+1, b.begin()+1, c.begin()+1)),
-        thrust::make_zip_iterator(thrust::make_tuple(a.end()-1, b.end()-1, c.end()-1)),
-        thrust::make_zip_iterator(thrust::make_tuple(in.begin(), in.begin()+1, in.begin()+2)),
-        out.begin()+1,
+        make_zip_iterator(make_tuple(sub+1, mid+1, sup+1)),
+        make_zip_iterator(make_tuple(sub+N-1, mid+N-1, sup+N-1)),
+        make_zip_iterator(make_tuple(V.data.begin(), V.data.begin()+1, V.data.begin()+2)),
+        U->data.begin()+1,
         zipdot3()
     );
-    out[N-1] = a[N-1]*in[N-2] + b[N-1]*in[N-1];
+    U->data[N-1] = sub[N-1]*V.data[N-2] + mid[N-1]*V.data[N-1];
 
     if (is_folded()) {
-        fold_vector(out, true);
+        fold_vector(U->data, true);
     }
-
 
     if (has_residual) {
-        thrust::transform(out.begin(), out.end(),
+        thrust::transform(U->data.begin(), U->data.end(),
                 R.data.begin(),
-                out.begin(),
+                U->data.begin(),
                 thrust::plus<double>());
     }
-
-    // TODO: We can transpose `out` straight into U
-    U = new SizedArray<double>(out,
-            V.ndim, V.shape, "CPP Solve U from V");
 
     if (axis == 0) {
         U->transpose(1);
@@ -296,9 +285,16 @@ bool _TriBandedOperator::is_folded() {
 
 
 
-int _TriBandedOperator::solve(SizedArray<double> &V) {
+SizedArray<double> *
+_TriBandedOperator::solve(SizedArray<double> &V, bool inplace) {
     FULLTRACE;
     verify_diag_ptrs();
+    const unsigned N = V.size;
+    SizedArray<double> *U = new SizedArray<double>(N, "U from V solve");
+    U->ndim = V.ndim;
+    U->shape[0] = V.shape[0];
+    U->shape[1] = V.shape[1];
+    U->sanity_check();
 
     if (has_low_dirichlet) {
         thrust::copy(low_dirichlet.data.begin(),
@@ -326,27 +322,22 @@ int _TriBandedOperator::solve(SizedArray<double> &V) {
         fold_vector(V.data);
     }
 
-    GPUVec<double> d_V(V.data);
-    GPUVec<double> d_sup(sup, sup+V.size);
-    GPUVec<double> d_mid(mid, mid+V.size);
-    GPUVec<double> d_sub(sub, sub+V.size);
-
-    status = cusparseDgtsvStridedBatch(handle, V.size,
-            d_sub.raw(), d_mid.raw(), d_sup.raw(),
-            d_V.raw(),
-            1, V.size);
+    thrust::copy(V.data.begin(), V.data.end(), U->data.begin());
+    status = cusparseDgtsvStridedBatch(handle, N,
+            sub.get(), mid.get(), sup.get(),
+            U->data.raw(),
+            1, N);
     cudaDeviceSynchronize();
     if (status != CUSPARSE_STATUS_SUCCESS) {
-        std::cerr << "CUSPARSE tridiag system solve failed." << std::endl;
-        return 1;
+        delete U;
+        DIE("CUSPARSE tridiag system solve failed.");
     }
 
-    thrust::copy(d_V.begin(), d_V.end(), V.data.begin());
     if (axis == 0) {
-        V.transpose(1);
+        U->transpose(1);
     }
     FULLTRACE;
-    return 0;
+    return U;
 }
 
 template <typename Tuple, typename OP>

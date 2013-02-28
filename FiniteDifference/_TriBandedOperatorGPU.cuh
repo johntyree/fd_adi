@@ -26,7 +26,7 @@ class _TriBandedOperator {
         void verify_diag_ptrs();
         bool is_folded();
         SizedArray<double> *apply(SizedArray<double> &);
-        int solve(SizedArray<double> &);
+        SizedArray<double> *solve(SizedArray<double> &, bool=false);
         void add_scalar(double val);
         void vectorized_scale(SizedArray<double> &vector);
         void add_operator(_TriBandedOperator &other);

@@ -21,7 +21,7 @@ cdef extern from "_TriBandedOperatorGPU.cuh":
         void diagonalize() except +
         void fold_bottom(cbool unfold) except +
         void fold_top(cbool unfold) except +
-        int solve(SizedArray[double] &) except +
+        SizedArray[double] *solve(SizedArray[double] &) except +
         SizedArray[double] bottom_factors
         SizedArray[double] top_factors
         SizedArray[double] high_dirichlet,
