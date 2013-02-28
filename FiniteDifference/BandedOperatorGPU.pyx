@@ -166,8 +166,6 @@ cdef class BandedOperator(object):
         shp = (self.thisptr_csr.operator_rows,self.thisptr_csr.operator_rows)
         self.D = scipy.sparse.csr_matrix((data, indices, indptr), shape=shp)
 
-        del self.thisptr_csr
-        self.thisptr_csr = <_CSRBandedOperator *> 0
 
 
 
