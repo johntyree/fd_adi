@@ -345,13 +345,9 @@ cdef class BandedOperator(object):
 
     cpdef apply(self, np.ndarray V, overwrite=False):
 
-        cdef SizedArrayPtr sa_V = SizedArrayPtr(V)
+        cdef SizedArrayPtr sa_V = SizedArrayPtr(V, "sa_V apply")
         cdef SizedArrayPtr sa_U = SizedArrayPtr()
-
-        # if not overwrite:
-            # sa_V.store(new SizedArray[double](deref(V.p)), "Cloned in apply: " + V.tag)
-        # else:
-            # sa_V = V
+        sa_U.tag = "sa_U apply"
 
         if self.thisptr_tri:
             sa_U.store(self.thisptr_tri.apply(deref(sa_V.p)))
@@ -360,27 +356,17 @@ cdef class BandedOperator(object):
 
         V = sa_U.to_numpy()
 
-        del sa_U, sa_V
         return V
 
 
     cpdef solve(self, np.ndarray V, overwrite=False):
-        cdef np.ndarray ret
-        if not overwrite:
-            V = V.copy()
-
-        cdef SizedArray[double] *d_V = to_SizedArray(V, "solve2 domain V")
-        self.thisptr_tri.solve(deref(d_V))
-
-        if V.ndim == 2:
-            d_V.reshape(V.shape[0], V.shape[1])
-            ret = from_SizedArray_2(deref(d_V))
-        else:
-            ret = from_SizedArray(deref(d_V))
-        # print "After solve Device array: ", d_V.show()
-        del d_V
-
-        return ret
+        assert not self.is_mixed_derivative
+        cdef SizedArrayPtr sa_V = SizedArrayPtr(V, "sa_V solve")
+        cdef SizedArrayPtr sa_U = SizedArrayPtr()
+        sa_U.tag = "sa_U solve"
+        sa_U.store(self.thisptr_tri.solve(deref(sa_V.p)))
+        V = sa_U.to_numpy()
+        return V
 
 
     cdef inline no_mixed(self):
