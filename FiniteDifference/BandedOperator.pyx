@@ -90,7 +90,6 @@ cdef class BandedOperator(object):
                 or attr == 'top_factors'
                 or attr == 'bottom_factors'):
                 continue
-            print "%s:" % attr,  getattr(self, attr), getattr(other, attr)
             if not np.array_equal(getattr(self, attr), getattr(other, attr)):
                 print "FAIL %s:" % attr,  getattr(self, attr), getattr(other, attr)
                 return false
