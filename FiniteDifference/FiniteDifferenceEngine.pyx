@@ -22,23 +22,24 @@ import numpy as np
 cimport numpy as np
 import scipy.sparse
 import itertools
-import utils
 import scipy.linalg as spl
 
 import itertools as it
 
-import BandedOperatorGPU as BOG
-cimport BandedOperatorGPU as BOG
+import FiniteDifference.utils as utils
 
-import BandedOperator as BO
-cimport BandedOperator as BO
+import FiniteDifference.BandedOperatorGPU as BOG
+cimport FiniteDifference.BandedOperatorGPU as BOG
+
+import FiniteDifference.BandedOperator as BO
+cimport FiniteDifference.BandedOperator as BO
 BandedOperator = BO.BandedOperator
 
-from visualize import fp
+from FiniteDifference.visualize import fp
 
 DEBUG = False
 
-from Option import Option
+from FiniteDifference.Option import Option
 
 REAL = np.float64
 ctypedef np.float64_t REAL_t
