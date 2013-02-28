@@ -21,6 +21,7 @@ import FiniteDifference.Grid as Grid
 
 import FiniteDifference.FiniteDifferenceEngine as FD
 import FiniteDifference.BandedOperatorGPU as BOG
+import FiniteDifference.BandedOperator as BO
 
 from FiniteDifference.blackscholes import BlackScholesFiniteDifferenceEngine, BlackScholesOption
 from FiniteDifference.heston import HestonBarrierOption
@@ -69,29 +70,25 @@ class Cpp_test(unittest.TestCase):
     def test_migrate_0(self):
         B = self.F.operators[0]
         ref = B.copy()
-        B = BOG.BandedOperator(B, "C1 0")
-        B = B.immigrate("C1 0")
+        B = BOG.BandedOperator(B, "test 0")
+        B = B.immigrate("test 0")
         assert ref == B
 
     def test_migrate_1(self):
-        raise unittest.SkipTest
         B = self.F.operators[1]
         ref = B.copy()
         print "bottom_is_folded", B.bottom_is_folded
-        print type(B.D)
-        B.emigrate("B test 1")
-        B.D.data *= 0
-        B.immigrate("B test 1")
-        print type(B.D)
+        B = BOG.BandedOperator(B, "test 0")
+        B = B.immigrate("test 0")
         assert ref == B
 
     def test_migrate_01(self):
-        raise unittest.SkipTest
         B = self.F.operators[(0,1)]
         ref = B.copy()
-        B.emigrate("B test 01")
-        B.D.data *= 0
-        B.immigrate("B test 01")
+        print type(B.D)
+        B = BOG.BandedOperator(B, "test 01")
+        B = B.immigrate("test 01")
+        print type(B.D)
         npt.assert_array_equal(ref.D.todense(), B.D.todense())
         assert ref == B
 
@@ -105,47 +102,45 @@ class Cpp_test(unittest.TestCase):
 
 
     def test_tri_apply_axis_0(self):
-        B0  = self.F.operators[0]
+        B = self.F.operators[0]
         # print "B0 data"
         # fp(B0.D.data)
-        R0 = B0.R.copy()
-        ref = B0.apply(self.v2)
-        tst = B0.apply(self.v2.copy())
-        npt.assert_array_equal(R0, B0.R)
+        R = B.R.copy()
+        ref = B.apply(self.v2)
+        B = BOG.BandedOperator(B, "C1 0")
+        tst = B.apply(self.v2.copy())
+        B = B.immigrate("C1 0")
+        npt.assert_array_equal(R, B.R)
         npt.assert_array_equal(ref, tst)
 
 
     def test_tri_apply_axis_1(self):
-        B1  = self.F.operators[1]
-        # print "B1 data"
-        # fp(B1.D.data)
-        R1 = B1.R.copy()
-        ref = B1.apply(self.v2)
-        tst = B1.apply(self.v2.copy())
-        npt.assert_array_equal(R1, B1.R)
+        B = self.F.operators[0]
+        # print "B0 data"
+        # fp(B0.D.data)
+        R = B.R.copy()
+        ref = B.apply(self.v2)
+        B = BOG.BandedOperator(B)
+        tst = B.apply(self.v2.copy())
+        B = B.immigrate()
+        npt.assert_array_equal(R, B.R)
         npt.assert_array_equal(ref, tst)
 
 
     def test_csr_apply_0(self):
-        raise unittest.SkipTest
         vec = np.arange(30, dtype=float)
-        B = BOG.for_vector(vec)
+        B = BO.for_vector(vec)
         ref = B.apply(vec)
-        print B.D.tocsr().data
-        print B.D.tocsr().indptr
-        print B.D.tocsr().indices
         B.is_mixed_derivative = True
+        B = BOG.BandedOperator(B)
         tst = B.apply(vec)
         npt.assert_array_equal(ref, tst)
 
 
     def test_csr_apply_01(self):
-        raise unittest.SkipTest
         B01  = self.F.operators[(0,1)]
         ref = B01.apply(self.v2)
-        print B01.D.tocsr().data
-        print B01.D.tocsr().indptr
-        print B01.D.tocsr().indices
+        B01 = BOG.BandedOperator(B01)
         tst = B01.apply(self.v2.copy())
         npt.assert_array_equal(ref, tst)
 
@@ -193,7 +188,9 @@ class Cpp_test(unittest.TestCase):
         B.D.data[-1,-1] = 0
         origdata = B.D.data.copy()
         ref = B.solve(self.v2)
+        B = BOG.BandedOperator(B)
         tst = B.solve(self.v2.copy())
+        B = B.immigrate()
         fp(ref - tst, 3, 'e')
         npt.assert_array_almost_equal(ref, tst, decimal=8)
         npt.assert_array_equal(origdata, B.D.data)
@@ -206,7 +203,9 @@ class Cpp_test(unittest.TestCase):
         B.D.data[-1,-1] = 0
         origdata = B.D.data.copy()
         ref = B.solve(self.v2)
+        B = BOG.BandedOperator(B)
         tst = B.solve(self.v2.copy())
+        B = B.immigrate()
         fp(ref - tst, 3, 'e')
         npt.assert_array_almost_equal(ref, tst, decimal=8)
         npt.assert_array_equal(origdata, B.D.data)
