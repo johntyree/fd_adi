@@ -19,6 +19,9 @@ import scipy.linalg as spl
 cimport cython
 from cython.operator import dereference as deref
 
+from FiniteDifference.BandedOperator import BandedOperator as BO
+from FiniteDifference.BandedOperator cimport BandedOperator as BO
+
 cdef class BandedOperator(object):
 
     def __init__(self, other=None, tag="Constructor"):
@@ -167,8 +170,8 @@ cdef class BandedOperator(object):
 
     cdef emigrate_tri(self, other, tag=""):
         if tag:
-            print "Emigrate Tri:", tag, to_string(self.thisptr_tri), "offsets", self.D.offsets
-        assert not (self.thisptr_tri)
+            print "Emigrate Tri:", tag, "<- offsets", other.D.offsets
+        assert not self.thisptr_tri
 
         other = other.copy()
 
@@ -202,16 +205,28 @@ cdef class BandedOperator(object):
         del diags, R, high_dirichlet, low_dirichlet, top_factors, bottom_factors
 
     cdef immigrate_tri(self, tag=""):
+        cdef BO B
+
         if tag:
             print "Immigrate Tri:", tag, to_string(self.thisptr_tri)
         assert self.thisptr_tri != <void *>0
-        self.D.data = from_SizedArray_2(self.thisptr_tri.diags)
-        self.top_is_folded = self.thisptr_tri.top_is_folded
-        self.bottom_is_folded = self.thisptr_tri.bottom_is_folded
+        data = from_SizedArray_2(self.thisptr_tri.diags)
+        selfoffsets = np.array((1,0,-1))
 
-        block_len = self.D.shape[0] / self.blocks
+        if self.thisptr_tri.has_residual:
+            R = from_SizedArray(self.thisptr_tri.R)
+        else:
+            R = None
 
-        # self.cublas_to_scipy()
+        B = BO((data,selfoffsets), residual=R, inplace=False,
+            derivative=self.derivative,
+            order=self.order,
+            axis=self.axis)
+
+        cublas_to_scipy(B)
+
+        B.top_is_folded = self.thisptr_tri.top_is_folded
+        B.bottom_is_folded = self.thisptr_tri.bottom_is_folded
 
         center = 1
         bottom = 2
@@ -219,58 +234,39 @@ cdef class BandedOperator(object):
         tops = from_SizedArray(self.thisptr_tri.top_factors)
 
         if self.bottom_is_folded:
-            self.bottom_factors = bots
+            B.bottom_factors = bots
         else:
             bottom += 1
-            self.bottom_factors = None
+            B.bottom_factors = None
 
         if self.top_is_folded:
-            self.top_factors = tops
+            B.top_factors = tops
         else:
             center += 1
             bottom += 1
-            self.top_factors = None
+            B.top_factors = None
 
-        selfoffsets = self.D.offsets
-
-        if (self.thisptr_tri.top_is_folded
-            or self.thisptr_tri.bottom_is_folded):
+        if (self.top_is_folded
+            or self.bottom_is_folded):
             print "Claims to be folded",
-            print self.thisptr_tri.top_is_folded, self.thisptr_tri.bottom_is_folded
+            print self.top_is_folded, self.bottom_is_folded
             offsets = -np.arange(bottom+1, dtype=np.int32)+center
-            data = np.zeros((bottom+1, self.shape[0]))
+            data = np.zeros((bottom+1, B.shape[0]))
             for i in range(selfoffsets.shape[0]):
                 o = selfoffsets[i]
                 fro = get_int_index(selfoffsets, o)
                 to = get_int_index(offsets, o)
-                data[to] += self.D.data[fro]
-            self.D = scipy.sparse.dia_matrix((data, offsets), shape=self.shape)
+                data[to] += B.D.data[fro]
             if not self.top_is_folded:
                 assert offsets[0] == 2
-                data[0,2::block_len] = tops
+                data[0,2::B.block_len] = tops
             if not self.bottom_is_folded:
                 assert offsets[-1] == -2
-                data[-1,block_len-3::block_len] = bots
-        else:
-            data = self.D.data
-            offsets = self.D.offsets
+                data[-1,B.block_len-3::B.block_len] = bots
+            B.D = scipy.sparse.dia_matrix((data, offsets), shape=self.shape)
 
-        # if data[2,0] == 0:
-            # data[2,0] = np.inf
-        # self.D = utils.todia(self.D.tocoo())
-        # c = get_int_index(self.D.offsets, 0)
-        # if self.D.data[c,0] == np.inf:
-            # self.D.data[c,0] = 0
-
-        self.solve_banded_offsets = (abs(min(self.D.offsets)), abs(max(self.D.offsets)))
-
-        if self.thisptr_tri.has_residual:
-            self.R = from_SizedArray(self.thisptr_tri.R)
-        else:
-            assert self.R is None, ("We used to have a residual..."
-                                    "but now it's gone!")
-        del self.thisptr_tri
-        self.thisptr_tri = <_TriBandedOperator *> 0
+        B.solve_banded_offsets = (abs(min(B.D.offsets)), abs(max(B.D.offsets)))
+        return B
 
 
     cpdef diagonalize(self):
