@@ -678,7 +678,6 @@ cdef class BandedOperator(object):
         cdef unsigned int operator_rows = self.shape[0]
         cdef unsigned int blocks = self.blocks
         cdef unsigned int block_len = operator_rows / blocks
-        print type(self.D)
         cdef int[:] offsets = np.array(self.D.offsets)
         cdef double[:] R = self.R
         cdef double[:,:] data = self.D.data
