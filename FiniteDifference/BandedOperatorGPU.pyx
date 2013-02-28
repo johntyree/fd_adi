@@ -46,6 +46,10 @@ cdef class BandedOperator(object):
             else:
                 return self.thisptr_tri.operator_rows
 
+    property shape:
+        def __get__(self):
+            return (self.operator_rows, self.operator_rows)
+
     def __dealloc__(self):
         if self.thisptr_csr:
             del self.thisptr_csr
