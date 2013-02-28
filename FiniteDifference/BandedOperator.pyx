@@ -86,9 +86,7 @@ cdef class BandedOperator(object):
             return np.array(0) if x is None else np.nan_to_num(x)
 
         for attr in self.attrs:
-            if (   attr == 'deltas'
-                or attr == 'top_factors'
-                or attr == 'bottom_factors'):
+            if attr in ('deltas', 'top_factors', 'bottom_factors'):
                 continue
             if not np.array_equal(getattr(self, attr), getattr(other, attr)):
                 print "FAIL %s:" % attr,  getattr(self, attr), getattr(other, attr)

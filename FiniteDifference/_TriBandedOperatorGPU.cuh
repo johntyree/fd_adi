@@ -36,6 +36,17 @@ class _TriBandedOperator {
         void fold_bottom(bool = false);
         void fold_top(bool = false);
 
+        // This is public to get to and from python
+        bool has_residual;
+        bool has_high_dirichlet;
+        bool has_low_dirichlet;
+        bool top_is_folded;
+        bool bottom_is_folded;
+        bool is_tridiagonal;
+        Py_ssize_t operator_rows;
+        Py_ssize_t blocks;
+        Py_ssize_t block_len;
+
         _TriBandedOperator(
             SizedArray<double> &data,
             SizedArray<double> &R,
@@ -52,17 +63,6 @@ class _TriBandedOperator {
             bool bottom_is_folded,
             bool has_residual
             );
-
-        // This is public to get to and from python
-        bool has_residual;
-        bool has_high_dirichlet;
-        bool has_low_dirichlet;
-        bool top_is_folded;
-        bool bottom_is_folded;
-        bool is_tridiagonal;
-        Py_ssize_t operator_rows;
-        Py_ssize_t blocks;
-        Py_ssize_t block_len;
 
     private:
         unsigned int axis;
