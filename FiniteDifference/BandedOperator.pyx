@@ -3,18 +3,13 @@
 # cython: infer_types = True
 # cython: profile = True
 # distutils: language = c++
-"""Description."""
 
-from bisect import bisect_left
 
 import numpy as np
 cimport numpy as np
 import scipy.sparse
-import itertools
 import utils
 import scipy.linalg as spl
-
-cimport cython
 
 
 cdef class BandedOperator(object):
@@ -64,10 +59,6 @@ cdef class BandedOperator(object):
         self.axis = axis
         self.is_mixed_derivative = False
 
-
-    # def __dealloc__(self):
-        # if (self.thisptr_tri):
-            # del self.thisptr_tri
 
     def copy_meta_data(self, other, **kwargs):
         for attr in self.attrs:
@@ -323,6 +314,7 @@ cdef class BandedOperator(object):
 
         return ret
 
+
     # @cython.boundscheck(False)
     cpdef applyboundary(self, boundary, mesh):
         """
@@ -450,6 +442,7 @@ cdef class BandedOperator(object):
                                       " order 2 at boundaries. (%s)" % derivative)
         B.R = np.asarray(R)
 
+
     cpdef splice_with(self, begin, at, inplace=False):
         """
         Splice a second operator into this one by replacing rows after @at@.
@@ -525,6 +518,7 @@ cdef class BandedOperator(object):
     def __imul__(self, val):
         self.vectorized_scale(np.ones(self.shape[0]) * val)
         return self
+
 
     cpdef add(self, val, inplace=False):
         return self.__iadd__(val) if inplace else self.__add__(val)
@@ -756,6 +750,7 @@ cdef inline int sign(int i):
     else:
         return 1
 
+
 # @cython.boundscheck(False)
 cdef inline unsigned int get_real_index(double[:] haystack, double needle) except +:
     cdef unsigned int length = haystack.shape[0]
@@ -807,7 +802,6 @@ cpdef for_vector(vector, scheme="center", derivative=1, order=2,
     @derivative@ is a tuple specifying the sequence of derivatives. For
     example, `(0,0)` is the second derivative in the first dimension.
     """
-
     check_derivative(derivative)
 
     deltas = np.hstack((np.nan, np.diff(vector)))
@@ -981,5 +975,3 @@ cpdef backwardcoeffs(deltas, derivative=1, order=2, force_bandwidth=None):
         raise NotImplementedError, ("Derivative must be 1 or 2")
 
     return (data, offsets)
-
-

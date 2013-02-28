@@ -5,22 +5,20 @@
 # cython: embedsignature = True
 # distutils: language = c++
 # distutils: sources = FiniteDifference/_GPU_Code.cu FiniteDifference/backtrace.c FiniteDifference/filter.c
-"""Description."""
+
 
 from bisect import bisect_left
 
 import numpy as np
 cimport numpy as np
 import scipy.sparse
-import itertools
-import utils
-import scipy.linalg as spl
 
 cimport cython
 from cython.operator import dereference as deref
 
 from FiniteDifference.BandedOperator import BandedOperator as BO
 from FiniteDifference.BandedOperator cimport BandedOperator as BO
+
 
 cdef class BandedOperator(object):
 
@@ -39,6 +37,7 @@ cdef class BandedOperator(object):
         if other:
             self.emigrate(other, tag)
 
+
     property operator_rows:
         def __get__(self):
             if self.is_mixed_derivative:
@@ -46,15 +45,18 @@ cdef class BandedOperator(object):
             else:
                 return self.thisptr_tri.operator_rows
 
+
     property shape:
         def __get__(self):
             return (self.operator_rows, self.operator_rows)
+
 
     def __dealloc__(self):
         if self.thisptr_csr:
             del self.thisptr_csr
         elif self.thisptr_tri:
             del self.thisptr_tri
+
 
     def copy_meta_data(self, other, **kwargs):
         for attr in self.attrs:
@@ -144,6 +146,7 @@ cdef class BandedOperator(object):
         B.copy_meta_data(self)
         return B
 
+
     cpdef emigrate(self, other, tag=""):
         self.copy_meta_data(other)
         if self.is_mixed_derivative:
@@ -151,11 +154,13 @@ cdef class BandedOperator(object):
         else:
             return self.emigrate_tri(other, tag)
 
+
     cpdef immigrate(self, tag=""):
         if self.is_mixed_derivative:
             return self.immigrate_csr(tag)
         else:
             return self.immigrate_tri(tag)
+
 
     cdef emigrate_csr(self, other, tag=""):
         if tag:
@@ -203,9 +208,6 @@ cdef class BandedOperator(object):
         return B
 
 
-
-
-
     cdef emigrate_tri(self, other, tag=""):
         if tag:
             print "Emigrate Tri:", tag, "<- offsets", other.D.offsets
@@ -241,6 +243,7 @@ cdef class BandedOperator(object):
                 )
 
         del diags, R, high_dirichlet, low_dirichlet, top_factors, bottom_factors
+
 
     cdef immigrate_tri(self, tag=""):
         cdef BO B
@@ -330,6 +333,7 @@ cdef class BandedOperator(object):
     cpdef diagonalize(self):
         self.thisptr_tri.diagonalize()
 
+
     cpdef undiagonalize(self):
         self.thisptr_tri.undiagonalize()
 
@@ -357,6 +361,7 @@ cdef class BandedOperator(object):
 
         return ret
 
+
     cpdef solve(self, np.ndarray V, overwrite=False):
         cdef np.ndarray ret
         if not overwrite:
@@ -375,13 +380,16 @@ cdef class BandedOperator(object):
 
         return ret
 
+
     cdef inline no_mixed(self):
         if self.is_mixed_derivative:
             raise ValueError("Operation not supported with mixed operator.")
 
+
     cpdef fold_top(self, unfold=False):
         self.no_mixed()
         self.thisptr_tri.fold_top(unfold)
+
 
     cpdef fold_bottom(self, unfold=False):
         self.no_mixed()
@@ -485,6 +493,7 @@ cdef inline int sign(int i):
     else:
         return 1
 
+
 # @cython.boundscheck(False)
 cdef inline unsigned int get_real_index(double[:] haystack, double needle) except +:
     cdef unsigned int length = haystack.shape[0]
@@ -504,14 +513,10 @@ cdef inline unsigned int get_int_index(int[:] haystack, int needle) except +:
 
 
 def test_SizedArray_transpose(np.ndarray[ndim=2, dtype=double] v):
-    from visualize import fp
-    # fp(v, fmt='i')
     cdef SizedArray[double]* s = to_SizedArray(v, "transpose s")
     v[:] = 0
     s.transpose(1)
-    # print
     v = from_SizedArray_2(deref(s))
-    # fp(v, fmt='i')
     return v
 
 
@@ -520,10 +525,12 @@ def test_SizedArray1_roundtrip(np.ndarray[ndim=1, dtype=double] v):
     v[:] = 0
     return from_SizedArray(deref(s))
 
+
 def test_SizedArray2_roundtrip(np.ndarray[ndim=2, dtype=double] v):
     cdef SizedArray[double]* s = to_SizedArray(v, "Round trip 2")
     v[:,:] = 0
     return from_SizedArray_2(deref(s))
+
 
 cdef inline SizedArray[double]* to_SizedArray(np.ndarray v, name) except +:
     assert v.dtype.type == np.float64, ("Types don't match! Got (%s) expected (%s)."
@@ -533,12 +540,14 @@ cdef inline SizedArray[double]* to_SizedArray(np.ndarray v, name) except +:
         v = v.copy("C")
     return new SizedArray[double](<double *>np.PyArray_DATA(v), v.ndim, v.shape, name)
 
+
 cdef inline SizedArray[int]* to_SizedArray_i(np.ndarray v, cpp_string name) except +:
     assert v.dtype.type == np.int32, ("Types don't match! Got (%s) expected (%s)."
                                       % (v.dtype.type, np.int64))
     if not v.flags.c_contiguous:
         v = v.copy("C")
     return new SizedArray[int](<int *>np.PyArray_DATA(v), v.ndim, v.shape, name)
+
 
 cdef inline from_SizedArray_i(SizedArray[int] &v):
     cdef int sz = v.size
@@ -548,6 +557,7 @@ cdef inline from_SizedArray_i(SizedArray[int] &v):
         s[i] = v.get(i)
     return s
 
+
 cdef inline from_SizedArray(SizedArray[double] &v):
     sz = v.size
     cdef np.ndarray[double, ndim=1] s = np.empty(sz, dtype=float)
@@ -555,6 +565,7 @@ cdef inline from_SizedArray(SizedArray[double] &v):
     for i in range(sz):
         s[i] = v.get(i)
     return s
+
 
 cdef inline from_SizedArray_2(SizedArray[double] &v):
     assert v.ndim == 2, ("Using from_SizedArray_2 on an array of dim %s" % v.ndim)
@@ -573,12 +584,14 @@ cdef inline from_GPUVec(GPUVec[double] &v):
         s[i] = v[i]
     return s
 
+
 cdef inline from_GPUVec_i(GPUVec[int] &v):
     cdef int sz = v.size(), i
     cdef np.ndarray[int, ndim=1] s = np.empty(sz, dtype=np.int32)
     for i in range(sz):
         s[i] = v[i]
     return s
+
 
 cdef cublas_to_scipy(B):
     # Shift because of scipy/cublas row configuration
@@ -589,6 +602,7 @@ cdef cublas_to_scipy(B):
         if o < 0:
             B.D.data[row,:o] = B.D.data[row,-o:]
             B.D.data[row,o:] = 0
+
 
 cdef scipy_to_cublas(B):
     # We have to shift the offsets between scipy and cublas

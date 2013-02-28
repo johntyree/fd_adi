@@ -3,16 +3,7 @@
 # cython: infer_types=True
 # cython: profile=True
 # distutils: language = c++
-"""<+Module Description.+>"""
 
-# import sys
-# import os
-# import itertools as it
-
-# TODO: This needs a partial redesign on how to handle boundary conditions.
-# This just isn't flexible enough.
-
-from types import MethodType
 
 from bisect import bisect_left
 
@@ -20,11 +11,8 @@ import sys
 
 import numpy as np
 cimport numpy as np
-import scipy.sparse
-import itertools
-import scipy.linalg as spl
 
-import itertools as it
+import itertools
 
 import FiniteDifference.utils as utils
 
@@ -34,15 +22,6 @@ cimport FiniteDifference.BandedOperatorGPU as BOG
 import FiniteDifference.BandedOperator as BO
 cimport FiniteDifference.BandedOperator as BO
 BandedOperator = BO.BandedOperator
-
-from FiniteDifference.visualize import fp
-
-DEBUG = False
-
-from FiniteDifference.Option import Option
-
-REAL = np.float64
-ctypedef np.float64_t REAL_t
 
 
 cdef class FiniteDifferenceEngine(object):
@@ -59,7 +38,6 @@ cdef class FiniteDifferenceEngine(object):
     cdef public simple_operators
 
     def __init__(self, other):
-    # def __init__(self, grid, coefficients={}, boundaries={}, schemes={}):
         """
         @coefficients@ is a dict of tuple, function pairs with c[i,j] referring to the
         coefficient of the i j derivative, dU/didj. Absent pairs are counted as zeros.
@@ -152,7 +130,6 @@ cdef class FiniteDifferenceEngine(object):
         self.operators = {}
         self.simple_operators = {}
         self.emigrate(other)
-        self.initialized = True
 
 
     def emigrate(self, other, tag=""):
@@ -167,7 +144,6 @@ cdef class FiniteDifferenceEngine(object):
 
 
 cdef class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
-
 
     def __init__(self, other):
         FiniteDifferenceEngine.__init__(self, other)
@@ -210,6 +186,7 @@ cdef class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
             ret = 0
         return ret
 
+
     def solve_implicit(self, n, dt, initial=None, callback=None, numpy=False):
         n = int(n)
         if initial is not None:
@@ -244,7 +221,6 @@ cdef class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
         return V
 
 
-    @initialized
     def solve_hundsdorferverwer(self, n, dt, initial=None, theta=0.5, callback=None,
             numpy=False):
 
@@ -310,7 +286,6 @@ cdef class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
         return V
 
 
-    @initialized
     def solve_craigsneyd2(self, n, dt, initial=None, theta=0.5, callback=None,
             numpy=False):
 
@@ -371,7 +346,6 @@ cdef class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
         return V
 
 
-    @initialized
     def solve_craigsneyd(self, n, dt, initial=None, theta=0.5, callback=None,
             numpy=False):
 
@@ -427,7 +401,6 @@ cdef class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
         return V
 
 
-    @initialized
     def solve_douglas(self, n, dt, initial=None, theta=0.5, callback=None,
             numpy=False):
 
@@ -477,7 +450,6 @@ cdef class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
         return V
 
 
-    @initialized
     def solve_smooth(self, n, dt, initial=None, callback=None, smoothing_steps=2,
             scheme=None):
         if scheme is None:
