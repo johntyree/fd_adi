@@ -159,7 +159,7 @@ class Cpp_test(unittest.TestCase):
         for i in range(5):
             sz = np.random.randint(3, 20)
             B.D = scipy.sparse.csr_matrix(np.random.random((sz*sz,sz*sz)))
-            BG = BOG.BandedOperator.immigrate(B)
+            BG = BOG.BandedOperator(B)
             v = np.random.random((sz, sz))
             ref = B.apply(v)
             tst = BG.apply(v)

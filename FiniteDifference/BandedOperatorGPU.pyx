@@ -130,7 +130,7 @@ cdef class BandedOperator(object):
         if tag:
             print "Emigrate CSR:", tag, to_string(self.thisptr_csr)
         assert not (self.thisptr_csr)
-        csr = self.D.tocsr()
+        csr = other.D.tocsr()
         coo = csr.tocoo()
         cdef:
             SizedArray[double] *data = to_SizedArray(csr.data, "data")
@@ -143,8 +143,8 @@ cdef class BandedOperator(object):
                 , deref(row_ptr)
                 , deref(row_ind)
                 , deref(col_ind)
-                , self.D.shape[0]
-                , self.blocks
+                , other.D.shape[0]
+                , other.blocks
                 , tag
                 )
         del data, row_ptr, row_ind, col_ind
