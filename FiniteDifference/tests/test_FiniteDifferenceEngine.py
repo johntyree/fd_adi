@@ -509,7 +509,6 @@ class FiniteDifferenceEngineADI_test(unittest.TestCase):
 
 
     def test_cross_derivative(self):
-        raise unittest.SkipTest
         crossOp = self.F.operators[(0,1)]
         g = self.F.grid.domain[-1]
         x = self.F.grid.mesh[0]
