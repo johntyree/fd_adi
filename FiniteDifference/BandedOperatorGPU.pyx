@@ -18,6 +18,7 @@ from cython.operator import dereference as deref
 
 from FiniteDifference.BandedOperator import BandedOperator as BO
 from FiniteDifference.BandedOperator cimport BandedOperator as BO
+from FiniteDifference.VecArray cimport SizedArray, GPUVec
 
 
 cdef class BandedOperator(object):

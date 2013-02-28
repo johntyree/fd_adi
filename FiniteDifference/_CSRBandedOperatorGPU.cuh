@@ -8,6 +8,7 @@
 #include "backtrace.h"
 #include "VecArray.h"
 
+
 class _CSRBandedOperator {
     public:
         GPUVec<double> data;
