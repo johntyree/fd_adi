@@ -262,23 +262,31 @@ cdef class BandedOperator(object):
         bots = from_SizedArray(self.thisptr_tri.bottom_factors)
         tops = from_SizedArray(self.thisptr_tri.top_factors)
 
+        top_can_unfold = not np.array_equiv(tops, 0)
+        bottom_can_unfold = not np.array_equiv(bots, 0)
+
         if self.bottom_is_folded:
             B.bottom_factors = bots
         else:
-            bottom += 1
             B.bottom_factors = None
+            if not bottom_can_unfold:
+                bottom += 1
 
         if self.top_is_folded:
             B.top_factors = tops
         else:
-            center += 1
-            bottom += 1
             B.top_factors = None
+            if not top_can_unfold:
+                center += 1
+                bottom += 1
 
-        if (self.top_is_folded
-            or self.bottom_is_folded):
+        block_len = B.D.shape[0] / B.blocks
+        if (not self.top_is_folded and top_can_unfold
+            or not self.bottom_is_folded and bottom_can_unfold):
             print "Claims to be folded",
-            print self.top_is_folded, self.bottom_is_folded
+            print self.top_is_folded, "/", top_can_unfold,
+            print self.bottom_is_folded, "/", bottom_can_unfold
+            print tops, bots
             offsets = -np.arange(bottom+1, dtype=np.int32)+center
             data = np.zeros((bottom+1, B.shape[0]))
             for i in range(selfoffsets.shape[0]):
@@ -286,12 +294,12 @@ cdef class BandedOperator(object):
                 fro = get_int_index(selfoffsets, o)
                 to = get_int_index(offsets, o)
                 data[to] += B.D.data[fro]
-            if not self.top_is_folded:
-                assert offsets[0] == 2
-                data[0,2::B.block_len] = tops
-            if not self.bottom_is_folded:
-                assert offsets[-1] == -2
-                data[-1,B.block_len-3::B.block_len] = bots
+            if not self.top_is_folded and top_can_unfold:
+                assert offsets[0] == 2, "Top not folded but 2 not in offsets"
+                data[0,2::block_len] = tops
+            if not self.bottom_is_folded and bottom_can_unfold:
+                assert offsets[-1] == -2, "Bottom not folded but -2 not in offsets"
+                data[-1,block_len-3::block_len] = bots
             B.D = scipy.sparse.dia_matrix((data, offsets), shape=self.shape)
 
         B.solve_banded_offsets = (abs(min(B.D.offsets)), abs(max(B.D.offsets)))
