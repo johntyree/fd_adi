@@ -167,15 +167,16 @@ class Cpp_test(unittest.TestCase):
 
 
     def test_csr_scale(self):
-        raise unittest.SkipTest
         B = self.F.operators[0]
         B.D = scipy.sparse.csr_matrix(np.ones((5,5)))
         B.R = None
         B.dirichlet = (None, None)
-        B.use_csr_format()
+        B.is_mixed_derivative = True
         ref = np.arange(B.D.shape[0], dtype=float).repeat(B.D.shape[1])
         ref.resize(B.D.shape)
-        B.vectorized_scale(np.arange(B.D.shape[0], dtype=float))
+        B = BOG.BandedOperator(B)
+        B.vectorized_scale(np.arange(B.operator_rows, dtype=float))
+        B = B.immigrate()
         fp(ref)
         print
         fp(B.D)
