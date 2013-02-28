@@ -86,8 +86,12 @@ cdef extern from "_TriBandedOperatorGPU.cuh":
         int solve(SizedArray[double] &)
         SizedArray[double] bottom_factors
         SizedArray[double] top_factors
+        SizedArray[double] high_dirichlet,
+        SizedArray[double] low_dirichlet,
         SizedArray[double] diags
         SizedArray[double] R
+        cbool has_high_dirichlet,
+        cbool has_low_dirichlet,
         _TriBandedOperator(
             SizedArray[double] data,
             SizedArray[double] R,

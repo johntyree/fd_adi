@@ -222,6 +222,16 @@ cdef class BandedOperator(object):
             derivative=self.derivative,
             order=self.order,
             axis=self.axis)
+        if self.thisptr_tri.has_high_dirichlet:
+            h = tuple(from_SizedArray(self.thisptr_tri.high_dirichlet))
+        else:
+            h = None
+        if self.thisptr_tri.has_low_dirichlet:
+            l = tuple(from_SizedArray(self.thisptr_tri.low_dirichlet))
+        else:
+            l = None
+        B.dirichlet = [l,h]
+
 
         cublas_to_scipy(B)
 
