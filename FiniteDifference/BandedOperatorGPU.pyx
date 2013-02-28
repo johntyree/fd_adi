@@ -168,9 +168,6 @@ cdef class BandedOperator(object):
         indices = from_GPUVec_i(self.thisptr_csr.col_ind)
         indptr = from_GPUVec_i(self.thisptr_csr.row_ptr)
 
-        print "Data from csr on GPU"
-        print data
-
         shp = (self.thisptr_csr.operator_rows,self.thisptr_csr.operator_rows)
         mat = scipy.sparse.csr_matrix((data, indices, indptr), shape=shp).todia()
 
