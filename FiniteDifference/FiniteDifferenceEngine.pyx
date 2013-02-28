@@ -154,6 +154,10 @@ cdef class FiniteDifferenceEngine(object):
         self.operators = {}
         self.simple_operators = {}
 
+    def emigrate(self, tag=""):
+        for op, B in self.operators.items():
+            self.operator_rows[op] = BOG.BandedOperatorGPU(B)
+
 
     def solve(self):
         """Run all the way to the terminal condition."""
