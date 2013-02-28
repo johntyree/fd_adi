@@ -113,12 +113,34 @@ cdef class BandedOperator(object):
 
 
     cpdef copy(self):
-        raise NotImplementedError
+        cdef BandedOperator B = BandedOperator()
         if self.is_mixed_derivative:
-            self.D = self.D.todia()
-        B = BandedOperator((self.D.data, self.D.offsets), residual=self.R, inplace=False)
-        if self.is_mixed_derivative:
-            B.D = B.D.tocsr()
+            B.thisptr_csr = new _CSRBandedOperator(
+                  self.thisptr_csr.data
+                , self.thisptr_csr.row_ptr
+                , self.thisptr_csr.row_ind
+                , self.thisptr_csr.col_ind
+                , self.thisptr_csr.operator_rows
+                , self.blocks
+                , self.thisptr_csr.name
+            )
+        else:
+            B.thisptr_tri = new _TriBandedOperator(
+                      self.thisptr_tri.diags
+                    , self.thisptr_tri.R
+                    , self.thisptr_tri.high_dirichlet
+                    , self.thisptr_tri.low_dirichlet
+                    , self.thisptr_tri.top_factors
+                    , self.thisptr_tri.bottom_factors
+                    , self.axis
+                    , self.thisptr_tri.operator_rows
+                    , self.thisptr_tri.blocks
+                    , self.thisptr_tri.has_high_dirichlet
+                    , self.thisptr_tri.has_low_dirichlet
+                    , self.thisptr_tri.top_is_folded
+                    , self.thisptr_tri.bottom_is_folded
+                    , self.thisptr_tri.has_residual
+                    )
         B.copy_meta_data(self)
         return B
 

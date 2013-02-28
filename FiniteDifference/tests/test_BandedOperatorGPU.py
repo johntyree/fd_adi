@@ -182,6 +182,31 @@ class Cpp_test(unittest.TestCase):
         npt.assert_array_equal(ref, B.D.todense())
 
 
+    def test_copy_tri(self):
+        ref = self.F.operators[0]
+        tst = BOG.BandedOperator(ref).copy().immigrate()
+        fp(ref.D)
+        print
+        fp(tst.D)
+        print
+        fp(tst.D - ref.D)
+        npt.assert_array_equal(ref.D.todense(), tst.D.todense())
+        npt.assert_equal(tst, ref)
+
+
+    def test_copy_csr(self):
+        ref = self.F.operators[(0,1)]
+        tst = BOG.BandedOperator(ref).copy().immigrate()
+        ref.D = ref.D.tocoo().todia()
+        fp(ref.D)
+        print
+        fp(tst.D)
+        print
+        fp(tst.D - ref.D)
+        npt.assert_array_equal(ref.D.todense(), tst.D.todense())
+        npt.assert_equal(tst, ref)
+
+
     def test_GPUSolve_0(self):
         B = self.F.operators[0]
         B.D.data = np.random.random((B.D.data.shape))
