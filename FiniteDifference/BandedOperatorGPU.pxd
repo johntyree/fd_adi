@@ -29,7 +29,7 @@ cdef extern from "VecArray.h":
         pass
 
     cdef cppclass SizedArray[T]:
-        # T *data
+        GPUVec[T] data
         Py_ssize_t size
         Py_ssize_t ndim
         Py_ssize_t[8] shape
