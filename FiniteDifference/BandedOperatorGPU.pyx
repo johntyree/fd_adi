@@ -176,6 +176,8 @@ cdef class BandedOperator(object):
             derivative=self.derivative,
             order=self.order,
             axis=self.axis)
+        B.is_mixed_derivative = True
+        B.blocks = self.blocks
         return B
 
 
