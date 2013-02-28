@@ -84,6 +84,8 @@ class Cpp_test(unittest.TestCase):
 
     def test_migrate_01(self):
         B = self.F.operators[(0,1)]
+        fp(B.D)
+        B.D = B.D.tocoo().todia()
         ref = B.copy()
         print type(B.D)
         B = BOG.BandedOperator(B, "test 01")
