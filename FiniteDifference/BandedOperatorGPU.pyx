@@ -231,6 +231,7 @@ cdef class BandedOperator(object):
         else:
             l = None
         B.dirichlet = [l,h]
+        B.blocks = self.thisptr_tri.blocks
 
 
         cublas_to_scipy(B)
