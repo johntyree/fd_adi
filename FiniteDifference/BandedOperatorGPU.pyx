@@ -488,6 +488,38 @@ cdef class BandedOperator(object):
         return
 
 
+cdef class SizedArrayPtr(object):
+    cdef store(self, SizedArray[double] *p, cpp_string tag="Unknown"):
+        self.p = new SizedArray[double](deref(p))
+        print "Storing %s:" % tag, to_string(p)
+
+    def __init__(self, a=None, tag="Unknown"):
+        if a is not None:
+            self.from_numpy(a, tag)
+
+    cpdef from_numpy(self, np.ndarray a, cpp_string tag="Unknown"):
+        self.p = to_SizedArray(a, tag)
+        print "Storing %s:" % tag, to_string(self.p)
+
+    cpdef to_numpy(self):
+        print "Converting", to_string(deref(self.p))
+        print "ndim", self.p.ndim, self.p.shape[0], self.p.shape[1]
+        if self.p.ndim == 2:
+            a = from_SizedArray_2(deref(self.p))
+        else:
+            a = from_SizedArray(deref(self.p))
+        assert a.ndim == self.p.ndim
+        return a
+
+    def __dealloc__(self):
+        if self.p:
+            print "Freeing %s:" % (self.tag,), to_string(self.p)
+            del self.p
+
+    def __str__(self):
+        return "SizedArrayPtr (%s)@%s" % (self.tag, to_string(self.p))
+
+
 cdef inline int sign(int i):
     if i < 0:
         return -1
