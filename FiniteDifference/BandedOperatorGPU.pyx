@@ -576,7 +576,7 @@ cdef inline SizedArray[double]* to_SizedArray(np.ndarray v, name) except +:
 
 cdef inline SizedArray[int]* to_SizedArray_i(np.ndarray v, cpp_string name) except +:
     assert v.dtype.type == np.int32, ("Types don't match! Got (%s) expected (%s)."
-                                      % (v.dtype.type, np.int64))
+                                      % (v.dtype.type, np.int32))
     if not v.flags.c_contiguous:
         v = v.copy("C")
     return new SizedArray[int](<int *>np.PyArray_DATA(v), v.ndim, v.shape, name)
