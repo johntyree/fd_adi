@@ -339,35 +339,10 @@ cdef class BandedOperator(object):
         cdef np.ndarray ret
         if not overwrite:
             V = V.copy()
-        t = range(V.ndim)
-        utils.rolllist(t, self.axis, V.ndim-1)
-        V = np.transpose(V, axes=t)
 
-        # TODO: This should move to GPU
-        if self.dirichlet[0] is not None:
-            V[...,0] = self.dirichlet[0]
-        if self.dirichlet[1] is not None:
-            V[...,-1] = self.dirichlet[1]
-
-        if self.R is not None:
-            V0 = V.flat - self.R
-        else:
-            V0 = V.ravel()
-
-        if self.is_folded():
-            # print "solve Folded"
-            V0 = self.fold_vector(V0)
-
-        # print "Host array size:", V0.size, V0.shape
-        # print "Orig array size:", V.size, V.shape[0], V.shape[1]
-        cdef SizedArray[double] *d_V = to_SizedArray(V0, "solve2 domain V0")
-        # print "Device array ptr: ", to_string(d_V)
-        # print
-        # print "Device array: ", d_V.show()
-        # print
-        self.emigrate_tri("solve2 0")
+        cdef SizedArray[double] *d_V = to_SizedArray(V, "solve2 domain V")
         self.thisptr_tri.solve(deref(d_V))
-        self.immigrate_tri("solve2 0")
+
         if V.ndim == 2:
             d_V.reshape(V.shape[0], V.shape[1])
             ret = from_SizedArray_2(deref(d_V))
@@ -375,10 +350,6 @@ cdef class BandedOperator(object):
             ret = from_SizedArray(deref(d_V))
         # print "After solve Device array: ", d_V.show()
         del d_V
-
-        t = range(V.ndim)
-        utils.rolllist(t, V.ndim-1, self.axis)
-        ret = np.transpose(ret, axes=t)
 
         return ret
 

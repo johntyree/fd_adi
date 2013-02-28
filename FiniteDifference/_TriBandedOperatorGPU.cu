@@ -151,23 +151,12 @@ SizedArray<double> *_TriBandedOperator::apply(SizedArray<double> &V) {
 
     GPUVec<REAL_t> &in = V.data;
 
-    if (!is_tridiagonal) {
-        DIE("Can only apply tridiagonal operators when on the GPU.");
-    }
-
-
     if (has_low_dirichlet) {
-        /* print "Setting V[0,:] to", self.dirichlet[0] */
-        // Some kind of thrust thing?
-        /* V[...,0] = low_dirichlet[i] */
         thrust::copy(low_dirichlet.data.begin(),
                 low_dirichlet.data.end(),
                 in.begin());
     }
     if (has_high_dirichlet) {
-        /* print "Setting V[0,:] to", self.dirichlet[0] */
-        // Some kind of thrust thing?
-        /* V[...,-1] = high_dirichlet[i] */
         thrust::copy(high_dirichlet.data.begin(),
                 high_dirichlet.data.end(),
                 in.end() - V.shape[1]);
@@ -308,20 +297,39 @@ bool _TriBandedOperator::is_folded() {
 
 int _TriBandedOperator::solve(SizedArray<double> &V) {
     FULLTRACE;
-    if (!is_tridiagonal) {
-        DIE("Can only solve tridiagonal systems when on the GPU.");
-    }
     verify_diag_ptrs();
 
-    /* std::cout << "Begin C Solve\n"; */
-    /* std::cout << "Copy Host->Dev... " << V.data << ' '; */
+    if (has_low_dirichlet) {
+        thrust::copy(low_dirichlet.data.begin(),
+                low_dirichlet.data.end(),
+                V.data.begin());
+    }
+    if (has_high_dirichlet) {
+        thrust::copy(high_dirichlet.data.begin(),
+                high_dirichlet.data.end(),
+                V.data.end() - V.shape[1]);
+    }
+    if (axis == 0) {
+        V.transpose(1);
+    }
+
+    if (has_residual) {
+        thrust::transform(V.data.begin(), V.data.end(),
+                R.data.begin(),
+                V.data.begin(),
+                thrust::minus<double>());
+    }
+
+
+    if (is_folded()) {
+        fold_vector(V.data);
+    }
+
     GPUVec<double> d_V(V.data);
     GPUVec<double> d_sup(sup, sup+V.size);
     GPUVec<double> d_mid(mid, mid+V.size);
     GPUVec<double> d_sub(sub, sub+V.size);
-    /* std::cout << "OK\n"; */
 
-    /* std::cout << "CUSPARSE... "; */
     status = cusparseDgtsvStridedBatch(handle, V.size,
             d_sub.raw(), d_mid.raw(), d_sup.raw(),
             d_V.raw(),
@@ -331,12 +339,11 @@ int _TriBandedOperator::solve(SizedArray<double> &V) {
         std::cerr << "CUSPARSE tridiag system solve failed." << std::endl;
         return 1;
     }
-    /* std::cout << "OK\n"; */
 
-    /* std::cout << "Copy Dev->Host... " << d_V << ' '; */
     thrust::copy(d_V.begin(), d_V.end(), V.data.begin());
-    /* std::cout << "OK\n"; */
-    /* std::cout << "End C Solve\n"; */
+    if (axis == 0) {
+        V.transpose(1);
+    }
     FULLTRACE;
     return 0;
 }

@@ -30,11 +30,11 @@ class _TriBandedOperator {
         void add_scalar(double val);
         void vectorized_scale(SizedArray<double> &vector);
         void add_operator(_TriBandedOperator &other);
-        void fold_vector(GPUVec<double> &vector, bool);
+        void fold_vector(GPUVec<double> &vector, bool=false);
         void diagonalize();
         void undiagonalize();
-        void fold_bottom(bool = false);
-        void fold_top(bool = false);
+        void fold_bottom(bool=false);
+        void fold_top(bool=false);
 
         // This is public to get to and from python
         bool has_residual;
@@ -42,7 +42,6 @@ class _TriBandedOperator {
         bool has_low_dirichlet;
         bool top_is_folded;
         bool bottom_is_folded;
-        bool is_tridiagonal;
         Py_ssize_t operator_rows;
         Py_ssize_t blocks;
         Py_ssize_t block_len;
