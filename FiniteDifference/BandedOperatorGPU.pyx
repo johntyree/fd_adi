@@ -33,7 +33,7 @@ cdef class BandedOperator(object):
             U2 = L*U1 + Rj  -->   U2 = B.apply(U1)
             U2 = L.I * (U1 - R) --> U2 = B.solve(U1)
         """
-        self.attrs = ('derivative', 'is_mixed_derivative', 'order', 'axis',
+        self.attrs = ('deltas', 'derivative', 'is_mixed_derivative', 'order', 'axis',
                       'blocks', 'top_is_folded', 'bottom_is_folded')
 
         if other:
@@ -45,10 +45,12 @@ cdef class BandedOperator(object):
 
     def copy_meta_data(self, other, **kwargs):
         for attr in self.attrs:
-            if attr not in kwargs:
-                setattr(self, attr, getattr(other, attr))
-            else:
+            if attr in kwargs:
                 setattr(self, attr, kwargs[attr])
+            elif attr in ('deltas', 'top_factors', 'bottom_factors'):
+                setattr(self, attr, getattr(other, attr).copy())
+            else:
+                setattr(self, attr, getattr(other, attr))
 
 
     def __richcmp__(self, other, op):
@@ -219,6 +221,7 @@ cdef class BandedOperator(object):
             R = None
 
         B = BO((data,selfoffsets), residual=R, inplace=False,
+            deltas=self.deltas,
             derivative=self.derivative,
             order=self.order,
             axis=self.axis)

@@ -133,6 +133,7 @@ cdef class BandedOperator(object):
         cbool is_mixed_derivative
         cbool top_is_folded
         cbool bottom_is_folded
+        deltas
 
 
     cdef _TriBandedOperator *thisptr_tri
