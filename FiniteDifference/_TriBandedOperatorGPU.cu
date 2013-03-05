@@ -379,7 +379,7 @@ void _TriBandedOperator::fold_vector(GPUVec<double> &vector, bool unfold) {
     strided_range<Iterator> un(vector.begin()+block_len-1, vector.end(), block_len);
     strided_range<Iterator> un1(vector.begin()+block_len-2, vector.end(), block_len);
 
-    LOG("top_is_folded("<<top_is_folded<<") bottom_is_folded("<<bottom_is_folded<<")");
+    /* LOG("top_is_folded("<<top_is_folded<<") bottom_is_folded("<<bottom_is_folded<<")"); */
     // Top fold
     if (top_is_folded) {
         /* LOG("Folding top. direction("<<unfold<<") top_factors("<<top_factors<<")"); */
