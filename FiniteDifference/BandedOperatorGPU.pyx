@@ -1,7 +1,6 @@
 # coding: utf8
 # cython: annotate = True
 # cython: infer_types = True
-# cython: profile = True
 # cython: embedsignature = True
 # distutils: language = c++
 # distutils: sources = FiniteDifference/_GPU_Code.cu FiniteDifference/backtrace.c FiniteDifference/filter.c

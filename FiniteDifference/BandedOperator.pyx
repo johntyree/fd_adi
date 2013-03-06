@@ -1,7 +1,6 @@
 # coding: utf8
 # cython: annotate = True
 # cython: infer_types = True
-# cython: profile = True
 # distutils: language = c++
 
 
