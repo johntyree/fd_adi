@@ -61,11 +61,14 @@ class Cpp_test(unittest.TestCase):
         self.F.operators[1]
         # print "Setup complete for CPP test"
 
+
     def test_SizedArray_roundtrip(self):
         npt.assert_array_equal(self.v1, FD.BOG.test_SizedArray1_roundtrip(self.v1.copy()))
 
+
     def test_SizedArray_roundtrip2D(self):
         npt.assert_array_equal(self.v2, FD.BOG.test_SizedArray2_roundtrip(self.v2.copy()))
+
 
     def test_migrate_0(self):
         B = self.F.operators[0]
@@ -74,13 +77,14 @@ class Cpp_test(unittest.TestCase):
         B = B.immigrate("test 0")
         assert ref == B
 
+
     def test_migrate_1(self):
         B = self.F.operators[1]
         ref = B.copy()
-        fp(ref.D)
         B = BOG.BandedOperator(B, "test 1")
         B = B.immigrate("test 1")
         assert ref == B
+
 
     def test_migrate_1_diag(self):
         B = self.F.operators[1]
@@ -94,9 +98,9 @@ class Cpp_test(unittest.TestCase):
         fp(B.D)
         assert ref == B
 
+
     def test_migrate_01(self):
         B = self.F.operators[(0,1)]
-        fp(B.D)
         B.D = B.D.tocoo().todia()
         ref = B.copy()
         B = BOG.BandedOperator(B, "test 01")
