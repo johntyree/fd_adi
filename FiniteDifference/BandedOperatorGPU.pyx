@@ -15,6 +15,8 @@ import scipy.sparse
 cimport cython
 from cython.operator import dereference as deref
 
+import FiniteDifference.utils as utils
+
 from FiniteDifference.BandedOperator import BandedOperator as BO
 from FiniteDifference.BandedOperator cimport BandedOperator as BO
 from FiniteDifference.VecArray cimport SizedArray, GPUVec
@@ -159,6 +161,7 @@ cdef class BandedOperator(object):
 
         shp = (self.thisptr_csr.operator_rows,self.thisptr_csr.operator_rows)
         mat = scipy.sparse.csr_matrix((data, indices, indptr), shape=shp).todia()
+        mat = utils.todia(mat)
 
         cdef BO B = BO((mat.data,mat.offsets), residual=None, inplace=False,
             deltas=self.deltas,

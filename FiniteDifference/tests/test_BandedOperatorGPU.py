@@ -7,6 +7,8 @@ import itertools
 # from bisect import bisect_left
 import unittest
 
+import FiniteDifference.utils as utils
+
 import numpy as np
 import numpy.testing as npt
 import scipy.sparse
@@ -101,7 +103,7 @@ class Cpp_test(unittest.TestCase):
 
     def test_migrate_01(self):
         B = self.F.operators[(0,1)]
-        B.D = B.D.tocoo().todia()
+        B.D = utils.todia(B.D.tocoo().todia())
         ref = B.copy()
         B = BOG.BandedOperator(B, "test 01")
         B = B.immigrate("test 01")
@@ -219,7 +221,7 @@ class Cpp_test(unittest.TestCase):
     def test_copy_csr(self):
         ref = self.F.operators[(0,1)]
         tst = BOG.BandedOperator(ref).copy().immigrate()
-        ref.D = ref.D.tocoo().todia()
+        ref.D = utils.todia(ref.D.tocoo().todia())
         # fp(ref.D)
         # print
         # fp(tst.D)
