@@ -74,6 +74,7 @@ cdef class BandedOperator(object):
 
 
     def __richcmp__(self, other, op):
+        raise NotImplementedError
         true = op == 2
         false = op == 3
 
