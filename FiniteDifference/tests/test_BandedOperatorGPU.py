@@ -183,14 +183,22 @@ class Cpp_test(unittest.TestCase):
 
     def test_copy_tri(self):
         ref = self.F.operators[0]
-        tst = BOG.BandedOperator(ref).copy().immigrate()
+        ref2 = ref.copy()
+        Gtst1 = BOG.BandedOperator(ref)
+        Gtst2 = BOG.BandedOperator(ref2)
+        del ref2
+        tst1 = Gtst1.immigrate()
+        tst2 = Gtst2.immigrate()
+        del Gtst2
+        npt.assert_array_equal(tst1.D.todense(), tst2.D.todense())
+        del tst2
         # fp(ref.D)
         # print
         # fp(tst.D)
         # print
         # fp(tst.D - ref.D)
-        npt.assert_array_equal(ref.D.todense(), tst.D.todense())
-        npt.assert_equal(tst, ref)
+        npt.assert_array_equal(ref.D.todense(), tst1.D.todense())
+        npt.assert_equal(ref, tst1)
 
 
     def test_copy_csr(self):
