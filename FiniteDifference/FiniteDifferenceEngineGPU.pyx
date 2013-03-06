@@ -127,15 +127,8 @@ cdef class FiniteDifferenceEngine(object):
         self.default_order = 2
 
         # Setup
-        self.operators = {}
-        self.simple_operators = {}
-        self.emigrate(other)
-
-
-    def emigrate(self, other, tag=""):
-        for op, B in self.operators.items():
-            self.operators[op] = BOG.BandedOperator(B)
-
+        self.operators = {k:BOG.BandedOperator(v) for k,v in other.operators.items()}
+        self.simple_operators = {k:BOG.BandedOperator(v) for k,v in other.simple_operators.items()}
 
     def solve(self):
         """Run all the way to the terminal condition."""
