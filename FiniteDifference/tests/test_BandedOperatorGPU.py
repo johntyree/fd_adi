@@ -42,10 +42,10 @@ class Cpp_test(unittest.TestCase):
                   (0,1): lambda *x: 1,
                   }
         bounds = {
-                (0,)  : ((0, lambda *args: 0), (1, lambda *args: 1)),
-                (0,0)  : ((0, lambda *args: 0), (None, lambda *args: 1)),
+                (0,)  : ((0,    lambda *args: 0),    (1,    lambda *args: 1)),
+                (0,0) : ((0,    lambda *args: 0),    (None, lambda *args: 1)),
                 (1,)  : ((None, lambda *args: None), (None, lambda *args: None)),
-                (1,1)  : ((1, lambda *args: 0.0), (None, lambda *args: None)),
+                (1,1) : ((1,    lambda *args: 0.0),  (None, lambda *args: None)),
                 }
 
         schemes = {}

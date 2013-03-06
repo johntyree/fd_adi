@@ -5,7 +5,6 @@ cimport numpy as np
 from cpython cimport bool
 from libcpp cimport bool as cbool
 
-
 cdef class BandedOperator(object):
     cdef public:
         attrs

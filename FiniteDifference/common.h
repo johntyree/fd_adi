@@ -38,7 +38,6 @@ inline void debug_printer(std::ostream &os, const char *type, const char *fn, co
         os << std::endl;
 }
 
-
 typedef double REAL_t;
 typedef long int Py_ssize_t;
 
