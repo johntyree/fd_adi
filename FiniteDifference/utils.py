@@ -517,3 +517,10 @@ def block_repeat(B, blocks):
     B.blocks = blocks
     B.shape = tuple(x*blocks for x in B.shape)
     return B
+
+
+def enum(name, *sequential, **named):
+    enums = dict(zip(sequential, range(len(sequential))), **named)
+    reverse = dict((value, key) for key, value in enums.iteritems())
+    enums['reverse_mapping'] = reverse
+    return type('Enum: '+name, (), enums)
