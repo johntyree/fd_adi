@@ -22,8 +22,8 @@ def filterprint(domain, prec=1, fmt="f", predicate=lambda x: x == 0, blank='- ')
     """
     if hasattr(domain, "todense"):
         domain = domain.todense()
-    if domain.ndim == 1: # Print 1-D vectors as columns
-        domain = domain[:,np.newaxis]
+    # if domain.ndim == 1: # Print 1-D vectors as columns
+        # domain = domain[:,np.newaxis]
     tmp = "% .{0}{1}".format(prec, fmt)
     xdim, ydim = np.shape(domain)
     pad = max(len(tmp % x) for x in domain.flat)

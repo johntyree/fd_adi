@@ -405,32 +405,32 @@ void _TriBandedOperator::fold_vector(GPUVec<double> &vector, bool unfold) {
 
 void _TriBandedOperator::diagonalize() {
     FULLTRACE;
-    LOG("Before folding: " << diags);
+    /* LOG("Before folding: " << diags); */
     if (bottom_fold_status == CAN_FOLD) {
-        LOG("Bottom:" << bottom_fold_status);
+        /* LOG("Bottom:" << bottom_fold_status); */
         fold_bottom();
-        LOG("Bottom:" << bottom_fold_status);
+        /* LOG("Bottom:" << bottom_fold_status); */
     }
     if (top_fold_status == CAN_FOLD) {
-        LOG("Top:" << top_fold_status);
+        /* LOG("Top:" << top_fold_status); */
         fold_top();
-        LOG("Top:" << top_fold_status);
+        /* LOG("Top:" << top_fold_status); */
     }
-    LOG("After folding: " << diags);
+    /* LOG("After folding: " << diags); */
     FULLTRACE;
 }
 
 void _TriBandedOperator::undiagonalize() {
     FULLTRACE;
     if (bottom_fold_status == FOLDED) {
-        LOG("Bottom:" << bottom_fold_status);
+        /* LOG("Bottom:" << bottom_fold_status); */
         fold_bottom(true);
-        LOG("Bottom:" << bottom_fold_status);
+        /* LOG("Bottom:" << bottom_fold_status); */
     }
     if (top_fold_status == FOLDED) {
-        LOG("Top:" << top_fold_status);
+        /* LOG("Top:" << top_fold_status); */
         fold_top(true);
-        LOG("Top:" << top_fold_status);
+        /* LOG("Top:" << top_fold_status); */
     }
     FULLTRACE;
 }

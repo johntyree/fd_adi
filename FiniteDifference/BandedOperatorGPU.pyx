@@ -183,16 +183,9 @@ cdef class BandedOperator(object):
         diad = False
         if other.top_fold_status == CAN_FOLD or other.bottom_fold_status == CAN_FOLD:
             diad = True
-            print "other.offsets", other.D.offsets
-            print "emigrate_tri: Bottom fold status:", other.bottom_fold_status
-            print "emigrate_tri: top fold status:", other.top_fold_status
             other.diagonalize()
             self.top_fold_status = other.top_fold_status
             self.bottom_fold_status = other.bottom_fold_status
-            print "other.offsets after diag", other.D.offsets
-            print "emigrate_tri: Bottom fold status:", other.bottom_fold_status
-            print "emigrate_tri: top fold status:", other.top_fold_status
-            print "bottom factors", other.bottom_factors
 
         scipy_to_cublas(other)
 
@@ -282,16 +275,12 @@ cdef class BandedOperator(object):
 
 
     cpdef diagonalize(self):
-        print "diagonalize: Bottom fold status:", self.bottom_fold_status
-        print "diagonalize: top fold status:", self.top_fold_status
         self.top_fold_status = FOLDED if self.top_fold_status == CAN_FOLD else CANNOT_FOLD
         self.bottom_fold_status = FOLDED if self.bottom_fold_status == CAN_FOLD else CANNOT_FOLD
         self.thisptr_tri.diagonalize()
 
 
     cpdef undiagonalize(self):
-        print "undiagonalize: Bottom fold status:", self.bottom_fold_status
-        print "undiagonalize: top fold status:", self.top_fold_status
         self.top_fold_status = CAN_FOLD if self.top_fold_status == FOLDED else CANNOT_FOLD
         self.bottom_fold_status = CAN_FOLD if self.bottom_fold_status == FOLDED else CANNOT_FOLD
         self.thisptr_tri.undiagonalize()
@@ -441,24 +430,24 @@ cdef class SizedArrayPtr(object):
     def __init__(self, a=None, tag="Unknown"):
         if a is not None:
             self.from_numpy(a, tag)
-            print "imported from numpy in constructor"
+            # print "imported from numpy in constructor"
 
     cdef store(self, SizedArray[double] *p, cpp_string tag="Unknown"):
         if self.p:
             raise RuntimeError("SizedArrayPtr is single assignment")
         self.p = new SizedArray[double](deref(p))
-        print "SAPtr -> Storing %s:" % tag, to_string(p)
+        # print "SAPtr -> Storing %s:" % tag, to_string(p)
 
     cpdef from_numpy(self, np.ndarray a, cpp_string tag="Unknown"):
         if self.p:
             print "SizedArrayPtr is single assignment"
             raise RuntimeError("SizedArrayPtr is single assignment")
         self.p = to_SizedArray(a, tag)
-        print "Numpy -> Storing %s: %s" % (tag, to_string(self.p))
+        # print "Numpy -> Storing %s: %s" % (tag, to_string(self.p))
 
     cpdef to_numpy(self):
-        print "Converting", to_string(deref(self.p))
-        print "ndim", self.p.ndim, self.p.shape[0], self.p.shape[1]
+        # print "Converting", to_string(deref(self.p))
+        # print "ndim", self.p.ndim, self.p.shape[0], self.p.shape[1]
         if self.p.ndim == 2:
             a = from_SizedArray_2(deref(self.p))
         else:

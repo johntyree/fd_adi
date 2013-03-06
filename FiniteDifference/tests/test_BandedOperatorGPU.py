@@ -242,7 +242,7 @@ class Cpp_test(unittest.TestCase):
         B = BOG.BandedOperator(B)
         tst = B.solve(self.v2.copy())
         B = B.immigrate()
-        fp(ref - tst, 3, 'e')
+        # fp(ref - tst, 3, 'e')
         npt.assert_array_almost_equal(ref, tst, decimal=8)
         npt.assert_array_equal(origdata, B.D.data)
 

@@ -91,7 +91,6 @@ class FiniteDifferenceEngineADI_test(unittest.TestCase):
 
     def test_verify_simple_operators_0(self):
         ref = self.F.simple_operators[(0,)]
-        fp(ref.D)
         tst = self.FG.simple_operators[(0,)].immigrate()
         npt.assert_equal(tst, ref)
 
@@ -102,7 +101,6 @@ class FiniteDifferenceEngineADI_test(unittest.TestCase):
 
     def test_verify_simple_operators_00(self):
         ref = self.F.simple_operators[(0,0)]
-        fp(ref.D)
         tst = self.FG.simple_operators[(0,0)].immigrate()
         npt.assert_equal(tst, ref)
 
