@@ -506,7 +506,7 @@ cdef inline int sign(int i):
 
 
 # @cython.boundscheck(False)
-cdef inline unsigned int get_real_index(double[:] haystack, double needle) except +:
+cdef inline unsigned int get_real_index(double[:] haystack, double needle):
     cdef unsigned int length = haystack.shape[0]
     for i in range(length):
         if needle == haystack[i]:
@@ -515,7 +515,7 @@ cdef inline unsigned int get_real_index(double[:] haystack, double needle) excep
 
 
 # @cython.boundscheck(False)
-cdef inline unsigned int get_int_index(int[:] haystack, int needle) except +:
+cdef inline unsigned int get_int_index(int[:] haystack, int needle):
     cdef unsigned int length = haystack.shape[0]
     for i in range(length):
         if needle == haystack[i]:
@@ -543,7 +543,7 @@ def test_SizedArray2_roundtrip(np.ndarray[ndim=2, dtype=double] v):
     return from_SizedArray_2(deref(s))
 
 
-cdef inline SizedArray[double]* to_SizedArray(np.ndarray v, name) except +:
+cdef inline SizedArray[double]* to_SizedArray(np.ndarray v, name):
     assert v.dtype.type == np.float64, ("Types don't match! Got (%s) expected (%s)."
                                       % (v.dtype.type, np.float64))
     cdef double *ptr
@@ -552,7 +552,7 @@ cdef inline SizedArray[double]* to_SizedArray(np.ndarray v, name) except +:
     return new SizedArray[double](<double *>np.PyArray_DATA(v), v.ndim, v.shape, name)
 
 
-cdef inline SizedArray[int]* to_SizedArray_i(np.ndarray v, cpp_string name) except +:
+cdef inline SizedArray[int]* to_SizedArray_i(np.ndarray v, cpp_string name):
     assert v.dtype.type == np.int32, ("Types don't match! Got (%s) expected (%s)."
                                       % (v.dtype.type, np.int32))
     if not v.flags.c_contiguous:
