@@ -103,6 +103,8 @@ cdef class BandedOperator(object):
         deltas         = np.array_equal(no_nan(self.deltas), no_nan(other.deltas))
         Ddata          = np.array_equal(self.D.data, other.D.data)
         shape          = np.array_equal(self.shape, other.shape)
+        top_fold_status = self.top_fold_status == other.top_fold_status
+        bottom_fold_status = self.bottom_fold_status == other.bottom_fold_status
 
         if (mat_type
             and shape
@@ -110,22 +112,42 @@ cdef class BandedOperator(object):
             and top_factors
             and bottom_factors
             and deltas
+            and top_fold_status
+            and bottom_fold_status
             and R
             and Ddata):
             return true
         else:
-            print "mat_type", mat_type
-            print "shape", shape
-            print "offsets", offsets
-            print "top_fact", top_factors
+            if not top_fold_status:
+                print "top_fold_status", top_fold_status
+                print self.top_fold_status, other.top_fold_status
+            if not bottom_fold_status:
+                print "bottom_fold_status", bottom_fold_status
+                print self.bottom_fold_status, other.bottom_fold_status
+            if not mat_type:
+                print "mat_type", mat_type
+                print self.mat_type, other.mat_type
+            if not shape:
+                print "shape", shape
+                print self.shape, other.shape
+            if not offsets:
+                print "offsets", offsets
+                print self.D.offsets, other.D.offsets
             if not top_factors:
+                print "top_fact", top_factors
                 print self.top_factors, other.top_factors
-            print "bot_fact", bottom_factors
             if not bottom_factors:
+                print "bot_fact", bottom_factors
                 print self.bottom_factors, other.bottom_factors
-            print "deltas", deltas
-            print "R", R
-            print "Data", Ddata
+            if not deltas:
+                print "deltas", deltas
+                print self.deltas, other.deltas
+            if not R:
+                print "R", R
+                print self.R, other.R
+            if not Ddata:
+                print "Data", Ddata
+                print self.D.data, other.D.data
             return false
 
 
