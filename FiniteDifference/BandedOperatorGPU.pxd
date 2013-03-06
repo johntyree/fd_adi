@@ -66,8 +66,8 @@ cdef class SizedArrayPtr(object):
 
 cdef inline int sign(int i)
 
-cdef inline unsigned int get_real_index(double[:] haystack, double needle) except +
-cdef inline unsigned int get_int_index(int[:] haystack, int needle) except +
+cdef inline unsigned int get_real_index(double[:] haystack, double needle)
+cdef inline unsigned int get_int_index(int[:] haystack, int needle)
 
 cdef  cublas_to_scipy(B)
 cdef  scipy_to_cublas(B)

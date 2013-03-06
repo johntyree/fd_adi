@@ -41,7 +41,7 @@ cdef class BandedOperator(object):
     cpdef solve(self, V, overwrite=*)
     cpdef splice_with(self, begin, at, inplace=*)
     cpdef undiagonalize(self)
-    cpdef vectorized_scale(self, np.ndarray arr) except +
+    cpdef vectorized_scale(self, np.ndarray arr)
 
 
 cpdef for_vector(vector, scheme=*, derivative=*, order=*, residual=*, force_bandwidth=*, axis=*)
@@ -55,5 +55,5 @@ cpdef check_order(order)
 
 cdef inline int sign(int i)
 
-cdef inline unsigned int get_real_index(double[:] haystack, double needle) except +
-cdef inline unsigned int get_int_index(int[:] haystack, int needle) except +
+cdef inline unsigned int get_real_index(double[:] haystack, double needle)
+cdef inline unsigned int get_int_index(int[:] haystack, int needle)
