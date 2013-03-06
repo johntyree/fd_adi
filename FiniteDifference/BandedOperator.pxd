@@ -21,8 +21,8 @@ cdef class BandedOperator(object):
         shape
         cbool is_mixed_derivative
         top_factors, bottom_factors
-        cbool top_is_folded
-        cbool bottom_is_folded
+        top_fold_status
+        bottom_fold_status
 
     cpdef add(self, val, inplace=*)
     cpdef add_operator(BandedOperator self, BandedOperator other, cbool inplace=*)

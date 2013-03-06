@@ -11,6 +11,9 @@ import scipy.sparse
 import utils
 import scipy.linalg as spl
 
+FOLDED = "FOLDED"
+CAN_FOLD = "CAN_FOLD"
+CANNOT_FOLD = "CANNOT_FOLD"
 
 cdef class BandedOperator(object):
 
@@ -27,7 +30,7 @@ cdef class BandedOperator(object):
 
         self.attrs = ('derivative', 'is_mixed_derivative', 'order', 'axis',
                       'deltas', 'dirichlet', 'blocks', 'top_factors',
-                      'bottom_factors', 'top_is_folded', 'bottom_is_folded')
+                      'bottom_factors', 'top_fold_status', 'top_fold_status')
         data, offsets = data_offsets
         assert data.shape[1] > 3, "Vector too short to use finite differencing."
         if not inplace:
@@ -48,9 +51,10 @@ cdef class BandedOperator(object):
 
         # XXX: When adding something here, also add to BandedOperator.attrs
         self.blocks = 1
-        self.top_is_folded = self.bottom_is_folded = False
         self.derivative = derivative
         self.order = order
+        self.top_fold_status = CAN_FOLD if 2 in offsets else CANNOT_FOLD
+        self.bottom_fold_status = CAN_FOLD if -2 in offsets else CANNOT_FOLD
         self.deltas = deltas if deltas is not None else np.array([np.nan])
         self.solve_banded_offsets = (abs(min(offsets)), abs(max(offsets)))
         self.dirichlet = [None, None]
@@ -185,9 +189,11 @@ cdef class BandedOperator(object):
                 d[an] += d[bn1] * self.bottom_factors[b]
                 d[bn] += d[cn1] * self.bottom_factors[b]
 
-        self.bottom_is_folded = not unfold
         if unfold:
+            self.bottom_fold_status = CAN_FOLD
             self.bottom_factors = None
+        else:
+            self.bottom_fold_status = FOLDED
 
 
     cpdef fold_top(self, unfold=False):
@@ -218,9 +224,11 @@ cdef class BandedOperator(object):
                 d[c0] += d[b1] * self.top_factors[b]
                 d[b0] += d[a1] * self.top_factors[b]
 
-        self.top_is_folded = not unfold
         if unfold:
+            self.top_fold_status = CAN_FOLD
             self.top_factors = None
+        else:
+            self.top_fold_status = FOLDED
 
 
     cpdef fold_vector(self, double[:] v, unfold=False):
@@ -242,7 +250,8 @@ cdef class BandedOperator(object):
 
 
     cpdef cbool is_folded(self):
-        return self.top_is_folded or self.bottom_is_folded
+        return (self.top_fold_status == FOLDED
+                or self.bottom_fold_status == FOLDED)
 
 
     cpdef cbool is_tridiagonal(self):

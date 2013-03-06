@@ -20,6 +20,10 @@ from FiniteDifference.BandedOperator import BandedOperator as BO
 from FiniteDifference.BandedOperator cimport BandedOperator as BO
 from FiniteDifference.VecArray cimport SizedArray, GPUVec
 
+FOLDED = "FOLDED"
+CAN_FOLD = "CAN_FOLD"
+CANNOT_FOLD = "CANNOT_FOLD"
+
 
 cdef class BandedOperator(object):
 
@@ -33,7 +37,7 @@ cdef class BandedOperator(object):
             U2 = L.I * (U1 - R) --> U2 = B.solve(U1)
         """
         self.attrs = ('deltas', 'derivative', 'is_mixed_derivative', 'order', 'axis',
-                      'blocks', 'top_is_folded', 'bottom_is_folded')
+                      'blocks', 'top_fold_status', 'bottom_fold_status')
 
         if other:
             self.emigrate(other, tag)
@@ -218,6 +222,12 @@ cdef class BandedOperator(object):
 
         scipy_to_cublas(other)
 
+        diad = False
+
+        if other.top_fold_status == CAN_FOLD or other.bottom_fold_status == CAN_FOLD:
+            diad = True
+            other.diagonalize()
+
         cdef:
             SizedArray[double] *diags = to_SizedArray(other.D.data, "data")
             SizedArray[double] *R = to_SizedArray(other.R, "R")
@@ -245,6 +255,9 @@ cdef class BandedOperator(object):
 
         del diags, R, high_dirichlet, low_dirichlet, top_factors, bottom_factors
 
+        if diad:
+            self.undiagonalize()
+
 
     cdef immigrate_tri(self, tag=""):
         cdef BO B
@@ -252,80 +265,49 @@ cdef class BandedOperator(object):
         if tag:
             print "Immigrate Tri:", tag, to_string(self.thisptr_tri)
         assert self.thisptr_tri != <void *>0
-        data = from_SizedArray_2(self.thisptr_tri.diags)
-        selfoffsets = np.array((1,0,-1), dtype=np.int32)
 
-        if self.thisptr_tri.has_residual:
-            R = from_SizedArray(self.thisptr_tri.R)
-        else:
-            R = None
 
-        B = BO((data,selfoffsets), residual=R, inplace=False,
+        bots = from_SizedArray(self.thisptr_tri.bottom_factors)
+        tops = from_SizedArray(self.thisptr_tri.top_factors)
+
+        center = 1
+        bottom = 2
+        if self.top_fold_status == CAN_FOLD:
+            center += 1
+            bottom += 1
+        if self.bottom_fold_status == CAN_FOLD:
+            bottom += 1
+
+        block_len = self.thisptr_tri.block_len
+
+        data = np.zeros((bottom+1, self.operator_rows), dtype=float)
+        offsets = -np.arange(bottom+1) + center
+        data[center-1:center+2, :] = from_SizedArray_2(self.thisptr_tri.diags)
+
+        if self.top_fold_status == CAN_FOLD:
+            data[0,::block_len] = tops
+        if self.bottom_fold_status == CAN_FOLD:
+            data[-1,block_len-1::block_len] = bots
+
+        R = from_SizedArray(self.thisptr_tri.R) if self.thisptr_tri.has_residual else None
+
+        B = BO((data, offsets), residual=R, inplace=False,
             deltas=self.deltas,
             derivative=self.derivative,
             order=self.order,
             axis=self.axis)
-        if self.thisptr_tri.has_high_dirichlet:
-            h = tuple(from_SizedArray(self.thisptr_tri.high_dirichlet))
-        else:
-            h = None
-        if self.thisptr_tri.has_low_dirichlet:
-            l = tuple(from_SizedArray(self.thisptr_tri.low_dirichlet))
-        else:
-            l = None
+
+        h = tuple(from_SizedArray(self.thisptr_tri.high_dirichlet)) if self.thisptr_tri.has_high_dirichlet else None
+        l = tuple(from_SizedArray(self.thisptr_tri.low_dirichlet)) if self.thisptr_tri.has_low_dirichlet else None
         B.dirichlet = [l,h]
         B.blocks = self.thisptr_tri.blocks
-
+        B.top_fold_status = self.top_fold_status
+        B.bottom_fold_status = self.bottom_fold_status
 
         cublas_to_scipy(B)
 
-        B.top_is_folded = self.thisptr_tri.top_is_folded
-        B.bottom_is_folded = self.thisptr_tri.bottom_is_folded
-
-        center = 1
-        bottom = 2
-        bots = from_SizedArray(self.thisptr_tri.bottom_factors)
-        tops = from_SizedArray(self.thisptr_tri.top_factors)
-
-        top_can_unfold = not np.array_equiv(tops, 0)
-        bottom_can_unfold = not np.array_equiv(bots, 0)
-
-        if self.bottom_is_folded:
-            B.bottom_factors = bots
-        else:
-            B.bottom_factors = None
-            if not bottom_can_unfold:
-                bottom += 1
-
-        if self.top_is_folded:
-            B.top_factors = tops
-        else:
-            B.top_factors = None
-            if not top_can_unfold:
-                center += 1
-                bottom += 1
-
-        block_len = B.D.shape[0] / B.blocks
-        if (not self.top_is_folded and top_can_unfold
-            or not self.bottom_is_folded and bottom_can_unfold):
-            print "Claims to be folded",
-            print self.top_is_folded, "/", top_can_unfold,
-            print self.bottom_is_folded, "/", bottom_can_unfold
-            print tops, bots
-            offsets = -np.arange(bottom+1, dtype=np.int32)+center
-            data = np.zeros((bottom+1, B.shape[0]))
-            for i in range(selfoffsets.shape[0]):
-                o = selfoffsets[i]
-                fro = get_int_index(selfoffsets, o)
-                to = get_int_index(offsets, o)
-                data[to] += B.D.data[fro]
-            if not self.top_is_folded and top_can_unfold:
-                assert offsets[0] == 2, "Top not folded but 2 not in offsets"
-                data[0,2::block_len] = tops
-            if not self.bottom_is_folded and bottom_can_unfold:
-                assert offsets[-1] == -2, "Bottom not folded but -2 not in offsets"
-                data[-1,block_len-3::block_len] = bots
-            B.D = scipy.sparse.dia_matrix((data, offsets), shape=self.shape)
+        B.bottom_factors = bots if B.bottom_fold_status == FOLDED else None
+        B.top_factors = tops if B.top_fold_status == FOLDED else None
 
         B.solve_banded_offsets = (abs(min(B.D.offsets)), abs(max(B.D.offsets)))
         return B
@@ -340,7 +322,8 @@ cdef class BandedOperator(object):
 
 
     cpdef cbool is_folded(self):
-        return self.top_is_folded or self.bottom_is_folded
+        return (self.top_fold_status == FOLDED
+                or self.bottom_fold_status == FOLDED)
 
 
     cpdef apply(self, np.ndarray V, overwrite=False):

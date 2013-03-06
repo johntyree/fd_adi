@@ -27,8 +27,8 @@ cdef class BandedOperator(object):
         order
         blocks
         cbool is_mixed_derivative
-        cbool top_is_folded
-        cbool bottom_is_folded
+        top_fold_status
+        bottom_fold_status
         deltas
 
     cdef _TriBandedOperator *thisptr_tri
