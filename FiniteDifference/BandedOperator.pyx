@@ -670,7 +670,7 @@ cdef class BandedOperator(object):
 
 
     # @cython.boundscheck(False)
-    cpdef vectorized_scale(self, np.ndarray vector) except +:
+    cpdef vectorized_scale(self, np.ndarray vector):
         """
         @vector@ is the correpsonding mesh vector of the current dimension.
 
@@ -761,7 +761,7 @@ cdef inline int sign(int i):
 
 
 # @cython.boundscheck(False)
-cdef inline unsigned int get_real_index(double[:] haystack, double needle) except +:
+cdef inline unsigned int get_real_index(double[:] haystack, double needle):
     cdef unsigned int length = haystack.shape[0]
     for i in range(length):
         if needle == haystack[i]:
@@ -770,7 +770,7 @@ cdef inline unsigned int get_real_index(double[:] haystack, double needle) excep
 
 
 # @cython.boundscheck(False)
-cdef inline unsigned int get_int_index(int[:] haystack, int needle) except +:
+cdef inline unsigned int get_int_index(int[:] haystack, int needle):
     cdef unsigned int length = haystack.shape[0]
     for i in range(length):
         if needle == haystack[i]:
