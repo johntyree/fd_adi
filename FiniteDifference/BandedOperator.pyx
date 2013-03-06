@@ -82,7 +82,14 @@ cdef class BandedOperator(object):
         for attr in self.attrs:
             if attr in ('deltas', 'top_factors', 'bottom_factors'):
                 continue
-            if not np.array_equal(getattr(self, attr), getattr(other, attr)):
+            try:
+                b = np.array_equal(getattr(self, attr), getattr(other, attr))
+            except:
+                try:
+                    b = getattr(self, attr), getattr(other, attr)
+                except:
+                    b = False
+            if not b:
                 print "FAIL %s:" % attr,  getattr(self, attr), getattr(other, attr)
                 return false
 
@@ -111,7 +118,11 @@ cdef class BandedOperator(object):
             print "shape", shape
             print "offsets", offsets
             print "top_fact", top_factors
+            if not top_factors:
+                print self.top_factors, other.top_factors
             print "bot_fact", bottom_factors
+            if not bottom_factors:
+                print self.bottom_factors, other.bottom_factors
             print "deltas", deltas
             print "R", R
             print "Data", Ddata
