@@ -63,8 +63,8 @@ _TriBandedOperator::_TriBandedOperator(
         Py_ssize_t blocks,
         bool has_high_dirichlet,
         bool has_low_dirichlet,
-        bool top_is_folded,
-        bool bottom_is_folded,
+        std::string top_fold_status,
+        std::string bottom_fold_status,
         bool has_residual
         ) :
     diags(data),
@@ -83,8 +83,8 @@ _TriBandedOperator::_TriBandedOperator(
     sub(diags.data.ptr() + 2*operator_rows),
     has_high_dirichlet(has_high_dirichlet),
     has_low_dirichlet(has_low_dirichlet),
-    top_is_folded(top_is_folded),
-    bottom_is_folded(bottom_is_folded),
+    top_fold_status(top_fold_status),
+    bottom_fold_status(bottom_fold_status),
     has_residual(has_residual)
     {
         verify_diag_ptrs();
@@ -280,7 +280,7 @@ void _TriBandedOperator::add_scalar(double val) {
 }
 
 bool _TriBandedOperator::is_folded() {
-    return top_is_folded || bottom_is_folded;
+    return (top_fold_status == FOLDED || bottom_fold_status == FOLDED);
 }
 
 
@@ -381,7 +381,7 @@ void _TriBandedOperator::fold_vector(GPUVec<double> &vector, bool unfold) {
 
     /* LOG("top_is_folded("<<top_is_folded<<") bottom_is_folded("<<bottom_is_folded<<")"); */
     // Top fold
-    if (top_is_folded) {
+    if (top_fold_status == FOLDED) {
         /* LOG("Folding top. direction("<<unfold<<") top_factors("<<top_factors<<")"); */
         thrust::transform(
             make_zip_iterator(make_tuple(u0.begin(), u1.begin(), top_factors.data.begin())),
@@ -390,7 +390,7 @@ void _TriBandedOperator::fold_vector(GPUVec<double> &vector, bool unfold) {
             add_multiply3<REALTuple, REAL_t>(unfold ? -1 : 1));
     }
 
-    if (bottom_is_folded) {
+    if (bottom_fold_status == FOLDED) {
         /* LOG("Folding bottom. direction("<<unfold<<") bottom_factors("<<bottom_factors<<")"); */
         thrust::transform(
             make_zip_iterator(make_tuple(un.begin(), un1.begin(), bottom_factors.data.begin())),
@@ -405,15 +405,33 @@ void _TriBandedOperator::fold_vector(GPUVec<double> &vector, bool unfold) {
 
 void _TriBandedOperator::diagonalize() {
     FULLTRACE;
-    if (bottom_is_folded) fold_bottom();
-    if (top_is_folded) fold_top();
+    LOG("Before folding: " << diags);
+    if (bottom_fold_status == CAN_FOLD) {
+        LOG("Bottom:" << bottom_fold_status);
+        fold_bottom();
+        LOG("Bottom:" << bottom_fold_status);
+    }
+    if (top_fold_status == CAN_FOLD) {
+        LOG("Top:" << top_fold_status);
+        fold_top();
+        LOG("Top:" << top_fold_status);
+    }
+    LOG("After folding: " << diags);
     FULLTRACE;
 }
 
 void _TriBandedOperator::undiagonalize() {
     FULLTRACE;
-    if (bottom_is_folded) fold_bottom(true);
-    if (top_is_folded) fold_top(true);
+    if (bottom_fold_status == FOLDED) {
+        LOG("Bottom:" << bottom_fold_status);
+        fold_bottom(true);
+        LOG("Bottom:" << bottom_fold_status);
+    }
+    if (top_fold_status == FOLDED) {
+        LOG("Top:" << top_fold_status);
+        fold_top(true);
+        LOG("Top:" << top_fold_status);
+    }
     FULLTRACE;
 }
 
@@ -476,7 +494,8 @@ void _TriBandedOperator::fold_top(bool unfold) {
         fold_operator<REALTuple>(unfold)
     );
 
-    top_is_folded = !unfold;
+    if (unfold) top_fold_status = CAN_FOLD;
+    else top_fold_status = FOLDED;
     FULLTRACE;
 }
 
@@ -512,7 +531,8 @@ void _TriBandedOperator::fold_bottom(bool unfold) {
         fold_operator<REALTuple>(unfold)
     );
 
-    bottom_is_folded = !unfold;
+    if (unfold) bottom_fold_status = CAN_FOLD;
+    else bottom_fold_status = FOLDED;
     FULLTRACE;
 }
 

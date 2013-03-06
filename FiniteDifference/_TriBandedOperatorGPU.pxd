@@ -8,8 +8,8 @@ cdef extern from "_TriBandedOperatorGPU.cuh":
     cdef cppclass _TriBandedOperator:
         cbool is_folded() except +
         cbool has_residual
-        cbool bottom_is_folded
-        cbool top_is_folded
+        cpp_string bottom_fold_status
+        cpp_string top_fold_status
         SizedArray[double] *apply(SizedArray[double] &) except +
         void add_scalar(double val) except +
         void vectorized_scale(SizedArray[double] &vector) except +
@@ -42,7 +42,7 @@ cdef extern from "_TriBandedOperatorGPU.cuh":
             Py_ssize_t blocks,
             cbool has_high_dirichlet,
             cbool has_low_dirichlet,
-            cbool top_is_folded,
-            cbool bottom_is_folded,
+            cpp_string top_fold_status,
+            cpp_string bottom_fold_status,
             cbool has_residual
         ) except +

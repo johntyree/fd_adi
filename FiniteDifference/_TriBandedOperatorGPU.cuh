@@ -14,6 +14,10 @@
 
 typedef thrust::tuple<REAL_t,REAL_t,REAL_t> Triple;
 
+static const std::string FOLDED = "FOLDED";
+static const std::string CAN_FOLD = "CAN_FOLD";
+static const std::string CANNOT_FOLD = "CANNOT_FOLD";
+
 class _TriBandedOperator {
     public:
         SizedArray<double> diags;
@@ -40,8 +44,8 @@ class _TriBandedOperator {
         bool has_residual;
         bool has_high_dirichlet;
         bool has_low_dirichlet;
-        bool top_is_folded;
-        bool bottom_is_folded;
+        std::string top_fold_status;
+        std::string bottom_fold_status;
         Py_ssize_t operator_rows;
         Py_ssize_t blocks;
         Py_ssize_t block_len;
@@ -58,8 +62,8 @@ class _TriBandedOperator {
             Py_ssize_t blocks,
             bool has_high_dirichlet,
             bool has_low_dirichlet,
-            bool top_is_folded,
-            bool bottom_is_folded,
+            std::string top_fold_status,
+            std::string bottom_fold_status,
             bool has_residual
             );
 

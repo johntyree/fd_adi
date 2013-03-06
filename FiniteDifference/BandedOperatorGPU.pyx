@@ -101,8 +101,8 @@ cdef class BandedOperator(object):
                     , self.thisptr_tri.blocks
                     , self.thisptr_tri.has_high_dirichlet
                     , self.thisptr_tri.has_low_dirichlet
-                    , self.thisptr_tri.top_is_folded
-                    , self.thisptr_tri.bottom_is_folded
+                    , self.thisptr_tri.top_fold_status
+                    , self.thisptr_tri.bottom_fold_status
                     , self.thisptr_tri.has_residual
                     )
         B.copy_meta_data(self)
@@ -177,13 +177,21 @@ cdef class BandedOperator(object):
 
         other = other.copy()
 
-        scipy_to_cublas(other)
-
         diad = False
-
         if other.top_fold_status == CAN_FOLD or other.bottom_fold_status == CAN_FOLD:
             diad = True
+            print "other.offsets", other.D.offsets
+            print "emigrate_tri: Bottom fold status:", other.bottom_fold_status
+            print "emigrate_tri: top fold status:", other.top_fold_status
             other.diagonalize()
+            self.top_fold_status = other.top_fold_status
+            self.bottom_fold_status = other.bottom_fold_status
+            print "other.offsets after diag", other.D.offsets
+            print "emigrate_tri: Bottom fold status:", other.bottom_fold_status
+            print "emigrate_tri: top fold status:", other.top_fold_status
+            print "bottom factors", other.bottom_factors
+
+        scipy_to_cublas(other)
 
         cdef:
             SizedArray[double] *diags = to_SizedArray(other.D.data, "data")
@@ -205,8 +213,8 @@ cdef class BandedOperator(object):
                 , other.blocks
                 , other.dirichlet[1] is not None
                 , other.dirichlet[0] is not None
-                , other.top_factors is not None
-                , other.bottom_factors is not None
+                , other.top_fold_status
+                , other.bottom_fold_status
                 , other.R is not None
                 )
 
@@ -271,10 +279,18 @@ cdef class BandedOperator(object):
 
 
     cpdef diagonalize(self):
+        print "diagonalize: Bottom fold status:", self.bottom_fold_status
+        print "diagonalize: top fold status:", self.top_fold_status
+        self.top_fold_status = FOLDED if self.top_fold_status == CAN_FOLD else CANNOT_FOLD
+        self.bottom_fold_status = FOLDED if self.bottom_fold_status == CAN_FOLD else CANNOT_FOLD
         self.thisptr_tri.diagonalize()
 
 
     cpdef undiagonalize(self):
+        print "undiagonalize: Bottom fold status:", self.bottom_fold_status
+        print "undiagonalize: top fold status:", self.top_fold_status
+        self.top_fold_status = CAN_FOLD if self.top_fold_status == FOLDED else CANNOT_FOLD
+        self.bottom_fold_status = CAN_FOLD if self.bottom_fold_status == FOLDED else CANNOT_FOLD
         self.thisptr_tri.undiagonalize()
 
 
@@ -317,11 +333,13 @@ cdef class BandedOperator(object):
     cpdef fold_top(self, unfold=False):
         self.no_mixed()
         self.thisptr_tri.fold_top(unfold)
+        self.top_fold_status == CAN_FOLD if unfold else FOLDED
 
 
     cpdef fold_bottom(self, unfold=False):
         self.no_mixed()
         self.thisptr_tri.fold_bottom(unfold)
+        self.bottom_fold_status == CAN_FOLD if unfold else FOLDED
 
 
     cpdef mul(self, val, inplace=False):
