@@ -58,7 +58,7 @@ class Cpp_test(unittest.TestCase):
         self.F.init()
         self.F.operators[0].R = np.arange(self.G.size, dtype=float)
         self.F.operators[1].R = np.arange(self.G.size, dtype=float)
-        self.F.operators[1].diagonalize()
+        self.F.operators[1]
         # print "Setup complete for CPP test"
 
     def test_SizedArray_roundtrip(self):
@@ -80,6 +80,17 @@ class Cpp_test(unittest.TestCase):
         fp(ref.D)
         B = BOG.BandedOperator(B, "test 1")
         B = B.immigrate("test 1")
+        assert ref == B
+
+    def test_migrate_1_diag(self):
+        B = self.F.operators[1]
+        fp(B.D)
+        ref = B.copy()
+        ref.diagonalize()
+        B = BOG.BandedOperator(B, "test 1")
+        B.diagonalize()
+        B = B.immigrate("test 1")
+        fp(ref.D)
         fp(B.D)
         assert ref == B
 
@@ -229,20 +240,24 @@ class Cpp_test(unittest.TestCase):
         npt.assert_array_almost_equal(ref, tst, decimal=8)
         npt.assert_array_equal(origdata, B.D.data)
 
+
     def test_GPUSolve_1(self):
         B = self.F.operators[1]
+        B.diagonalize()
         B.D.data = np.random.random((B.D.data.shape))
         B.R = np.random.random(B.D.data.shape[1])
         B.D.data[0,0] = 0
         B.D.data[-1,-1] = 0
+        B.undiagonalize()
         origdata = B.D.data.copy()
         ref = B.solve(self.v2)
         B = BOG.BandedOperator(B)
+        B.diagonalize()
         tst = B.solve(self.v2.copy())
+        B.undiagonalize()
         B = B.immigrate()
-        fp(ref - tst, 3, 'e')
-        npt.assert_array_almost_equal(ref, tst, decimal=8)
         npt.assert_array_equal(origdata, B.D.data)
+        npt.assert_array_almost_equal(ref, tst, decimal=8)
 
 
 
