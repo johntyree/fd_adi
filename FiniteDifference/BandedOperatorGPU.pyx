@@ -74,49 +74,6 @@ cdef class BandedOperator(object):
 
     def __richcmp__(self, other, op):
         raise NotImplementedError
-        true = op == 2
-        false = op == 3
-
-        def no_nan(x):
-            return np.array(0) if x is None else np.nan_to_num(x)
-
-        for attr in self.attrs:
-            if attr in ('deltas', 'top_factors', 'bottom_factors'):
-                continue
-            if getattr(self, attr) != getattr(other, attr):
-                print "%s:" % attr,  getattr(self, attr), getattr(other, attr)
-                return false
-
-        if self.is_mixed_derivative:
-            top_factors = bottom_factors = True
-            R = True
-        else:
-            top_factors    = np.array_equal(no_nan(self.top_factors), no_nan(other.top_factors))
-            bottom_factors = np.array_equal(no_nan(self.bottom_factors), no_nan(other.bottom_factors))
-            R              = np.array_equal(self.R, other.R)
-
-        mat_type = self.is_mixed_derivative == other.is_mixed_derivative
-        deltas         = np.array_equal(no_nan(self.deltas), no_nan(other.deltas))
-        Ddata          = np.array_equal(self.D.data, other.D.data)
-        shape          = np.array_equal(self.shape, other.shape)
-
-        if (mat_type
-            and shape
-            and top_factors
-            and bottom_factors
-            and deltas
-            and R
-            and Ddata):
-            return true
-        else:
-            print "mat_type", mat_type
-            print "shape", shape
-            print "top_fact", top_factors
-            print "bot_fact", bottom_factors
-            print "deltas", deltas
-            print "R", R
-            print "Data", Ddata
-            return false
 
 
     cpdef copy(self):
