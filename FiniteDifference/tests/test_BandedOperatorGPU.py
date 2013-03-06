@@ -77,8 +77,10 @@ class Cpp_test(unittest.TestCase):
     def test_migrate_1(self):
         B = self.F.operators[1]
         ref = B.copy()
-        B = BOG.BandedOperator(B, "test 0")
-        B = B.immigrate("test 0")
+        fp(ref.D)
+        B = BOG.BandedOperator(B, "test 1")
+        B = B.immigrate("test 1")
+        fp(B.D)
         assert ref == B
 
     def test_migrate_01(self):
