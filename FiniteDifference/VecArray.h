@@ -29,6 +29,26 @@ struct GPUVec : thrust::device_vector<T> {
     GPUVec(const X &x, const Y &y, const Z &z)
         : thrust::device_vector<T>(x, y, z) {}
 
+    GPUVec<T> &operator+=(T x) {
+        thrust::transform(
+                begin(),
+                end()
+                make_constant_iterator(x),
+                begin(),
+                thrust::plus<T>());
+        return *this;
+    }
+
+    GPUVec<T> &operator*=(T x) {
+        thrust::transform(
+                begin(),
+                end()
+                make_constant_iterator(x),
+                begin(),
+                thrust::multiplies<T>());
+        return *this;
+    }
+
     inline thrust::device_reference<T> ref() {
         return thrust::device_reference<T>(ptr());
     }
@@ -210,6 +230,16 @@ struct SizedArray {
                 <<") not in range [0, Size("<<size<<"))\n");
         }
         return idx;
+    }
+
+    SizedArray<T> &operator+(double x) {
+        SizedArray<T> V(this->size, "from: (" + this->name + ")");
+        V.data += x;
+        return V;
+    }
+
+    SizedArray<T> &copy() {
+        return SizedArray<T>(*this);
     }
 
     inline void set(int i, T x) {

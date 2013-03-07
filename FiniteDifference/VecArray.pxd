@@ -20,6 +20,8 @@ cdef extern from "VecArray.h":
         cpp_string name
         SizedArray(SizedArray[T]) except +
         SizedArray(T*, int, np.npy_intp*, cpp_string name) except +
+        SizedArray[T] copy() except +
+        SizedArray[T] operator+() except +
         T get(int i) except +
         T get(int i, int j) except +
         void reshape(Py_ssize_t h, Py_ssize_t w) except +
