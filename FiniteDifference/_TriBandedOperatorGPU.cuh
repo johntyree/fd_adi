@@ -12,7 +12,10 @@
 #include "VecArray.h"
 
 
+typedef GPUVec<REAL_t>::iterator VI;
+typedef thrust::tuple<VI, VI, VI, VI, VI, VI, VI> VecIter7;
 typedef thrust::tuple<REAL_t,REAL_t,REAL_t> Triple;
+typedef thrust::tuple<REAL_t, REAL_t, REAL_t, REAL_t, REAL_t, REAL_t, REAL_t> Septuple;
 
 static const std::string FOLDED = "FOLDED";
 static const std::string CAN_FOLD = "CAN_FOLD";

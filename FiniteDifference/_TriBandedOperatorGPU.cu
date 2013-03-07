@@ -128,6 +128,74 @@ void _TriBandedOperator::verify_diag_ptrs() {
 }
 
 
+struct DMVPY : thrust::unary_function<const Septuple &, void> {
+    __host__ __device__
+    REAL_t operator()(const Septuple &t, void) {
+        using thrust::get;
+        const REAL_t &a = get<0>(t);
+        const REAL_t &b = get<1>(t);
+        const REAL_t &c = get<2>(t);
+        const REAL_t &x0 = get<3>(t);
+        const REAL_t &x1 = get<4>(t);
+        const REAL_t &x2 = get<5>(t);
+        const REAL_t &y = get<6>(t);
+        get<7>(t) = y + a*x0 + b*x1 + c*x2;
+        return;
+    }
+};
+void _TriBandedOperator::DMVPY(SizedArray<double> &V, char operation, SizedArray<double> &Y,
+        SizedArray<double> &out) {
+    FULLTRACE;
+    verify_diag_ptrs();
+    const unsigned N = V.size;
+
+    if (has_low_dirichlet) {
+        thrust::copy(low_dirichlet.data.begin(),
+                low_dirichlet.data.end(),
+                V.data.begin());
+    }
+    if (has_high_dirichlet) {
+        thrust::copy(high_dirichlet.data.begin(),
+                high_dirichlet.data.end(),
+                V.data.end() - V.shape[1]);
+    }
+
+    if (axis == 0) {
+        V.transpose(1);
+    }
+
+    VecIter7 start(
+            sub+1, mid+1, sup+1,
+            V.data.begin(), V.data.begin()+1, V.data.begin()+2,
+            Y.begin()+1);
+
+    VecIter7 finish(
+            sub+N-1, mid+N-1, sup+N-1,
+            V.data.begin()+N, V.data.begin()+N+1, V.data.begin()+N+2,
+            Y.begin()+N+1);
+
+    switch op {
+        case 'm':
+            out.data[0] = Y.data[0]
+                - (mid[0]*V.data[0] + sup[0]*V.data[1]);
+            transform(start, finish, out.data.begin()+1, op);
+            out.data[N-1] = Y.data[N-1]
+                - (sub[N-1]*V.data[N-2] + mid[N-1]*V.data[N-1]);
+            break;
+        case 'p':
+            out.data[0] = Y.data[0]
+                + (mid[0]*V.data[0] + sup[0]*V.data[1]);
+            transform(start, finish, out.data.begin()+1, op);
+            out.data[N-1] = Y.data[N-1]
+                + (sub[N-1]*V.data[N-2] + mid[N-1]*V.data[N-1]);
+            break;
+        default:
+            DIE("Unknown operation in DMVPY '"<<op<<"'");
+    }
+    return;
+}
+
+
 struct zipdot3 : thrust::binary_function<const Triple &, const Triple &, REAL_t> {
     __host__ __device__
     REAL_t operator()(const Triple &diags, const Triple &x) {
@@ -141,7 +209,6 @@ struct zipdot3 : thrust::binary_function<const Triple &, const Triple &, REAL_t>
         return a*x0 + b*x1 + c*x2;
     }
 };
-
 SizedArray<double> *_TriBandedOperator::apply(SizedArray<double> &V) {
     FULLTRACE;
     verify_diag_ptrs();
