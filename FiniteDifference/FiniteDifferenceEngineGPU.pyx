@@ -185,7 +185,7 @@ cdef class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
 
     def solve_implicit(self, n, dt, SizedArray[double] initial):
         n = int(n)
-        cdef SizedArray[double] *V = &initial.copy()
+        cdef SizedArray[double] *V = new SizedArray[double](initial)
 
         Lis = [(o * -dt).add(1, inplace=True)
                for d, o in sorted(self.operators.iteritems())
@@ -203,11 +203,13 @@ cdef class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
                     # return V
                 print int(k * to_percent),
                 sys.stdout.flush()
-            V += self.cross_term(V) * dt
+            V = *V + self.operators[(0,1)].apply(V) * dt
             for L in Lis:
                 V = L.solve(V)
         utils.toc(':  \t')
-        return V
+        ret = from_SizedArray_2(*V)
+        del V
+        return ret
 
 
     # def solve_hundsdorferverwer(self, n, dt, initial=None, theta=0.5, callback=None,
@@ -426,6 +428,15 @@ cdef class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
         # V = self.solve_implicit(smoothing_steps*2, dt*0.5, initial=initial)
         # # V = self.solve_douglas(smoothing_steps*2, dt*0.5, theta=1, initial=initial)
         # return scheme(n-smoothing_steps, dt, initial=V, theta=0.60)
+
+cdef inline from_SizedArray_2(SizedArray[double] &v):
+    assert v.ndim == 2, ("Using from_SizedArray_2 on an array of dim %s" % v.ndim)
+    cdef np.ndarray[double, ndim=2] s = np.empty((v.shape[0], v.shape[1]), dtype=float)
+    cdef int i, j
+    for i in range(v.shape[0]):
+        for j in range(v.shape[1]):
+            s[i, j] = v.get(i, j)
+    return s
 
 
 cdef inline SizedArray[double]* to_SizedArray(np.ndarray v, name):
