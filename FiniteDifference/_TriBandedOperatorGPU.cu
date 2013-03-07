@@ -247,7 +247,6 @@ void _TriBandedOperator::add_operator(_TriBandedOperator &other) {
     }
 
     if (other.top_fold_status == CAN_FOLD) {
-        LOG("Adding top factors together");
         int them = other.top_factors.data.size();
         int us = top_factors.data.size();
         if (them != us) {
@@ -260,9 +259,7 @@ void _TriBandedOperator::add_operator(_TriBandedOperator &other) {
             top_factors.data.begin(),
             thrust::plus<double>());
     }
-    LOG("bottom_fold_status: " << bottom_fold_status);
     if (other.bottom_fold_status == "CAN_FOLD") {
-        LOG("Adding bottom factors together");
         int them = other.bottom_factors.data.size();
         int us = bottom_factors.data.size();
         if (them != us) {
