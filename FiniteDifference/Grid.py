@@ -92,28 +92,5 @@ Grid object <%(hexid)s>
         style(self.domain[-1], *self.mesh)
 
 
-
-
-def test_copy():
-    """Run main."""
-    k = 0.5
-    g = Grid(initializer=lambda x,y: np.maximum(x-k,0))
-    h = g.copy()
-    g.domain[1,:] = 4
-    print g.mesh
-    print h.mesh
-    print
-    print g.domain
-    print h.domain
-    print g.shape, h.shape
-    assert(g.domain != h.domain)
-    g.reset()
-    assert(g.domain != h.domain)
-    g.reset()
-    print g.mesh
-    print g.domain
-    print g.shape
-    return 0
-
 if __name__ == '__main__':
     main()
