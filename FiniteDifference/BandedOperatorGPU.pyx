@@ -395,6 +395,11 @@ cdef class BandedOperator(object):
         # Copy the data from the other operator over
         # Don't double the dirichlet boundaries!
         self.thisptr_tri.add_operator(deref(other.thisptr_tri))
+
+        if other.top_fold_status == CAN_FOLD:
+            self.top_fold_status = CAN_FOLD
+        if other.bottom_fold_status == CAN_FOLD:
+            self.bottom_fold_status = CAN_FOLD
         return
 
 

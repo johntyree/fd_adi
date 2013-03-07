@@ -662,6 +662,10 @@ cdef class BandedOperator(object):
                 B.R = other.R.copy()
             else:
                 B.R += other.R
+        if other.top_fold_status == CAN_FOLD or self.top_fold_status == CAN_FOLD:
+            B.top_fold_status = CAN_FOLD
+        if other.bottom_fold_status == CAN_FOLD or self.bottom_fold_status == CAN_FOLD:
+            B.bottom_fold_status = CAN_FOLD
 
         return B
 
