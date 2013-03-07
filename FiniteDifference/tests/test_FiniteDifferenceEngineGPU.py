@@ -86,7 +86,7 @@ class FiniteDifferenceEngineADI_test(unittest.TestCase):
         self.F = FD.FiniteDifferenceEngineADI(self.G, coefficients=coeffs,
                 boundaries=bounds, schemes=schemes, force_bandwidth=None)
         self.F.init()
-        self.F.operators[1].diagonalize()
+        self.F.operators[1]
         self.FG = FDG.FiniteDifferenceEngineADI(self.F)
 
 
@@ -116,6 +116,39 @@ class FiniteDifferenceEngineADI_test(unittest.TestCase):
     def test_verify_simple_operators_01(self):
         ref = self.F.simple_operators[(0,1)]
         tst = self.FG.simple_operators[(0,1)].immigrate()
+        npt.assert_equal(tst, ref)
+
+    def test_combine_operators_0(self):
+        ref = self.F.operators[0]
+        fst = self.FG.simple_operators[(0,)]
+        snd = self.FG.simple_operators[(0,0)]
+        tst = (fst + snd) + 0.5
+        tst = tst.immigrate()
+        tst.derivative = ref.derivative
+        fp(ref.D)
+        print
+        fp(tst.D)
+        npt.assert_equal(tst, ref)
+
+    def test_combine_operators_1(self):
+        ref = self.F.operators[1]
+        npt.assert_array_equal([1, 0, -1], ref.D.offsets)
+        npt.assert_equal(ref.bottom_fold_status, "FOLDED")
+        fst = self.FG.simple_operators[(1,)]
+        snd = self.FG.simple_operators[(1,1)]
+        print "fst:", fst.bottom_fold_status
+        print "snd:", snd.bottom_fold_status
+        print "ref:", ref.bottom_fold_status
+        tst = (fst + snd) + 0.5
+        print "tst:", tst.bottom_fold_status
+        tst = tst.immigrate()
+        tst.derivative = ref.derivative
+        # fp(ref.D)
+        # print
+        # fp(tst.D)
+        # print
+        print tst.bottom_factors
+        fp(tst.D.data - ref.D.data, 'e')
         npt.assert_equal(tst, ref)
 
     def test_dirichlet_boundary(self):
