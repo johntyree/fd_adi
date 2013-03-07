@@ -245,6 +245,37 @@ void _TriBandedOperator::add_operator(_TriBandedOperator &other) {
                     thrust::plus<double>());
         }
     }
+
+    if (other.top_fold_status == CAN_FOLD) {
+        LOG("Adding top factors together");
+        int them = other.top_factors.data.size();
+        int us = top_factors.data.size();
+        if (them != us) {
+            DIE("Bottom_factors are different sizes:" << us << ", " << them);
+        }
+        thrust::transform(
+            top_factors.data.begin(),
+            top_factors.data.end(),
+            other.top_factors.data.begin(),
+            top_factors.data.begin(),
+            thrust::plus<double>());
+    }
+    LOG("bottom_fold_status: " << bottom_fold_status);
+    if (other.bottom_fold_status == "CAN_FOLD") {
+        LOG("Adding bottom factors together");
+        int them = other.bottom_factors.data.size();
+        int us = bottom_factors.data.size();
+        if (them != us) {
+            DIE("Bottom_factors are different sizes:" << us << ", " << them);
+        }
+        thrust::transform(
+            bottom_factors.data.begin(),
+            bottom_factors.data.end(),
+            other.bottom_factors.data.begin(),
+            bottom_factors.data.begin(),
+            thrust::plus<double>());
+    }
+
     /* LOG("Adding R."); */
     thrust::transform(
             R.data.begin(),
