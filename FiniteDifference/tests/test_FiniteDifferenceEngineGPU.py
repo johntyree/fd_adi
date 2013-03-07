@@ -125,9 +125,6 @@ class FiniteDifferenceEngineADI_test(unittest.TestCase):
         tst = (fst + snd) + 0.5
         tst = tst.immigrate()
         tst.derivative = ref.derivative
-        fp(ref.D)
-        print
-        fp(tst.D)
         npt.assert_equal(tst, ref)
 
     def test_combine_operators_1(self):
@@ -141,11 +138,6 @@ class FiniteDifferenceEngineADI_test(unittest.TestCase):
         npt.assert_array_equal([1, 0, -1, -2], tst.D.offsets)
         npt.assert_equal(tst.bottom_fold_status, "CAN_FOLD")
         tst.derivative = ref.derivative
-        # fp(ref.D)
-        # print
-        # fp(tst.D)
-        # print
-        print tst.bottom_factors
         fp(tst.D.data - ref.D.data, 'e')
 
         tstD = tst.D.data
@@ -156,135 +148,24 @@ class FiniteDifferenceEngineADI_test(unittest.TestCase):
         ref.D.data *= 0
         npt.assert_equal(tst, ref)
 
-    def test_dirichlet_boundary(self):
-        spots = np.arange(5.)
-        vars = np.arange(4.)
-
-        def rndgrid(x0, x1):
-            return np.random.random((x0.shape[0], x1.shape[1]))
-
-        G = Grid.Grid((spots, vars), initializer=rndgrid)
-        npt.assert_array_equal(G.shape, tuple(map(len, G.mesh)))
-        coeffs = bounds = {}
-        coeffs = {
-                  (0,) : lambda t, *dim: 1,
-                  # (0,0): lambda t, *dim: 0,
-                  (1,) : lambda t, *dim: 0,
-                  # (1,1): lambda t, *dim: 0,
-                  # (0,1): lambda t, *dim: 0
-                  }
-        bounds = {
-                  (0,) : ((0, lambda t, *x: 1), (0, lambda t, *x: 1)),
-                  # (0,0): ((None, lambda *x: 1), (0, lambda *x: 1)),
-                  (1,) : ((0, lambda *x: 1), (0, lambda *x: 1)),
-                  # (1,1): ((0, lambda *x: 1), (0, lambda *x: 1)),
-                  }
-        F = FD.FiniteDifferenceEngineADI(G, coefficients=coeffs, boundaries=bounds, force_bandwidth=None)
-        F.init()
-
-        for d, o in F.simple_operators.items():
-            l = [[1] * F.grid.shape[(o.axis + 1) % 2]] * 2
-            npt.assert_array_equal(o.dirichlet, l, err_msg="Dim: %s, dirichlet: %s, expected: %s" % (d, o.dirichlet, l))
-        for d, o in F.simple_operators.items():
-            l = [[1] * F.grid.shape[(o.axis + 1) % 2]] * 2
-            npt.assert_array_equal(o.dirichlet, l, err_msg="Dim: %s, dirichlet: %s, expected: %s" % (d, o.dirichlet, l))
-
-        for d in bounds.keys():
-            B = F.simple_operators[d]
-            # print "Derivative", d, "Dirichlets", B.dirichlet
-            g = (B+1).solve(F.grid.domain[-1])
-            if B.axis == 1:
-                g = g.T
-            if B.dirichlet[0] is not None:
-                npt.assert_array_equal(g[0,:], 1)
-            if B.dirichlet[1] is not None:
-                npt.assert_array_equal(g[-1,:], 1)
-
-        for d in bounds.keys():
-            B = F.simple_operators[d]
-            # print "Derivative", d, "Dirichlets", B.dirichlet
-            # print B.dirichlet
-            g = B.apply(F.grid.domain[-1])
-            if B.axis == 1:
-                g = g.T
-            if B.dirichlet[0] is not None:
-                npt.assert_array_equal(g[0,:], 1)
-            if B.dirichlet[1] is not None:
-                npt.assert_array_equal(g[-1,:], 1)
-
-        for d in bounds.keys():
-            B = F.simple_operators[d]
-            # print "Derivative", d, "Dirichlets", B.dirichlet
-            # fp(B.data)
-            g = (B+1).solve(F.grid.domain[-1])
-            # fp(g)
-            if B.axis == 1:
-                g = g.T
-            if B.dirichlet[0] is not None:
-                npt.assert_array_equal(g[0,:], 1)
-            if B.dirichlet[1] is not None:
-                npt.assert_array_equal(g[-1,:], 1)
-
-
     def test_cross_derivative(self):
         crossOp = self.F.operators[(0,1)]
+        crossOpGPU = self.FG.simple_operators[(0,1)]
         g = self.F.grid.domain[-1]
         x = self.F.grid.mesh[0]
         y = self.F.grid.mesh[1]
 
-        dx = np.gradient(x)[:,np.newaxis]
-        dy = np.gradient(y)
-        dgdx = np.gradient(g)[0]
-        manuald2gdxdy = np.gradient(dgdx)[1] / (dx * dy)
-        manuald2gdxdy[:,0] = 0; manuald2gdxdy[:,-1] = 0
-        manuald2gdxdy[0,:] = 0; manuald2gdxdy[-1,:] = 0
-        X,Y = np.meshgrid(y, x)
-        manuald2gdxdy *= self.F.coefficients[(0,1)](0, X, Y)
-
         d2gdxdy = crossOp.apply(g)
-
-        # print "Cross op"
-        # fp(crossOp.D.todense())
-        # print crossOp.dirichlet
-        # print crossOp.axis
-        # print
-
-        # print "manual"
-        # fp(manuald2gdxdy)
-        # print
-        # print "new"
-        # fp(d2gdxdy)
-        # print
-        # print "diff"
-        # fp(d2gdxdy - manuald2gdxdy, fmt='e')
-        npt.assert_array_almost_equal(manuald2gdxdy, d2gdxdy)
+        d2gdxdyGPU = crossOpGPU.apply(g)
+        npt.assert_array_almost_equal(d2gdxdy, d2gdxdyGPU)
 
         scale = np.random.random()
-
-        crossOp
-
-        # print "Scaling CrossOp (%s)" % scale
         crossOp *= scale
+        crossOpGPU *= scale
 
         d2gdxdy_scaled = crossOp.apply(g)
-        manuald2gdxdy_scaled = manuald2gdxdy * scale
-
-        # print "Cross op"
-        # print crossOp.dirichlet
-        # print crossOp.axis
-        # fp(crossOp.D.todense())
-        # print
-
-        # print "manual"
-        # fp(manuald2gdxdy_scaled)
-        # print
-        # print "new"
-        # fp(d2gdxdy_scaled)
-        # print
-        # print "diff"
-        # fp(d2gdxdy_scaled - manuald2gdxdy, fmt='e')
-
-        npt.assert_array_almost_equal(manuald2gdxdy_scaled, d2gdxdy_scaled)
+        d2gdxdyGPU_scaled = crossOp.apply(g)
+        npt.assert_array_almost_equal(d2gdxdy_scaled, d2gdxdyGPU_scaled)
 
 
 def main():
