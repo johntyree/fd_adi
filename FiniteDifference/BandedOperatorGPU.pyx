@@ -377,25 +377,23 @@ cdef class BandedOperator(object):
         Does not alter self.R, the residual vector.
         """
         # TODO: Move these errors into C++
+
+        # Verify that they are compatible
         if self.is_mixed_derivative:
             raise NotImplementedError("No add to mixed operator")
         elif other.is_mixed_derivative:
             raise NotImplementedError("No add mixed operator to this one")
-
-        if self.axis != other.axis:
+        elif self.axis != other.axis:
             raise ValueError("Both operators must operate on the same axis."
                     " (%s != %s)" % (self.axis, other.axis))
-
-        # Verify that they are compatible
-        if self.thisptr_tri.operator_rows != other.thisptr_tri.operator_rows:
+        elif self.thisptr_tri.operator_rows != other.thisptr_tri.operator_rows:
             raise ValueError("Both operators must have the same length")
-        if self.is_folded():
+        elif self.is_folded():
             raise NotImplementedError("No add to diagonalized operator.")
         elif other.is_folded():
             raise NotImplementedError("No add diagonalized operator to this one.")
 
         # Copy the data from the other operator over
-        # Don't double the dirichlet boundaries!
         self.thisptr_tri.add_operator(deref(other.thisptr_tri))
 
         if other.top_fold_status == CAN_FOLD:
