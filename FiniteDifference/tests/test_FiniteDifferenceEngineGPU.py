@@ -70,6 +70,7 @@ class FiniteDifferenceEngineADI_test(unittest.TestCase):
                   (1,1): gamma2_v,
                   (0,1): lambda t, *dim: dim[0] * dim[1] * rho * sigma
                   }
+        coeffs = {k: lambda *x: 1 for k in coeffs}
         bounds = {
                 (0,)  : ((0,    lambda *args: 0),    (1,    lambda *args: 1)),
                 (0,0) : ((0,    lambda *args: 0),    (None, lambda *args: 1)),
