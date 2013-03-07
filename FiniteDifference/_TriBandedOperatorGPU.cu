@@ -218,6 +218,9 @@ void _TriBandedOperator::add_operator(_TriBandedOperator &other) {
     * Does not alter self.R, the residual vector.
     */
     FULLTRACE;
+    if (is_folded() || other.is_folded()) {
+        DIE("Cannot add folded (diagonalized) operators");
+    }
     int begin = has_low_dirichlet;
     int end = block_len-1 - has_high_dirichlet;
     int o, to, fro;
