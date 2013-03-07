@@ -248,60 +248,6 @@ class FiniteDifferenceEngineADI_test(unittest.TestCase):
         npt.assert_array_almost_equal(manuald2gdxdy_scaled, d2gdxdy_scaled)
 
 
-def implicit_manual(V, L1, R1x, L2, R2x, dt, n, spots, vars, coeffs, crumbs=[], callback=None):
-    V = V.copy()
-
-    # L1i = flatten_tensor(L1)
-    L1i = L1.copy()
-    R1 = np.array(R1x)
-
-    # L2i = flatten_tensor(L2)
-    L2i = L2.copy()
-    R2 = np.array(R2x)
-
-    m = 2
-
-    # L  = (As + Ass - H.interest_rate*np.eye(nspots))*-dt + np.eye(nspots)
-    L1i.data *= -dt
-    L1i.data[m, :] += 1
-    R1 *= dt
-
-    L2i.data *= -dt
-    L2i.data[m, :] += 1
-    R2 *= dt
-
-    offsets1 = (abs(min(L1i.offsets)), abs(max(L1i.offsets)))
-    offsets2 = (abs(min(L2i.offsets)), abs(max(L2i.offsets)))
-
-    dx = np.gradient(spots)[:,np.newaxis]
-    dy = np.gradient(vars)
-    X, Y = [dim.T for dim in np.meshgrid(spots, vars)]
-    gradgrid = dt * coeffs[(0,1)](0, X, Y) / (dx * dy)
-    gradgrid[:,0] = 0; gradgrid[:,-1] = 0
-    gradgrid[0,:] = 0; gradgrid[-1,:] = 0
-
-    print_step = max(1, int(n / 10))
-    to_percent = 100.0 / n
-    utils.tic("Impl:")
-    for k in xrange(n):
-        if not k % print_step:
-            if np.isnan(V).any():
-                print "Impl fail @ t = %f (%i steps)" % (dt * k, k)
-                return crumbs
-            print int(k * to_percent),
-        if callback is not None:
-            callback(V, ((n - k) * dt))
-        Vsv = np.gradient(np.gradient(V)[0])[1] * gradgrid
-        V = spl.solve_banded(offsets2, L2i.data,
-                             (V + Vsv + R2).flat, overwrite_b=True).reshape(V.shape)
-        V = spl.solve_banded(offsets1, L1i.data,
-                             (V + R1).T.flat, overwrite_b=True).reshape(V.shape[::-1]).T
-    crumbs.append(V.copy())
-    utils.toc()
-    return crumbs
-
-
-
 def main():
     """Run main."""
     import nose
