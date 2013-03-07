@@ -189,13 +189,15 @@ cdef class BandedOperator(object):
 
         scipy_to_cublas(other)
 
+        tops = np.atleast_1d(other.top_factors if other.top_factors is not None else [0.0]*other.blocks)
+        bots = np.atleast_1d(other.bottom_factors if other.bottom_factors is not None else [0.0]*other.blocks)
         cdef:
             SizedArray[double] *diags = to_SizedArray(other.D.data, "data")
             SizedArray[double] *R = to_SizedArray(other.R, "R")
             SizedArray[double] *low_dirichlet = to_SizedArray(np.atleast_1d(other.dirichlet[0] or [0.0]), "low_dirichlet")
             SizedArray[double] *high_dirichlet = to_SizedArray(np.atleast_1d(other.dirichlet[1] or [0.0]), "high_dirichlet")
-            SizedArray[double] *top_factors = to_SizedArray(np.atleast_1d(other.top_factors if other.top_factors is not None else [0.0]), "top_factors")
-            SizedArray[double] *bottom_factors = to_SizedArray(np.atleast_1d(other.bottom_factors if other.bottom_factors is not None else [0.0]), "bottom_factors")
+            SizedArray[double] *top_factors = to_SizedArray(tops, "top_factors")
+            SizedArray[double] *bottom_factors = to_SizedArray(bots, "bottom_factors")
 
         self.thisptr_tri = new _TriBandedOperator(
                   deref(diags)
