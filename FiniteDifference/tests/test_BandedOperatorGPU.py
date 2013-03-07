@@ -82,20 +82,29 @@ class Cpp_test(unittest.TestCase):
 
     def test_migrate_1(self):
         B = self.F.operators[1]
+        npt.assert_array_equal([1, 0, -1, -2], B.D.offsets)
+        npt.assert_equal(B.bottom_fold_status, "CAN_FOLD")
         ref = B.copy()
         B = BOG.BandedOperator(B, "test 1")
         B = B.immigrate("test 1")
+        npt.assert_array_equal([1, 0, -1, -2], B.D.offsets)
+        npt.assert_equal(B.bottom_fold_status, "CAN_FOLD")
         assert ref == B
 
 
     def test_migrate_1_diag(self):
         B = self.F.operators[1]
-        fp(B.D)
+        npt.assert_array_equal([1, 0, -1, -2], B.D.offsets)
+        npt.assert_equal(B.bottom_fold_status, "CAN_FOLD")
         ref = B.copy()
         ref.diagonalize()
+        npt.assert_array_equal([1, 0, -1], ref.D.offsets)
+        npt.assert_equal(ref.bottom_fold_status, "FOLDED")
         B = BOG.BandedOperator(B, "test 1")
         B.diagonalize()
         B = B.immigrate("test 1")
+        npt.assert_array_equal([1, 0, -1], B.D.offsets)
+        npt.assert_equal(B.bottom_fold_status, "FOLDED")
         fp(ref.D)
         fp(B.D)
         assert ref == B
