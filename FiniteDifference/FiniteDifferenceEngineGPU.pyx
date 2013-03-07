@@ -22,15 +22,19 @@ import FiniteDifference.BandedOperator as BO
 cimport FiniteDifference.BandedOperator as BO
 BandedOperator = BO.BandedOperator
 
+from FiniteDifference.VecArray cimport SizedArray, GPUVec
+
 
 cdef class FiniteDifferenceEngine(object):
-    cdef public shape
-    cdef public ndim
-    cdef public coefficients
-    cdef public t
-    cdef public default_scheme
-    cdef public default_order
-    cdef public grid
+    cdef public:
+        shape
+        ndim
+        coefficients
+        t
+        default_scheme
+        default_order
+
+    cdef SizedArray[double] grid
 
     # Setup
     cdef public operators
@@ -117,7 +121,7 @@ cdef class FiniteDifferenceEngine(object):
 
         Can't do this with C/Cuda of course... maybe cython?
         """
-        self.grid = other.grid
+        self.grid = to_SizedArray(other.grid.domain[-1], "FDEGPU.grid")
         self.shape = other.grid.shape
         self.ndim = self.grid.ndim
         self.coefficients = other.coefficients
@@ -179,13 +183,9 @@ cdef class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
         return ret
 
 
-    def solve_implicit(self, n, dt, initial=None, callback=None, numpy=False):
+    def solve_implicit(self, n, dt, SizedArray[double] initial):
         n = int(n)
-        if initial is not None:
-            V = initial.copy()
-        else:
-            V = self.grid.domain[-1].copy()
-            self.grid.domain.append(V)
+        cdef SizedArray[double] *V = &initial.copy()
 
         Lis = [(o * -dt).add(1, inplace=True)
                for d, o in sorted(self.operators.iteritems())
@@ -198,258 +198,240 @@ cdef class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
         utils.tic("solve_implicit:\t")
         for k in range(n):
             if not k % print_step:
-                if np.isnan(V).any():
-                    print "Impl fail @ t = %f (%i steps)" % (dt * k, k)
-                    return V
+                # if np.isnan(V).any():
+                    # print "Impl fail @ t = %f (%i steps)" % (dt * k, k)
+                    # return V
                 print int(k * to_percent),
                 sys.stdout.flush()
-            if callback is not None:
-                callback(V, ((n - k) * dt))
-            V += self.cross_term(V, numpy=numpy) * dt
+            V += self.cross_term(V) * dt
             for L in Lis:
                 V = L.solve(V)
         utils.toc(':  \t')
-        self.grid.domain.append(V.copy())
         return V
 
 
-    def solve_hundsdorferverwer(self, n, dt, initial=None, theta=0.5, callback=None,
-            numpy=False):
+    # def solve_hundsdorferverwer(self, n, dt, initial=None, theta=0.5, callback=None,
+            # numpy=False):
 
-        n = int(n)
-        if initial is not None:
-            V = initial.copy()
-        else:
-            V = self.grid.domain[-1].copy()
-            self.grid.domain.append(V)
+        # n = int(n)
+        # cdef SizedArray[double] V = initial.copy()
 
-        Firsts = [(o * dt) for o in self.operators.values()]
+        # Firsts = [(o * dt) for o in self.operators.values()]
 
-        Les = [(o * theta * dt)
-               for d, o in sorted(self.operators.iteritems())
-               if type(d) != tuple]
-        Lis = [(o * (theta * -dt)).add(1, inplace=True)
-               for d, o in sorted(self.operators.iteritems())
-               if type(d) != tuple]
+        # Les = [(o * theta * dt)
+               # for d, o in sorted(self.operators.iteritems())
+               # if type(d) != tuple]
+        # Lis = [(o * (theta * -dt)).add(1, inplace=True)
+               # for d, o in sorted(self.operators.iteritems())
+               # if type(d) != tuple]
 
-        for L in itertools.chain(Les, Lis):
-            L.R = None
+        # for L in itertools.chain(Les, Lis):
+            # L.R = None
 
-        print_step = max(1, int(n / 10))
-        to_percent = 100.0 / n
-        utils.tic("Hundsdorfer-Verwer:\t")
-        for k in range(n):
-            if not k % print_step:
-                if np.isnan(V).any():
-                    print "Hundsdorfer-Verwer fail @ t = %f (%i steps)" % (dt * k, k)
-                    return V
-                print int(k * to_percent),
-                sys.stdout.flush()
-            if callback is not None:
-                callback(V, ((n - k) * dt))
+        # print_step = max(1, int(n / 10))
+        # to_percent = 100.0 / n
+        # utils.tic("Hundsdorfer-Verwer:\t")
+        # for k in range(n):
+            # if not k % print_step:
+                # if np.isnan(V).any():
+                    # print "Hundsdorfer-Verwer fail @ t = %f (%i steps)" % (dt * k, k)
+                    # return V
+                # print int(k * to_percent),
+                # sys.stdout.flush()
+            # if callback is not None:
+                # callback(V, ((n - k) * dt))
 
-            Y = V.copy()
-            for L in Firsts:
-                Y += L.apply(V)
-            Y0 = Y.copy()
+            # Y = V.copy()
+            # for L in Firsts:
+                # Y += L.apply(V)
+            # Y0 = Y.copy()
 
-            for Le, Li in zip(Les, Lis):
-                Y -= Le.apply(V)
-                Y = Li.solve(Y)
-            Y2 = Y.copy()
+            # for Le, Li in zip(Les, Lis):
+                # Y -= Le.apply(V)
+                # Y = Li.solve(Y)
+            # Y2 = Y.copy()
 
-            Y = Y0
-            for L in Firsts:
-                no_residual = L.R
-                L.R = None
-                Y += 0.5 * L.apply(Y2-V)
-                L.R = no_residual
+            # Y = Y0
+            # for L in Firsts:
+                # no_residual = L.R
+                # L.R = None
+                # Y += 0.5 * L.apply(Y2-V)
+                # L.R = no_residual
 
-            V = Y2
+            # V = Y2
 
-            for Le, Li in zip(Les, Lis):
-                Y -= Le.apply(V)
-                Y = Li.solve(Y)
+            # for Le, Li in zip(Les, Lis):
+                # Y -= Le.apply(V)
+                # Y = Li.solve(Y)
 
-            V = Y
+            # V = Y
 
-        utils.toc(':  \t')
-        self.grid.domain.append(V.copy())
-        return V
+        # utils.toc(':  \t')
+        # return V
 
 
-    def solve_craigsneyd2(self, n, dt, initial=None, theta=0.5, callback=None,
-            numpy=False):
+    # def solve_craigsneyd2(self, n, dt, initial=None, theta=0.5, callback=None,
+            # numpy=False):
 
-        n = int(n)
-        if initial is not None:
-            V = initial.copy()
-        else:
-            V = self.grid.domain[-1].copy()
-            self.grid.domain.append(V)
+        # cdef SizedArray[double] V = initial.copy()
+        # n = int(n)
 
-        Firsts = [(o * dt) for o in self.operators.values()]
+        # Firsts = [(o * dt) for o in self.operators.values()]
 
-        Les = [(o * theta * dt)
-               for d, o in sorted(self.operators.iteritems())
-               if type(d) != tuple]
-        Lis = [(o * (theta * -dt)).add(1, inplace=True)
-               for d, o in sorted(self.operators.iteritems())
-               if type(d) != tuple]
+        # Les = [(o * theta * dt)
+               # for d, o in sorted(self.operators.iteritems())
+               # if type(d) != tuple]
+        # Lis = [(o * (theta * -dt)).add(1, inplace=True)
+               # for d, o in sorted(self.operators.iteritems())
+               # if type(d) != tuple]
 
-        for L in itertools.chain(Les, Lis):
-            L.R = None
+        # for L in itertools.chain(Les, Lis):
+            # L.R = None
 
 
-        print_step = max(1, int(n / 10))
-        to_percent = 100.0 / n
-        utils.tic("Craig-Sneyd 2:\t")
-        for k in range(n):
-            if not k % print_step:
-                if np.isnan(V).any():
-                    print "Craig-Sneyd 2 fail @ t = %f (%i steps)" % (dt * k, k)
-                    return V
-                print int(k * to_percent),
-                sys.stdout.flush()
-            if callback is not None:
-                callback(V, ((n - k) * dt))
+        # print_step = max(1, int(n / 10))
+        # to_percent = 100.0 / n
+        # utils.tic("Craig-Sneyd 2:\t")
+        # for k in range(n):
+            # if not k % print_step:
+                # if np.isnan(V).any():
+                    # print "Craig-Sneyd 2 fail @ t = %f (%i steps)" % (dt * k, k)
+                    # return V
+                # print int(k * to_percent),
+                # sys.stdout.flush()
+            # if callback is not None:
+                # callback(V, ((n - k) * dt))
 
-            Y = V.copy()
-            for L in Firsts:
-                Y += L.apply(V)
-            Y0 = Y.copy()
+            # Y = V.copy()
+            # for L in Firsts:
+                # Y += L.apply(V)
+            # Y0 = Y.copy()
 
-            for Le, Li in zip(Les, Lis):
-                Y -= Le.apply(V)
-                Y = Li.solve(Y)
-            Y2 = Y.copy()
+            # for Le, Li in zip(Les, Lis):
+                # Y -= Le.apply(V)
+                # Y = Li.solve(Y)
+            # Y2 = Y.copy()
 
-            Y = Y0 + theta * dt * self.cross_term(Y2 - V, numpy=False)
-            for L in Firsts:
-                Y += (0.5 - theta) * L.apply(Y2-V)
+            # Y = Y0 + theta * dt * self.cross_term(Y2 - V, numpy=False)
+            # for L in Firsts:
+                # Y += (0.5 - theta) * L.apply(Y2-V)
 
-            for Le, Li in zip(Les, Lis):
-                Y -= Le.apply(V)
-                Y = Li.solve(Y)
-            V = Y
+            # for Le, Li in zip(Les, Lis):
+                # Y -= Le.apply(V)
+                # Y = Li.solve(Y)
+            # V = Y
 
-        utils.toc(':  \t')
-        self.grid.domain.append(V.copy())
-        return V
-
-
-    def solve_craigsneyd(self, n, dt, initial=None, theta=0.5, callback=None,
-            numpy=False):
-
-        n = int(n)
-        if initial is not None:
-            V = initial.copy()
-        else:
-            V = self.grid.domain[-1].copy()
-            self.grid.domain.append(V)
-
-        Firsts = [(o * dt) for o in self.operators.values()]
-
-        Les = [(o * theta * dt)
-               for d, o in sorted(self.operators.iteritems())
-               if type(d) != tuple]
-        Lis = [(o * (theta * -dt)).add(1, inplace=True)
-               for d, o in sorted(self.operators.iteritems())
-               if type(d) != tuple]
-
-        for L in itertools.chain(Les, Lis):
-            L.R = None
-
-        print_step = max(1, int(n / 10))
-        to_percent = 100.0 / n
-        utils.tic("Craig-Sneyd:\t")
-        for k in range(n):
-            if not k % print_step:
-                if np.isnan(V).any():
-                    print "Craig-Sneyd fail @ t = %f (%i steps)" % (dt * k, k)
-                    return V
-                print int(k * to_percent),
-                sys.stdout.flush()
-            if callback is not None:
-                callback(V, ((n - k) * dt))
-
-            Y = V.copy()
-            for L in Firsts:
-                Y += L.apply(V)
-            Y0 = Y.copy()
-
-            for Le, Li in zip(Les, Lis):
-                Y -= Le.apply(V)
-                Y = Li.solve(Y)
-
-            Y = Y0 + (0.5*dt) * self.cross_term(Y - V, numpy=False)
-            for Le, Li in zip(Les, Lis):
-                Y -= Le.apply(V)
-                Y = Li.solve(Y)
-            V = Y
-
-        utils.toc(':  \t')
-        self.grid.domain.append(V.copy())
-        return V
+        # utils.toc(':  \t')
+        # return V
 
 
-    def solve_douglas(self, n, dt, initial=None, theta=0.5, callback=None,
-            numpy=False):
+    # def solve_craigsneyd(self, n, dt, initial=None, theta=0.5, callback=None,
+            # numpy=False):
 
-        n = int(n)
-        if initial is not None:
-            V = initial.copy()
-        else:
-            V = self.grid.domain[-1].copy()
-            self.grid.domain.append(V)
+        # n = int(n)
+        # cdef SizedArray[double] V = initial.copy()
 
-        Firsts = [(o * dt) for d, o in self.operators.items()]
+        # Firsts = [(o * dt) for o in self.operators.values()]
 
-        Les = [(o * theta * dt)
-               for d, o in sorted(self.operators.iteritems())
-               if type(d) != tuple]
-        Lis = [(o * (theta * -dt)).add(1, inplace=True)
-               for d, o in sorted(self.operators.iteritems())
-               if type(d) != tuple]
+        # Les = [(o * theta * dt)
+               # for d, o in sorted(self.operators.iteritems())
+               # if type(d) != tuple]
+        # Lis = [(o * (theta * -dt)).add(1, inplace=True)
+               # for d, o in sorted(self.operators.iteritems())
+               # if type(d) != tuple]
 
-        for L in itertools.chain(Les, Lis):
-            L.R = None
+        # for L in itertools.chain(Les, Lis):
+            # L.R = None
 
-        print_step = max(1, int(n / 10))
-        to_percent = 100.0 / n
-        utils.tic("Douglas:\t")
-        for k in range(n):
-            if not k % print_step:
-                if np.isnan(V).any():
-                    print "Douglas fail @ t = %f (%i steps)" % (dt * k, k)
-                    return V
-                print int(k * to_percent),
-                sys.stdout.flush()
-            if callback is not None:
-                callback(V, ((n - k) * dt))
+        # print_step = max(1, int(n / 10))
+        # to_percent = 100.0 / n
+        # utils.tic("Craig-Sneyd:\t")
+        # for k in range(n):
+            # if not k % print_step:
+                # if np.isnan(V).any():
+                    # print "Craig-Sneyd fail @ t = %f (%i steps)" % (dt * k, k)
+                    # return V
+                # print int(k * to_percent),
+                # sys.stdout.flush()
+            # if callback is not None:
+                # callback(V, ((n - k) * dt))
 
-            Y = V.copy()
-            for L in Firsts:
-                Y += L.apply(V)
+            # Y = V.copy()
+            # for L in Firsts:
+                # Y += L.apply(V)
+            # Y0 = Y.copy()
 
-            for Le, Li in zip(Les, Lis):
-                Y -= Le.apply(V)
-                Y = Li.solve(Y)
-            V = Y
+            # for Le, Li in zip(Les, Lis):
+                # Y -= Le.apply(V)
+                # Y = Li.solve(Y)
 
-        utils.toc(':  \t')
-        self.grid.domain.append(V.copy())
-        return V
+            # Y = Y0 + (0.5*dt) * self.cross_term(Y - V, numpy=False)
+            # for Le, Li in zip(Les, Lis):
+                # Y -= Le.apply(V)
+                # Y = Li.solve(Y)
+            # V = Y
 
-
-    def solve_smooth(self, n, dt, initial=None, callback=None, smoothing_steps=2,
-            scheme=None):
-        if scheme is None:
-            scheme = self.solve_hundsdorferverwer
-        V = self.solve_implicit(smoothing_steps*2, dt*0.5, initial=initial)
-        # V = self.solve_douglas(smoothing_steps*2, dt*0.5, theta=1, initial=initial)
-        return scheme(n-smoothing_steps, dt, initial=V, theta=0.60)
+        # utils.toc(':  \t')
+        # return V
 
 
-if __name__ == '__main__':
-    print "This is just a library."
+    # def solve_douglas(self, n, dt, initial=None, theta=0.5, callback=None,
+            # numpy=False):
+
+        # n = int(n)
+        # cdef SizedArray[double] V = initial.copy()
+
+        # Firsts = [(o * dt) for d, o in self.operators.items()]
+
+        # Les = [(o * theta * dt)
+               # for d, o in sorted(self.operators.iteritems())
+               # if type(d) != tuple]
+        # Lis = [(o * (theta * -dt)).add(1, inplace=True)
+               # for d, o in sorted(self.operators.iteritems())
+               # if type(d) != tuple]
+
+        # for L in itertools.chain(Les, Lis):
+            # L.R = None
+
+        # print_step = max(1, int(n / 10))
+        # to_percent = 100.0 / n
+        # utils.tic("Douglas:\t")
+        # for k in range(n):
+            # if not k % print_step:
+                # if np.isnan(V).any():
+                    # print "Douglas fail @ t = %f (%i steps)" % (dt * k, k)
+                    # return V
+                # print int(k * to_percent),
+                # sys.stdout.flush()
+            # if callback is not None:
+                # callback(V, ((n - k) * dt))
+
+            # Y = V.copy()
+            # for L in Firsts:
+                # Y += L.apply(V)
+
+            # for Le, Li in zip(Les, Lis):
+                # Y -= Le.apply(V)
+                # Y = Li.solve(Y)
+            # V = Y
+
+        # utils.toc(':  \t')
+        # return V
+
+
+    # def solve_smooth(self, n, dt, initial=None, callback=None, smoothing_steps=2,
+            # scheme=None):
+        # if scheme is None:
+            # scheme = self.solve_hundsdorferverwer
+        # V = self.solve_implicit(smoothing_steps*2, dt*0.5, initial=initial)
+        # # V = self.solve_douglas(smoothing_steps*2, dt*0.5, theta=1, initial=initial)
+        # return scheme(n-smoothing_steps, dt, initial=V, theta=0.60)
+
+
+cdef inline SizedArray[double]* to_SizedArray(np.ndarray v, name):
+    assert v.dtype.type == np.float64, ("Types don't match! Got (%s) expected (%s)."
+                                      % (v.dtype.type, np.float64))
+    cdef double *ptr
+    if not v.flags.c_contiguous:
+        v = v.copy("C")
+    return new SizedArray[double](<double *>np.PyArray_DATA(v), v.ndim, v.shape, name)
