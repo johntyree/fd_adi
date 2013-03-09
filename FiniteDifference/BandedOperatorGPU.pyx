@@ -19,7 +19,7 @@ import FiniteDifference.utils as utils
 
 from FiniteDifference.BandedOperator import BandedOperator as BO
 from FiniteDifference.BandedOperator cimport BandedOperator as BO
-from FiniteDifference.VecArray cimport SizedArray, GPUVec
+from FiniteDifference.VecArray cimport GPUVec
 
 FOLDED = "FOLDED"
 CAN_FOLD = "CAN_FOLD"
@@ -428,45 +428,6 @@ cdef class BandedOperator(object):
         del v
 
         return
-
-
-cdef class SizedArrayPtr(object):
-
-    def __init__(self, a=None, tag="Unknown"):
-        if a is not None:
-            self.from_numpy(a, tag)
-            # print "imported from numpy in constructor"
-
-    cdef store(self, SizedArray[double] *p, cpp_string tag="Unknown"):
-        if self.p:
-            raise RuntimeError("SizedArrayPtr is single assignment")
-        self.p = new SizedArray[double](deref(p))
-        # print "SAPtr -> Storing %s:" % tag, to_string(p)
-
-    cpdef from_numpy(self, np.ndarray a, cpp_string tag="Unknown"):
-        if self.p:
-            print "SizedArrayPtr is single assignment"
-            raise RuntimeError("SizedArrayPtr is single assignment")
-        self.p = to_SizedArray(a, tag)
-        # print "Numpy -> Storing %s: %s" % (tag, to_string(self.p))
-
-    cpdef to_numpy(self):
-        # print "Converting", to_string(deref(self.p))
-        # print "ndim", self.p.ndim, self.p.shape[0], self.p.shape[1]
-        if self.p.ndim == 2:
-            a = from_SizedArray_2(deref(self.p))
-        else:
-            a = from_SizedArray(deref(self.p))
-        assert a.ndim == self.p.ndim
-        return a
-
-    def __dealloc__(self):
-        if self.p:
-            print "Freeing %s:" % (self.tag,), to_string(self.p)
-            del self.p
-
-    def __str__(self):
-        return "SizedArrayPtr (%s)@%s" % (self.tag, to_string(self.p))
 
 
 cdef inline int sign(int i):
