@@ -25,9 +25,9 @@
 #define ENDL std::cout << std::endl
 #define FULLTRACE noop();
 
-inline void noop() {};
+static inline void noop() {};
 
-inline void debug_printer(std::ostream &os, const char *type, const char *fn, const char *func, int line, std::string msg) {
+static inline void debug_printer(std::ostream &os, const char *type, const char *fn, const char *func, int line, std::string msg) {
     os
         << type << ": "
         << fn << "(" << line << "): "
