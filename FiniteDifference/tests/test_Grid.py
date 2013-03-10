@@ -55,23 +55,12 @@ class Grid_test(unittest.TestCase):
         npt.assert_array_equal(G.domain[-1], U)
 
 
-    def test_copy():
+    def test_copy(self):
         g = self.Grid
         h = g.copy()
-        g.domain[1,:] = 4
-        print g.mesh
-        print h.mesh
-        print
-        print g.domain
-        print h.domain
-        print g.shape, h.shape
-        assert(g.domain != h.domain)
-        g.reset()
-        assert(g.domain != h.domain)
-        g.reset()
-        print g.mesh
-        print g.domain
-        print g.shape
+        npt.assert_(np.array_equiv(g.domain[-1] - h.domain[-1], 0))
+        g.domain[-1] += 1
+        npt.assert_(not np.array_equiv(g.domain[-1] - h.domain[-1], 0))
         return 0
 
 
