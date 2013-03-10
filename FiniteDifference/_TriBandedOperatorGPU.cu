@@ -11,6 +11,7 @@
 #include <thrust/functional.h>
 #include <thrust/iterator/constant_iterator.h>
 #include <thrust/iterator/counting_iterator.h>
+#include <thrust/iterator/discard_iterator.h>
 #include <thrust/iterator/zip_iterator.h>
 #include "tiled_range.h"
 #include "strided_range.h"
@@ -128,9 +129,14 @@ void _TriBandedOperator::verify_diag_ptrs() {
 }
 
 
-struct DMVPY : thrust::unary_function<const Septuple &, void> {
+struct DMVPY_f : thrust::unary_function<const Septuple &, REAL_t> {
+
+    int op;
+
+    DMVPY_f(char o) : op(o == 'p' ? 1 : -1) {}
+
     __host__ __device__
-    REAL_t operator()(const Septuple &t, void) {
+    REAL_t operator()(const Septuple &t) {
         using thrust::get;
         const REAL_t &a = get<0>(t);
         const REAL_t &b = get<1>(t);
@@ -139,8 +145,7 @@ struct DMVPY : thrust::unary_function<const Septuple &, void> {
         const REAL_t &x1 = get<4>(t);
         const REAL_t &x2 = get<5>(t);
         const REAL_t &y = get<6>(t);
-        get<7>(t) = y + a*x0 + b*x1 + c*x2;
-        return;
+        return y + op*(a*x0 + b*x1 + c*x2);
     }
 };
 void _TriBandedOperator::DMVPY(SizedArray<double> &V, char operation, SizedArray<double> &Y,
@@ -164,33 +169,32 @@ void _TriBandedOperator::DMVPY(SizedArray<double> &V, char operation, SizedArray
         V.transpose(1);
     }
 
-    VecIter7 start(
-            sub+1, mid+1, sup+1,
-            V.data.begin(), V.data.begin()+1, V.data.begin()+2,
-            Y.begin()+1);
 
-    VecIter7 finish(
-            sub+N-1, mid+N-1, sup+N-1,
-            V.data.begin()+N, V.data.begin()+N+1, V.data.begin()+N+2,
-            Y.begin()+N+1);
 
-    switch op {
+    switch (operation) {
         case 'm':
-            out.data[0] = Y.data[0]
-                - (mid[0]*V.data[0] + sup[0]*V.data[1]);
-            transform(start, finish, out.data.begin()+1, op);
-            out.data[N-1] = Y.data[N-1]
-                - (sub[N-1]*V.data[N-2] + mid[N-1]*V.data[N-1]);
-            break;
         case 'p':
             out.data[0] = Y.data[0]
-                + (mid[0]*V.data[0] + sup[0]*V.data[1]);
-            transform(start, finish, out.data.begin()+1, op);
+                - (mid[0]*V.data[0] + sup[0]*V.data[1]);
+
+            thrust::transform(
+                thrust::make_zip_iterator(thrust::make_tuple(
+                    sub+1, mid+1, sup+1,
+                    V.data.begin(), V.data.begin()+1, V.data.begin()+2,
+                    Y.data.begin()+1)),
+                thrust::make_zip_iterator(thrust::make_tuple(
+                    sub+N-1, mid+N-1, sup+N-1,
+                    V.data.begin()+N-2, V.data.begin()+N-1, V.data.begin()+N,
+                    Y.data.begin()+N-1)),
+                out.data.begin()+1,
+                DMVPY_f(operation));
+
             out.data[N-1] = Y.data[N-1]
-                + (sub[N-1]*V.data[N-2] + mid[N-1]*V.data[N-1]);
+                - (sub[N-1]*V.data[N-2] + mid[N-1]*V.data[N-1]);
+
             break;
         default:
-            DIE("Unknown operation in DMVPY '"<<op<<"'");
+            DIE("Unknown operation in DMVPY '"<<operation<<"'");
     }
     return;
 }

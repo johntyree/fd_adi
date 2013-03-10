@@ -13,9 +13,9 @@
 
 
 typedef GPUVec<REAL_t>::iterator VI;
-typedef thrust::tuple<VI, VI, VI, VI, VI, VI, VI> VecIter7;
 typedef thrust::tuple<REAL_t,REAL_t,REAL_t> Triple;
-typedef thrust::tuple<REAL_t, REAL_t, REAL_t, REAL_t, REAL_t, REAL_t, REAL_t> Septuple;
+typedef thrust::tuple<REAL_t, REAL_t, REAL_t, REAL_t,
+        REAL_t, REAL_t, REAL_t> Septuple;
 
 static const std::string FOLDED = "FOLDED";
 static const std::string CAN_FOLD = "CAN_FOLD";
@@ -42,6 +42,8 @@ class _TriBandedOperator {
         void undiagonalize();
         void fold_bottom(bool=false);
         void fold_top(bool=false);
+        void DMVPY(SizedArray<double> &V, char operation,
+                SizedArray<double> &Y, SizedArray<double> &out);
 
         // This is public to get to and from python
         bool has_residual;
