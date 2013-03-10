@@ -133,16 +133,16 @@ cdef class BandedOperator(object):
         csr = other.D.tocsr()
         coo = csr.tocoo()
         cdef:
-            SizedArray[double] *data = to_SizedArray(csr.data, "data")
-            SizedArray[int] *row_ptr = to_SizedArray_i(csr.indptr, "row_ptr")
-            SizedArray[int] *row_ind = to_SizedArray_i(coo.row, "row_ind")
-            SizedArray[int] *col_ind = to_SizedArray_i(csr.indices, "col_ind")
+            SizedArrayPtr data = SizedArrayPtr(csr.data, "data")
+            SizedArrayPtr_i row_ptr = SizedArrayPtr_i(csr.indptr, "row_ptr")
+            SizedArrayPtr_i row_ind = SizedArrayPtr_i(coo.row, "row_ind")
+            SizedArrayPtr_i col_ind = SizedArrayPtr_i(csr.indices, "col_ind")
 
         self.thisptr_csr = new _CSRBandedOperator(
-                  data.data
-                , row_ptr.data
-                , row_ind.data
-                , col_ind.data
+                  deref(data.p)
+                , deref(row_ptr.p)
+                , deref(row_ind.p)
+                , deref(col_ind.p)
                 , other.D.shape[0]
                 , other.blocks
                 , tag
@@ -155,11 +155,11 @@ cdef class BandedOperator(object):
             print "Immigrate CSR:", tag, to_string(self.thisptr_csr)
         assert (self.thisptr_csr)
 
-        data = from_GPUVec(self.thisptr_csr.data)
-        indices = from_GPUVec_i(self.thisptr_csr.col_ind)
-        indptr = from_GPUVec_i(self.thisptr_csr.row_ptr)
+        data = from_SizedArray(self.thisptr_csr.data)
+        indices = from_SizedArray_i(self.thisptr_csr.col_ind)
+        indptr = from_SizedArray_i(self.thisptr_csr.row_ptr)
 
-        shp = (self.thisptr_csr.operator_rows,self.thisptr_csr.operator_rows)
+        shp = (self.thisptr_csr.operator_rows, self.thisptr_csr.operator_rows)
         mat = scipy.sparse.csr_matrix((data, indices, indptr), shape=shp).todia()
         mat = utils.todia(mat)
 
@@ -192,20 +192,20 @@ cdef class BandedOperator(object):
         tops = np.atleast_1d(other.top_factors if other.top_factors is not None else [0.0]*other.blocks)
         bots = np.atleast_1d(other.bottom_factors if other.bottom_factors is not None else [0.0]*other.blocks)
         cdef:
-            SizedArray[double] *diags = to_SizedArray(other.D.data, "data")
-            SizedArray[double] *R = to_SizedArray(other.R, "R")
-            SizedArray[double] *low_dirichlet = to_SizedArray(np.atleast_1d(other.dirichlet[0] or [0.0]), "low_dirichlet")
-            SizedArray[double] *high_dirichlet = to_SizedArray(np.atleast_1d(other.dirichlet[1] or [0.0]), "high_dirichlet")
-            SizedArray[double] *top_factors = to_SizedArray(tops, "top_factors")
-            SizedArray[double] *bottom_factors = to_SizedArray(bots, "bottom_factors")
+            SizedArrayPtr diags = SizedArrayPtr(other.D.data, "data")
+            SizedArrayPtr R = SizedArrayPtr(other.R, "R")
+            SizedArrayPtr low_dirichlet = SizedArrayPtr(np.atleast_1d(other.dirichlet[0] or [0.0]), "low_dirichlet")
+            SizedArrayPtr high_dirichlet = SizedArrayPtr(np.atleast_1d(other.dirichlet[1] or [0.0]), "high_dirichlet")
+            SizedArrayPtr top_factors = SizedArrayPtr(tops, "top_factors")
+            SizedArrayPtr bottom_factors = SizedArrayPtr(bots, "bottom_factors")
 
         self.thisptr_tri = new _TriBandedOperator(
-                  deref(diags)
-                , deref(R)
-                , deref(high_dirichlet)
-                , deref(low_dirichlet)
-                , deref(top_factors)
-                , deref(bottom_factors)
+                  deref(diags.p)
+                , deref(R.p)
+                , deref(high_dirichlet.p)
+                , deref(low_dirichlet.p)
+                , deref(top_factors.p)
+                , deref(bottom_factors.p)
                 , other.axis
                 , other.shape[0]
                 , other.blocks
@@ -245,7 +245,7 @@ cdef class BandedOperator(object):
 
         data = np.zeros((bottom+1, self.operator_rows), dtype=float)
         offsets = -np.arange(bottom+1) + center
-        data[center-1:center+2, :] = from_SizedArray_2(self.thisptr_tri.diags)
+        data[center-1:center+2, :] = from_SizedArray(self.thisptr_tri.diags)
 
         if self.top_fold_status == CAN_FOLD:
             data[0,::block_len] = tops
@@ -296,31 +296,33 @@ cdef class BandedOperator(object):
     cpdef apply_(self, SizedArrayPtr sa_V, overwrite=False):
         cdef SizedArrayPtr sa_U = SizedArrayPtr()
         sa_U.tag = "sa_U apply"
-
         if self.thisptr_tri:
             sa_U.store(self.thisptr_tri.apply(deref(sa_V.p)))
         else:
             sa_U.store(self.thisptr_csr.apply(deref(sa_V.p)))
-
         return sa_U
 
 
     cpdef apply(self, np.ndarray V, overwrite=False):
         cdef SizedArrayPtr sa_V = SizedArrayPtr(V, "sa_V apply")
-
-        sa_U = self.apply_(sa_V)
+        cdef SizedArrayPtr sa_U = self.apply_(sa_V, overwrite)
         V = sa_U.to_numpy()
-
+        del sa_V, sa_U
         return V
 
 
-    cpdef solve(self, np.ndarray V, overwrite=False):
+    cpdef solve_(self, SizedArrayPtr sa_V, overwrite=False):
         assert not self.is_mixed_derivative
-        cdef SizedArrayPtr sa_V = SizedArrayPtr(V, "sa_V solve")
         cdef SizedArrayPtr sa_U = SizedArrayPtr()
         sa_U.tag = "sa_U solve"
         sa_U.store(self.thisptr_tri.solve(deref(sa_V.p)))
+        return sa_U
+
+    cpdef solve(self, np.ndarray V, overwrite=False):
+        cdef SizedArrayPtr sa_V = SizedArrayPtr(V, "sa_V solve")
+        cdef SizedArrayPtr sa_U = self.solve_(sa_V, overwrite)
         V = sa_U.to_numpy()
+        del sa_V, sa_U
         return V
 
 
@@ -416,8 +418,7 @@ cdef class BandedOperator(object):
         self.thisptr_tri.add_scalar(other)
         return
 
-
-    cpdef vectorized_scale(self, np.ndarray vector):
+    cpdef vectorized_scale_(self, SizedArrayPtr vector):
         """
         @vector@ is the correpsonding mesh vector of the current dimension.
 
@@ -425,13 +426,16 @@ cdef class BandedOperator(object):
 
         See FiniteDifferenceEngine.coefficients.
         """
-        cdef SizedArray[double] *v = to_SizedArray(vector, "Vectorized scale v")
         if self.thisptr_tri:
-            self.thisptr_tri.vectorized_scale(deref(v))
+            self.thisptr_tri.vectorized_scale(deref(vector.p))
         elif self.thisptr_csr:
-            self.thisptr_csr.vectorized_scale(deref(v))
-        del v
+            self.thisptr_csr.vectorized_scale(deref(vector.p))
 
+
+    cpdef vectorized_scale(self, np.ndarray vector):
+        cdef SizedArrayPtr v = SizedArrayPtr(vector, "Vectorized scale v")
+        self.vectorized_scale_(v)
+        del v
         return
 
 
@@ -461,84 +465,24 @@ cdef inline unsigned int get_int_index(int[:] haystack, int needle):
 
 
 def test_SizedArray_transpose(np.ndarray[ndim=2, dtype=double] v):
-    cdef SizedArray[double]* s = to_SizedArray(v, "transpose s")
+    cdef SizedArrayPtr s = SizedArrayPtr(v, "transpose s")
     v[:] = 0
-    s.transpose(1)
-    v = from_SizedArray_2(deref(s))
+    s.p.transpose(1)
+    v = s.to_numpy()
+    del s
     return v
 
 
 def test_SizedArray1_roundtrip(np.ndarray[ndim=1, dtype=double] v):
-    cdef SizedArray[double]* s = to_SizedArray(v, "Round Trip")
+    cdef SizedArrayPtr s = SizedArrayPtr(v, "Round Trip")
     v[:] = 0
-    return from_SizedArray(deref(s))
+    return s.to_numpy()
 
 
 def test_SizedArray2_roundtrip(np.ndarray[ndim=2, dtype=double] v):
-    cdef SizedArray[double]* s = to_SizedArray(v, "Round trip 2")
+    cdef SizedArrayPtr s = SizedArrayPtr(v, "Round Trip")
     v[:,:] = 0
-    return from_SizedArray_2(deref(s))
-
-
-cdef inline SizedArray[double]* to_SizedArray(np.ndarray v, name):
-    assert v.dtype.type == np.float64, ("Types don't match! Got (%s) expected (%s)."
-                                      % (v.dtype.type, np.float64))
-    cdef double *ptr
-    if not v.flags.c_contiguous:
-        v = v.copy("C")
-    return new SizedArray[double](<double *>np.PyArray_DATA(v), v.ndim, v.shape, name)
-
-
-cdef inline SizedArray[int]* to_SizedArray_i(np.ndarray v, cpp_string name):
-    assert v.dtype.type == np.int32, ("Types don't match! Got (%s) expected (%s)."
-                                      % (v.dtype.type, np.int32))
-    if not v.flags.c_contiguous:
-        v = v.copy("C")
-    return new SizedArray[int](<int *>np.PyArray_DATA(v), v.ndim, v.shape, name)
-
-
-cdef inline from_SizedArray_i(SizedArray[int] &v):
-    cdef int sz = v.size
-    cdef np.ndarray[int, ndim=1] s = np.empty(sz, dtype=int)
-    cdef int i
-    for i in range(sz):
-        s[i] = v.get(i)
-    return s
-
-
-cdef inline from_SizedArray(SizedArray[double] &v):
-    sz = v.size
-    cdef np.ndarray[double, ndim=1] s = np.empty(sz, dtype=float)
-    cdef int i
-    for i in range(sz):
-        s[i] = v.get(i)
-    return s
-
-
-cdef inline from_SizedArray_2(SizedArray[double] &v):
-    assert v.ndim == 2, ("Using from_SizedArray_2 on an array of dim %s" % v.ndim)
-    cdef np.ndarray[double, ndim=2] s = np.empty((v.shape[0], v.shape[1]), dtype=float)
-    cdef int i, j
-    for i in range(v.shape[0]):
-        for j in range(v.shape[1]):
-            s[i, j] = v.get(i, j)
-    return s
-
-
-cdef inline from_GPUVec(GPUVec[double] &v):
-    cdef int sz = v.size(), i
-    cdef np.ndarray[double, ndim=1] s = np.empty(sz, dtype=np.float64)
-    for i in range(sz):
-        s[i] = v[i]
-    return s
-
-
-cdef inline from_GPUVec_i(GPUVec[int] &v):
-    cdef int sz = v.size(), i
-    cdef np.ndarray[int, ndim=1] s = np.empty(sz, dtype=np.int32)
-    for i in range(sz):
-        s[i] = v[i]
-    return s
+    return s.to_numpy()
 
 
 cdef cublas_to_scipy(B):

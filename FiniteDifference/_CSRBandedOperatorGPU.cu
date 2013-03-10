@@ -37,10 +37,10 @@ std::ostream & operator<<(std::ostream & os, _CSRBandedOperator const &B) {
 }
 
 _CSRBandedOperator::_CSRBandedOperator(
-        GPUVec<double> &data,
-        GPUVec<int> &row_ptr,
-        GPUVec<int> &row_ind,
-        GPUVec<int> &col_ind,
+        SizedArray<double> &data,
+        SizedArray<int> &row_ptr,
+        SizedArray<int> &row_ind,
+        SizedArray<int> &col_ind,
         Py_ssize_t operator_rows,
         Py_ssize_t blocks,
         std::string name
@@ -53,7 +53,7 @@ _CSRBandedOperator::_CSRBandedOperator(
     operator_rows(operator_rows),
     blocks(blocks),
     block_len(operator_rows / blocks),
-    nnz(data.size())
+    nnz(data.data.size())
     {
         status = cusparseCreate(&handle);
         if (status != CUSPARSE_STATUS_SUCCESS) {
@@ -86,9 +86,9 @@ SizedArray<double> *_CSRBandedOperator::apply(SizedArray<double> &V) {
             nnz,
             &one,
             mat_description,
-            data.raw(),
-            row_ptr.raw(),
-            col_ind.raw(),
+            data.data.raw(),
+            row_ptr.data.raw(),
+            col_ind.data.raw(),
             V.data.raw(),
             &zero,
             U->data.raw()
@@ -135,16 +135,16 @@ void _CSRBandedOperator::vectorized_scale(SizedArray<double> &vector) {
 
     repeated_range<Iterator> v(vector.data.begin(), vector.data.end(), operator_rows / vsize);
     /* This can be optimized by noting that we only use the row_ind and can make do with project_1st(). */
-    thrust::transform(data.begin(), data.end(),
+    thrust::transform(data.data.begin(), data.data.end(),
         thrust::make_permutation_iterator(v.begin(),
             thrust::make_transform_iterator(
                 thrust::make_zip_iterator(
-                    thrust::make_tuple(row_ind.begin(), col_ind.begin())
+                    thrust::make_tuple(row_ind.data.begin(), col_ind.data.begin())
                     ),
                 compute_index<IntTuple>(block_len, block_len)
                 )
             ),
-            data.begin(),
+            data.data.begin(),
             thrust::multiplies<double>());
     FULLTRACE;
     return;

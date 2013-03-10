@@ -1,7 +1,7 @@
 
 from libcpp cimport bool as cbool
 from libcpp.string cimport string as cpp_string
-from VecArray cimport SizedArray, GPUVec, to_string
+from VecArray cimport SizedArray, to_string
 
 cdef extern from "_TriBandedOperatorGPU.cuh":
 

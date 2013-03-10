@@ -10,7 +10,8 @@ from libcpp.string cimport string as cpp_string
 from _CSRBandedOperatorGPU cimport _CSRBandedOperator
 from _TriBandedOperatorGPU cimport _TriBandedOperator, to_string
 from FiniteDifference.VecArray cimport SizedArray
-from FiniteDifference.SizedArrayPtr cimport SizedArrayPtr
+from FiniteDifference.SizedArrayPtr cimport SizedArrayPtr, SizedArrayPtr_i
+from FiniteDifference.SizedArrayPtr cimport from_SizedArray, from_SizedArray_i
 
 cdef extern from "backtrace.h":
     pass
@@ -54,8 +55,10 @@ cdef class BandedOperator(object):
     cpdef immigrate(self, tag=*)
     cpdef mul(self, val, inplace=*)
     cpdef solve(self, np.ndarray V, overwrite=*)
+    cpdef solve_(self, SizedArrayPtr V, overwrite=*)
     cpdef undiagonalize(self)
-    cpdef vectorized_scale(self, np.ndarray arr)
+    cpdef vectorized_scale(self, np.ndarray vector)
+    cpdef vectorized_scale_(self, SizedArrayPtr vector)
 
 cdef inline int sign(int i)
 
