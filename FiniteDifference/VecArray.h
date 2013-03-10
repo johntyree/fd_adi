@@ -31,20 +31,20 @@ struct GPUVec : thrust::device_vector<T> {
 
     GPUVec<T> &operator+=(T x) {
         thrust::transform(
-                begin(),
-                end()
+                this->begin(),
+                this->end(),
                 make_constant_iterator(x),
-                begin(),
+                this->begin(),
                 thrust::plus<T>());
         return *this;
     }
 
     GPUVec<T> &operator*=(T x) {
         thrust::transform(
-                begin(),
-                end()
+                this->begin(),
+                this->end(),
                 make_constant_iterator(x),
-                begin(),
+                this->begin(),
                 thrust::multiplies<T>());
         return *this;
     }
