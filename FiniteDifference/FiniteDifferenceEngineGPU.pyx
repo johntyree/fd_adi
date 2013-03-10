@@ -23,6 +23,7 @@ cimport FiniteDifference.BandedOperator as BO
 BandedOperator = BO.BandedOperator
 
 from FiniteDifference.VecArray cimport SizedArray, GPUVec
+from FiniteDifference.SizedArrayPtr cimport SizedArrayPtr
 
 
 cdef class FiniteDifferenceEngine(object):
@@ -34,7 +35,7 @@ cdef class FiniteDifferenceEngine(object):
         default_scheme
         default_order
 
-    cdef SizedArray[double] grid
+    cdef SizedArrayPtr grid
 
     # Setup
     cdef public operators
@@ -121,9 +122,9 @@ cdef class FiniteDifferenceEngine(object):
 
         Can't do this with C/Cuda of course... maybe cython?
         """
-        self.grid = to_SizedArray(other.grid.domain[-1], "FDEGPU.grid")
+        self.grid = SizedArrayPtr(other.grid.domain[-1], "FDEGPU.grid")
         self.shape = other.grid.shape
-        self.ndim = self.grid.ndim
+        self.ndim = self.grid.p.ndim
         self.coefficients = other.coefficients
         self.t = 0
         self.default_scheme = 'center'
@@ -183,33 +184,30 @@ cdef class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
         return ret
 
 
-    def solve_implicit(self, n, dt, SizedArray[double] initial):
-        n = int(n)
-        cdef SizedArray[double] *V = new SizedArray[double](initial)
+    # def solve_implicit(self, n, dt, SizedArray[double] initial):
+        # n = int(n)
+        # cdef SizedArray[double] *V = new SizedArray[double](initial)
 
-        Lis = [(o * -dt).add(1, inplace=True)
-               for d, o in sorted(self.operators.iteritems())
-               if type(d) != tuple]
+        # Lis = [(o * -dt).add(1, inplace=True)
+               # for d, o in sorted(self.operators.iteritems())
+               # if type(d) != tuple]
 
-        Lis = np.roll(Lis, -1)
+        # Lis = np.roll(Lis, -1)
 
-        print_step = max(1, int(n / 10))
-        to_percent = 100.0 / n
-        utils.tic("solve_implicit:\t")
-        for k in range(n):
-            if not k % print_step:
-                # if np.isnan(V).any():
-                    # print "Impl fail @ t = %f (%i steps)" % (dt * k, k)
-                    # return V
-                print int(k * to_percent),
-                sys.stdout.flush()
-            V = *V + self.operators[(0,1)].apply(V) * dt
-            for L in Lis:
-                V = L.solve(V)
-        utils.toc(':  \t')
-        ret = from_SizedArray_2(*V)
-        del V
-        return ret
+        # print_step = max(1, int(n / 10))
+        # to_percent = 100.0 / n
+        # utils.tic("solve_implicit:\t")
+        # for k in range(n):
+            # if not k % print_step:
+                # print int(k * to_percent),
+                # sys.stdout.flush()
+            # V = *V + self.operators[(0,1)].apply(V) * dt
+            # for L in Lis:
+                # V = L.solve(V)
+        # utils.toc(':  \t')
+        # ret = from_SizedArray_2(*V)
+        # del V
+        # return ret
 
 
     # def solve_hundsdorferverwer(self, n, dt, initial=None, theta=0.5, callback=None,
