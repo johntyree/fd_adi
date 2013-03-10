@@ -293,9 +293,7 @@ cdef class BandedOperator(object):
                 or self.bottom_fold_status == FOLDED)
 
 
-    cpdef apply(self, np.ndarray V, overwrite=False):
-
-        cdef SizedArrayPtr sa_V = SizedArrayPtr(V, "sa_V apply")
+    cpdef apply_(self, SizedArrayPtr sa_V, overwrite=False):
         cdef SizedArrayPtr sa_U = SizedArrayPtr()
         sa_U.tag = "sa_U apply"
 
@@ -304,6 +302,13 @@ cdef class BandedOperator(object):
         else:
             sa_U.store(self.thisptr_csr.apply(deref(sa_V.p)))
 
+        return sa_U
+
+
+    cpdef apply(self, np.ndarray V, overwrite=False):
+        cdef SizedArrayPtr sa_V = SizedArrayPtr(V, "sa_V apply")
+
+        sa_U = self.apply_(sa_V)
         V = sa_U.to_numpy()
 
         return V

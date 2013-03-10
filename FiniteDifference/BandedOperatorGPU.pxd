@@ -44,6 +44,7 @@ cdef class BandedOperator(object):
     cpdef add_operator(BandedOperator self, BandedOperator other)
     cpdef add_scalar(self, float other)
     cpdef apply(self, np.ndarray V, overwrite=*)
+    cpdef apply_(self, SizedArrayPtr V, overwrite=*)
     cpdef cbool is_folded(self)
     cpdef copy(self)
     cpdef diagonalize(self)
