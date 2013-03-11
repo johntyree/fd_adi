@@ -1,4 +1,3 @@
-
 #include "GNUC_47_compat.h"
 
 #include <thrust/device_ptr.h>
@@ -168,9 +167,6 @@ void _TriBandedOperator::DMVPY(SizedArray<double> &V, char operation, SizedArray
     if (axis == 0) {
         V.transpose(1);
     }
-
-
-
     switch (operation) {
         case 'm':
         case 'p':
@@ -213,7 +209,8 @@ struct zipdot3 : thrust::binary_function<const Triple &, const Triple &, REAL_t>
         return a*x0 + b*x1 + c*x2;
     }
 };
-SizedArray<double> *_TriBandedOperator::apply(SizedArray<double> &V) {
+
+SizedArray<double> &_TriBandedOperator::apply(SizedArray<double> &V) {
     FULLTRACE;
     verify_diag_ptrs();
     const unsigned N = V.size;
@@ -255,15 +252,17 @@ SizedArray<double> *_TriBandedOperator::apply(SizedArray<double> &V) {
     if (has_residual) {
         thrust::transform(U->data.begin(), U->data.end(),
                 R.data.begin(),
-                U->data.begin(),
+                V.data.begin(),
                 thrust::plus<double>());
+    } else {
+        thrust::copy(U->data.begin(), U->data.end(), V.data.begin());
     }
 
     if (axis == 0) {
-        U->transpose(1);
+        V.transpose(1);
     }
     FULLTRACE;
-    return U;
+    return V;
 }
 
 
@@ -387,8 +386,8 @@ bool _TriBandedOperator::is_folded() {
 
 
 
-SizedArray<double> *
-_TriBandedOperator::solve(SizedArray<double> &V, bool inplace) {
+SizedArray<double> &
+_TriBandedOperator::solve(SizedArray<double> &V) {
     FULLTRACE;
     verify_diag_ptrs();
     const unsigned N = V.size;
@@ -424,22 +423,21 @@ _TriBandedOperator::solve(SizedArray<double> &V, bool inplace) {
         fold_vector(V.data);
     }
 
-    thrust::copy(V.data.begin(), V.data.end(), U->data.begin());
+    /* thrust::copy(V.data.begin(), V.data.end(), U->data.begin()); */
     status = cusparseDgtsvStridedBatch(handle, N,
             sub.get(), mid.get(), sup.get(),
-            U->data.raw(),
+            V.data.raw(),
             1, N);
     cudaDeviceSynchronize();
     if (status != CUSPARSE_STATUS_SUCCESS) {
-        delete U;
         DIE("CUSPARSE tridiag system solve failed.");
     }
 
     if (axis == 0) {
-        U->transpose(1);
+        V.transpose(1);
     }
     FULLTRACE;
-    return U;
+    return V;
 }
 
 template <typename Tuple, typename OP>

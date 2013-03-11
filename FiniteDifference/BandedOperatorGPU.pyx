@@ -293,19 +293,34 @@ cdef class BandedOperator(object):
                 or self.bottom_fold_status == FOLDED)
 
 
+    # cpdef apply_mul(self, SizedArrayPtr sa_V, double x):
+        # self.apply_(sa_V, overwrite=True)
+
+
     cpdef apply_(self, SizedArrayPtr sa_V, overwrite=False):
-        cdef SizedArrayPtr sa_U = SizedArrayPtr()
-        sa_U.tag = "sa_U apply"
-        if self.thisptr_tri:
-            sa_U.store(self.thisptr_tri.apply(deref(sa_V.p)))
+        cdef SizedArrayPtr sa_U
+
+        if overwrite:
+            sa_U = sa_V
         else:
-            sa_U.store(self.thisptr_csr.apply(deref(sa_V.p)))
+            sa_U = sa_V.copy()
+
+        # if self.thisptr_tri:
+            # self.thisptr_tri.apply(deref(sa_U.p))
+        # else:
+            # self.thisptr_csr.apply(deref(sa_U.p))
         return sa_U
 
 
     cpdef apply(self, np.ndarray V, overwrite=False):
         cdef SizedArrayPtr sa_V = SizedArrayPtr(V, "sa_V apply")
-        cdef SizedArrayPtr sa_U = self.apply_(sa_V, overwrite)
+        cdef SizedArrayPtr sa_U
+        sa_U = self.apply_(sa_V, overwrite)
+        # if not overwrite:
+            # sa_U = SizedArrayPtr()
+            # sa_U.store(x)
+        # else:
+            # sa_U = sa_V
         V = sa_U.to_numpy()
         del sa_V, sa_U
         return V
@@ -313,10 +328,15 @@ cdef class BandedOperator(object):
 
     cpdef solve_(self, SizedArrayPtr sa_V, overwrite=False):
         assert not self.is_mixed_derivative
-        cdef SizedArrayPtr sa_U = SizedArrayPtr()
-        sa_U.tag = "sa_U solve"
-        sa_U.store(self.thisptr_tri.solve(deref(sa_V.p)))
+        cdef SizedArrayPtr sa_U
+        if overwrite:
+            sa_U = sa_V
+        else:
+            sa_U = sa_V.copy()
+            sa_U.tag = "sa_U solve"
+        # self.thisptr_tri.solve(deref(sa_U.p))
         return sa_U
+
 
     cpdef solve(self, np.ndarray V, overwrite=False):
         cdef SizedArrayPtr sa_V = SizedArrayPtr(V, "sa_V solve")

@@ -238,8 +238,8 @@ struct SizedArray {
         return V;
     }
 
-    SizedArray<T> &copy() {
-        return SizedArray<T>(*this);
+    SizedArray<T> *copy() {
+        return new SizedArray<T>(*this);
     }
 
     inline void set(int i, T x) {

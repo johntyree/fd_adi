@@ -26,10 +26,13 @@ cdef class SizedArrayPtr(object):
             self.from_numpy(a, tag)
             # print "imported from numpy in constructor"
 
+    # def __iadd__(self, other):
+        # self.p
+
     cdef store(self, SizedArray[double] *p, cpp_string tag="Unknown"):
         if self.p:
             raise RuntimeError("SizedArrayPtr is single assignment")
-        self.p = new SizedArray[double](deref(p))
+        self.p = p
         # print "SAPtr -> Storing %s:" % tag, to_string(p)
 
     cpdef from_numpy(self, np.ndarray a, cpp_string tag="Unknown"):
@@ -45,6 +48,10 @@ cdef class SizedArrayPtr(object):
         a = from_SizedArray(deref(self.p))
         assert a.ndim == self.p.ndim
         return a
+
+    cpdef copy(self):
+        u = SizedArrayPtr()
+        u.store(self.p.copy())
 
     def __dealloc__(self):
         if self.p:
@@ -65,8 +72,12 @@ cdef class SizedArrayPtr_i(object):
     cdef store(self, SizedArray[int] *p, cpp_string tag="Unknown"):
         if self.p:
             raise RuntimeError("SizedArrayPtr_i is single assignment")
-        self.p = new SizedArray[int](deref(p))
+        self.p = p
         # print "SAPtr -> Storing %s:" % tag, to_string(p)
+
+    cpdef copy(self):
+        u = SizedArrayPtr_i()
+        u.store(self.p.copy())
 
     cpdef from_numpy(self, np.ndarray a, cpp_string tag="Unknown"):
         if self.p:

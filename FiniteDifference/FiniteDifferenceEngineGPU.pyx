@@ -184,30 +184,34 @@ cdef class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
         return ret
 
 
-    # def solve_implicit(self, n, dt, SizedArray[double] initial):
-        # n = int(n)
-        # cdef SizedArray[double] *V = new SizedArray[double](initial)
+    def solve_implicit_(self, n, dt, SizedArrayPtr V):
+        Lis = [(o * -dt).add(1, inplace=True)
+               for d, o in sorted(self.operators.iteritems())
+               if type(d) != tuple]
 
-        # Lis = [(o * -dt).add(1, inplace=True)
-               # for d, o in sorted(self.operators.iteritems())
-               # if type(d) != tuple]
+        Lis = np.roll(Lis, -1)
 
-        # Lis = np.roll(Lis, -1)
+        print_step = max(1, int(n / 10))
+        to_percent = 100.0 / n
+        self.operators[(0,1)] += 1
+        utils.tic("solve_implicit:\t")
+        for k in range(n):
+            if not k % print_step:
+                print int(k * to_percent),
+                sys.stdout.flush()
+            self.operators[(0,1)].apply_(V) * dt
+            for L in Lis:
+                L.solve(V, inplace=True)
+        utils.toc(':  \t')
 
-        # print_step = max(1, int(n / 10))
-        # to_percent = 100.0 / n
-        # utils.tic("solve_implicit:\t")
-        # for k in range(n):
-            # if not k % print_step:
-                # print int(k * to_percent),
-                # sys.stdout.flush()
-            # V = *V + self.operators[(0,1)].apply(V) * dt
-            # for L in Lis:
-                # V = L.solve(V)
-        # utils.toc(':  \t')
-        # ret = from_SizedArray_2(*V)
-        # del V
-        # return ret
+
+    def solve_implicit(self, n, dt, np.ndarray initial):
+        n = int(n)
+        cdef SizedArrayPtr V = SizedArrayPtr(initial)
+        self.solve_implicit_(n, dt, V)
+        ret = V.to_numpy()
+        del V
+        return ret
 
 
     # def solve_hundsdorferverwer(self, n, dt, initial=None, theta=0.5, callback=None,

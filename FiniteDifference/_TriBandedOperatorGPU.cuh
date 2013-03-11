@@ -30,20 +30,19 @@ class _TriBandedOperator {
         SizedArray<double> top_factors;
         SizedArray<double> bottom_factors;
 
-        void verify_diag_ptrs();
+        SizedArray<double> &apply(SizedArray<double> &);
+        SizedArray<double> &solve(SizedArray<double> &);
         bool is_folded();
-        SizedArray<double> *apply(SizedArray<double> &);
-        SizedArray<double> *solve(SizedArray<double> &, bool=false);
-        void add_scalar(double val);
-        void vectorized_scale(SizedArray<double> &vector);
+        void DMVPY(SizedArray<double> &V, char operation, SizedArray<double> &Y, SizedArray<double> &out);
         void add_operator(_TriBandedOperator &other);
-        void fold_vector(GPUVec<double> &vector, bool=false);
+        void add_scalar(double val);
         void diagonalize();
-        void undiagonalize();
         void fold_bottom(bool=false);
         void fold_top(bool=false);
-        void DMVPY(SizedArray<double> &V, char operation,
-                SizedArray<double> &Y, SizedArray<double> &out);
+        void fold_vector(GPUVec<double> &vector, bool=false);
+        void undiagonalize();
+        void vectorized_scale(SizedArray<double> &vector);
+        void verify_diag_ptrs();
 
         // This is public to get to and from python
         bool has_residual;

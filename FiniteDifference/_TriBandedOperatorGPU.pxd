@@ -10,7 +10,7 @@ cdef extern from "_TriBandedOperatorGPU.cuh":
         cbool has_residual
         cpp_string bottom_fold_status
         cpp_string top_fold_status
-        SizedArray[double] *apply(SizedArray[double] &) except +
+        SizedArray[double] apply(SizedArray[double] &) except +
         void add_scalar(double val) except +
         void vectorized_scale(SizedArray[double] &vector) except +
         void add_operator(_TriBandedOperator &other) except +
@@ -21,7 +21,7 @@ cdef extern from "_TriBandedOperatorGPU.cuh":
         void diagonalize() except +
         void fold_bottom(cbool unfold) except +
         void fold_top(cbool unfold) except +
-        SizedArray[double] *solve(SizedArray[double] &) except +
+        SizedArray[double] solve(SizedArray[double] &) except +
         SizedArray[double] bottom_factors
         SizedArray[double] top_factors
         SizedArray[double] high_dirichlet,
