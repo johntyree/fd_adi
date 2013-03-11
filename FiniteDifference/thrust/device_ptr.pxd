@@ -1,0 +1,15 @@
+
+cdef extern from "<thrust/device_ptr.h>" namespace "thrust":
+    cdef cppclass device_ptr[T]:
+        device_ptr() nogil except +
+        device_ptr(device_ptr&) nogil except +
+        device_ptr(T *) nogil except +
+        T& operator[](size_t) nogil
+        T& operator*(device_ptr&) nogil
+        device_ptr& operator=(device_ptr&) nogil
+        bint operator==(device_ptr&, device_ptr&) nogil
+        bint operator!=(device_ptr&, device_ptr&) nogil
+        bint operator<(device_ptr&, device_ptr&) nogil
+        bint operator>(device_ptr&, device_ptr&) nogil
+        bint operator<=(device_ptr&, device_ptr&) nogil
+        bint operator>=(device_ptr&, device_ptr&) nogil
