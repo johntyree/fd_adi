@@ -107,53 +107,66 @@ std::ostream & operator<<(std::ostream &os, thrust::device_vector<T> const &v) {
     return os << "]";
 }
 
+using thrust::device_malloc;
 template<typename T>
 struct SizedArray {
-    GPUVec<T> data;
+    bool owner;
+    thrust::device_ptr<T> data;
     Py_ssize_t ndim;
     Py_ssize_t size;
     Py_ssize_t shape[8];
     std::string name;
 
+
     SizedArray(Py_ssize_t size, std::string name)
-        : data(size), size(size), name(name), ndim(1) {
-            shape[0] = size;
-            sanity_check();
+        : owner(true), data(device_malloc<T>(size)), ndim(1), size(size), name(name) {
+        shape[0] = size;
+        sanity_check();
     }
 
-    SizedArray(SizedArray<T> const &S)
-        : data(S.data), ndim(S.ndim), size(S.size), name(S.name) {
-            for (Py_ssize_t i = 0; i < ndim; ++i) {
-                shape[i] = S.shape[i];
-            }
-            sanity_check();
+    SizedArray(SizedArray<T> const &S, bool deep=false)
+        : owner(!deep),
+          data(owner ? device_malloc<T>(S.size) : S.data),
+          ndim(S.ndim), size(S.size), name(S.name) {
+        for (Py_ssize_t i = 0; i < ndim; ++i) {
+            shape[i] = S.shape[i];
+        }
+        sanity_check();
     }
 
-    SizedArray(thrust::host_vector<T> d, int ndim, intptr_t *s, std::string name)
-        : data(d), ndim(ndim), size(1), name(name) {
-            for (Py_ssize_t i = 0; i < ndim; ++i) {
-                shape[i] = s[i];
-                size *= shape[i];
-            }
-            sanity_check();
+    SizedArray(T *rawptr, Py_ssize_t size, std::string name)
+        : owner(false),
+          data(rawptr),
+          ndim(1),
+          size(size),
+          name(name) {
+        shape[0] = size;
+        sanity_check();
     }
 
     SizedArray(T *rawptr, int ndim, intptr_t *s, std::string name)
-        : ndim(ndim), size(1), name(name) {
-            for (Py_ssize_t i = 0; i < ndim; ++i) {
-                shape[i] = s[i];
-                size *= shape[i];
-            }
-            data.assign(rawptr, rawptr+size);
-            sanity_check();
+        : owner(false),
+          data(rawptr),
+          ndim(ndim),
+          size(1),
+          name(name) {
+        for (Py_ssize_t i = 0; i < ndim; ++i) {
+            shape[i] = s[i];
+            size *= shape[i];
+        }
+        sanity_check();
     }
 
     void sanity_check() {
-        if (static_cast<Py_ssize_t>(data.size()) != size) {
-            DIE(name << ": data.size()("<<data.size()<<") != size("<<size<<")");
+        if (data.get() == NULL) {
+            if (owner) {
+                DIE(name << ": Failed to alloc memory of size("<<size<<")");
+            } else {
+                DIE(name << ": data doesn't point ot anything");
+            }
         }
         if (ndim > 8) {
-            DIE(name << ": ndim("<<ndim<<") is out of range . Failed to initialize?");
+            DIE(name << ": ndim("<<ndim<<") is out of range. Failed to initialize?");
         }
         for (int i = 0; i < ndim; ++i) {
             if (shape[i] == 0) {
@@ -182,16 +195,20 @@ struct SizedArray {
             DIE("Can only transpose 2D matrix");
         }
         //XXX
-        thrust::device_ptr<double> out = thrust::device_malloc<double>(data.size());
+        thrust::device_ptr<T> out = thrust::device_malloc<T>(size);
         switch (strategy) {
             case 1:
-                transposeNoBankConflicts(out.get(), data.raw(), shape[0], shape[1]);
+                transposeNoBankConflicts(out.get(), data.get(), shape[0], shape[1]);
                 break;
             default:
                 DIE("\nUnknown Transpose Strategy")
         }
         reshape(shape[1], shape[0]);
-        data.assign(out, out+size);
+        if (owner) {
+            std::swap(out, data);
+        } else {
+            thrust::copy(out, out+size, data);
+        }
         thrust::device_free(out);
     }
 
@@ -232,15 +249,24 @@ struct SizedArray {
         return idx;
     }
 
-    SizedArray<T> &operator+(double x) {
-        SizedArray<T> V(this->size, "from: (" + this->name + ")");
-        V.data += x;
-        return V;
+    SizedArray<T> & plus(T x) {
+        thrust::transform(
+                data, data+size,
+                make_constant_iterator(x),
+                data,
+                thrust::plus<T>());
+        return *this;
     }
 
-    SizedArray<T> *copy() {
-        return new SizedArray<T>(*this);
+    SizedArray<T> & times(T x) {
+        thrust::transform(
+                data, data+size,
+                make_constant_iterator(x),
+                data,
+                thrust::multiplies<T>());
+        return *this;
     }
+
 
     inline void set(int i, T x) {
         data[idx(i)] = x;
@@ -255,14 +281,15 @@ struct SizedArray {
     inline T get(int i, int j) {
         return data[idx(i, j)];
     }
-
 };
 
 template <typename T>
 std::ostream & operator<<(std::ostream & os, SizedArray<T> const &sa) {
+    std::ostream_iterator<T> out = std::ostream_iterator<T>(std::cout, " ");
+    std::copy(sa.data, sa.data+sa.size, out);
     return os << sa.name << ": addr("<<&sa<<") size("
         <<sa.size<<") ndim("<<sa.ndim<< ") ["
-        << sa.data << " ]";
+        << out.str() << " ]";
 }
 
 

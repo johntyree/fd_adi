@@ -1,9 +1,11 @@
 
 from libcpp.string cimport string as cpp_string
+from libcpp cimport bool as cbool
 
 cimport numpy as np
 
 from FiniteDifference.thrust.device_vector cimport device_vector
+from FiniteDifference.thrust.device_ptr cimport device_ptr
 
 cdef extern from "VecArray.h":
 
@@ -13,15 +15,19 @@ cdef extern from "VecArray.h":
 
 
     cdef cppclass SizedArray[T]:
-        GPUVec[T] data
+        cbool owner
+        device_ptr[T] data
         Py_ssize_t size
         Py_ssize_t ndim
         Py_ssize_t[8] shape
         cpp_string name
-        SizedArray(SizedArray[T]) except +
+        SizedArray()
+        SizedArray(Py_ssize_t, cpp_string) except +
+        SizedArray(SizedArray[T], cbool=False) except +
+        SizedArray(T*, Py_ssize_t, cpp_string name) except +
         SizedArray(T*, int, np.npy_intp*, cpp_string name) except +
-        SizedArray[T]* copy() except +
-        SizedArray[T] operator+() except +
+        SizedArray[T] plus(T x) except +
+        SizedArray[T] times(T x) except +
         T get(int i) except +
         T get(int i, int j) except +
         void reshape(Py_ssize_t h, Py_ssize_t w) except +
