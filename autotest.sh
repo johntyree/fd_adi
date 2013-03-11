@@ -9,7 +9,7 @@ onmodify () {
         . onmodify.sh;
     fi;
     while inotifywait -qq -r -e close_write,moved_to,move_self $TARGET; do
-        sleep 0.2;
+        sleep 0.5;
         if [ "$CMD" ]; then
             bash -c "$CMD";
         else
@@ -25,6 +25,9 @@ if [ "$1" == '--force' ]; then
     shift
     CMD+="touch FiniteDifference/_GPU_Code.cu;"
 fi
-CMD+="python setup.py build_ext --inplace && nosetests --failed --rednose --verbosity=3 --with-id $@ || echo -ne '\a';"
+CMD+="(set -o pipefail; python setup.py build_ext --inplace 2>&1 | grep -Ei --color -e '' -e error) \
+    && nosetests --failed --rednose --verbosity=3 --with-id $@ \
+    || echo -ne '\a'
+"
 
 onmodify . $CMD
