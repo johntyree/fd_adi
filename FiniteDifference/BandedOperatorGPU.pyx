@@ -303,7 +303,7 @@ cdef class BandedOperator(object):
         if overwrite:
             sa_U = sa_V
         else:
-            sa_U = sa_V.copy()
+            sa_U = sa_V.copy(True)
 
         # if self.thisptr_tri:
             # self.thisptr_tri.apply(deref(sa_U.p))
@@ -332,8 +332,7 @@ cdef class BandedOperator(object):
         if overwrite:
             sa_U = sa_V
         else:
-            sa_U = sa_V.copy()
-            sa_U.tag = "sa_U solve"
+            sa_U = sa_V.copy(True)
         # self.thisptr_tri.solve(deref(sa_U.p))
         return sa_U
 

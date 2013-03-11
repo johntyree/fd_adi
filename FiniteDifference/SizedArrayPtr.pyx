@@ -16,6 +16,7 @@ cimport numpy as np
 from FiniteDifference.VecArray cimport to_string
 
 from libcpp.string cimport string as cpp_string
+from libcpp cimport bool as cbool
 
 from cython.operator cimport dereference as deref
 
@@ -49,9 +50,11 @@ cdef class SizedArrayPtr(object):
         assert a.ndim == self.p.ndim
         return a
 
-    cpdef copy(self):
+    cpdef copy(self, cbool deep):
+        cdef SizedArray[double] *x = new SizedArray[double](deref(self.p), deep)
         u = SizedArrayPtr()
-        u.store(self.p.copy())
+        u.store(x)
+        return u
 
     def __dealloc__(self):
         if self.p:
@@ -75,9 +78,11 @@ cdef class SizedArrayPtr_i(object):
         self.p = p
         # print "SAPtr -> Storing %s:" % tag, to_string(p)
 
-    cpdef copy(self):
+    cpdef copy(self, cbool deep):
+        cdef SizedArray[int] *x = new SizedArray[int](deref(self.p), deep)
         u = SizedArrayPtr_i()
-        u.store(self.p.copy())
+        u.store(x)
+        return u
 
     cpdef from_numpy(self, np.ndarray a, cpp_string tag="Unknown"):
         if self.p:
@@ -109,7 +114,7 @@ cdef SizedArray[double]* to_SizedArray(np.ndarray v, name):
     cdef double *ptr
     if not v.flags.c_contiguous:
         v = v.copy("C")
-    return new SizedArray[double](<double *>np.PyArray_DATA(v), v.ndim, v.shape, name)
+    return new SizedArray[double](<double *>np.PyArray_DATA(v), v.ndim, v.shape, name, True)
 
 
 cdef SizedArray[int]* to_SizedArray_i(np.ndarray v, cpp_string name):
@@ -117,7 +122,7 @@ cdef SizedArray[int]* to_SizedArray_i(np.ndarray v, cpp_string name):
                                       % (v.dtype.type, np.int32))
     if not v.flags.c_contiguous:
         v = v.copy("C")
-    return new SizedArray[int](<int *>np.PyArray_DATA(v), v.ndim, v.shape, name)
+    return new SizedArray[int](<int *>np.PyArray_DATA(v), v.ndim, v.shape, name, True)
 
 
 cdef from_SizedArray_i(SizedArray[int] &v):

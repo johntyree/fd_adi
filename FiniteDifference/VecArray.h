@@ -124,37 +124,52 @@ struct SizedArray {
         sanity_check();
     }
 
-    SizedArray(SizedArray<T> const &S, bool deep=false)
-        : owner(!deep),
+    SizedArray(SizedArray<T> const &S, bool deep)
+        : owner(deep),
           data(owner ? device_malloc<T>(S.size) : S.data),
           ndim(S.ndim), size(S.size), name(S.name) {
+        if (owner) {
+            thrust::copy(S.data, S.data + S.size, data);
+        }
         for (Py_ssize_t i = 0; i < ndim; ++i) {
             shape[i] = S.shape[i];
         }
         sanity_check();
     }
 
-    SizedArray(T *rawptr, Py_ssize_t size, std::string name)
-        : owner(false),
-          data(rawptr),
+    SizedArray(T *rawptr, Py_ssize_t size, std::string name, bool from_host)
+        : owner(!from_host),
+          data(owner ? device_malloc<T>(size) : rawptr),
           ndim(1),
           size(size),
           name(name) {
+        if (owner) {
+            thrust::copy(rawptr, rawptr + size, data);
+        }
         shape[0] = size;
         sanity_check();
     }
 
-    SizedArray(T *rawptr, int ndim, intptr_t *s, std::string name)
-        : owner(false),
-          data(rawptr),
+    SizedArray(T *rawptr, int ndim, intptr_t *s, std::string name, bool from_host)
+        : owner(!from_host),
+          data(owner ? device_malloc<T>(size) : rawptr),
           ndim(ndim),
           size(1),
           name(name) {
+        if (owner) {
+            thrust::copy(rawptr, rawptr + size, data);
+        }
         for (Py_ssize_t i = 0; i < ndim; ++i) {
             shape[i] = s[i];
             size *= shape[i];
         }
         sanity_check();
+    }
+
+    ~SizedArray() {
+        if (owner) {
+            thrust::device_free(data);
+        }
     }
 
     void sanity_check() {
