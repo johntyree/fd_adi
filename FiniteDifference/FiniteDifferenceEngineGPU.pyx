@@ -193,15 +193,19 @@ cdef class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
 
         print_step = max(1, int(n / 10))
         to_percent = 100.0 / n
-        self.operators[(0,1)] += 1
         utils.tic("solve_implicit:\t")
         for k in range(n):
             if not k % print_step:
                 print int(k * to_percent),
                 sys.stdout.flush()
-            self.operators[(0,1)].apply_(V) * dt
+            if (0,1) in self.operators:
+                U = V.copy(True)
+                self.operators[(0,1)].apply_(U)
+                U.times(dt)
+                V.pluseq(U)
+                del U
             for L in Lis:
-                L.solve(V, inplace=True)
+                L.solve_(V, overwrite=True)
         utils.toc(':  \t')
 
 
