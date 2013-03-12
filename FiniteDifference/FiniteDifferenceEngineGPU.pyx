@@ -430,21 +430,3 @@ cdef class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
         # V = self.solve_implicit(smoothing_steps*2, dt*0.5, initial=initial)
         # # V = self.solve_douglas(smoothing_steps*2, dt*0.5, theta=1, initial=initial)
         # return scheme(n-smoothing_steps, dt, initial=V, theta=0.60)
-
-cdef inline from_SizedArray_2(SizedArray[double] &v):
-    assert v.ndim == 2, ("Using from_SizedArray_2 on an array of dim %s" % v.ndim)
-    cdef np.ndarray[double, ndim=2] s = np.empty((v.shape[0], v.shape[1]), dtype=float)
-    cdef int i, j
-    for i in range(v.shape[0]):
-        for j in range(v.shape[1]):
-            s[i, j] = v.get(i, j)
-    return s
-
-
-cdef inline SizedArray[double]* to_SizedArray(np.ndarray v, name):
-    assert v.dtype.type == np.float64, ("Types don't match! Got (%s) expected (%s)."
-                                      % (v.dtype.type, np.float64))
-    cdef double *ptr
-    if not v.flags.c_contiguous:
-        v = v.copy("C")
-    return new SizedArray[double](<double *>np.PyArray_DATA(v), v.ndim, v.shape, name)
