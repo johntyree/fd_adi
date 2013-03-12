@@ -201,7 +201,7 @@ cdef class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
             if (0,1) in self.operators:
                 U = V.copy(True)
                 self.operators[(0,1)].apply_(U)
-                U.times(dt)
+                U.timeseq_scalar(dt)
                 V.pluseq(U)
                 del U
             for L in Lis:
@@ -382,49 +382,53 @@ cdef class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
         # utils.toc(':  \t')
         # return V
 
+    def solve_douglas(self, n, dt, np.ndarray initial, theta=0.5):
+        n = int(n)
+        cdef SizedArrayPtr V = SizedArrayPtr(initial)
+        self.solve_douglas_(n, dt, V)
+        ret = V.to_numpy()
+        del V
+        return ret
 
-    # def solve_douglas(self, n, dt, initial=None, theta=0.5, callback=None,
-            # numpy=False):
 
-        # n = int(n)
-        # cdef SizedArray[double] V = initial.copy()
+    cpdef solve_douglas_(self, int n, double dt, SizedArrayPtr V, double theta=0.5):
+        Firsts = [(o * dt) for d, o in self.operators.items()]
 
-        # Firsts = [(o * dt) for d, o in self.operators.items()]
+        Les = [(o * theta * dt)
+               for d, o in sorted(self.operators.iteritems())
+               if type(d) != tuple]
+        Lis = [(o * (theta * -dt)).add(1, inplace=True)
+               for d, o in sorted(self.operators.iteritems())
+               if type(d) != tuple]
 
-        # Les = [(o * theta * dt)
-               # for d, o in sorted(self.operators.iteritems())
-               # if type(d) != tuple]
-        # Lis = [(o * (theta * -dt)).add(1, inplace=True)
-               # for d, o in sorted(self.operators.iteritems())
-               # if type(d) != tuple]
+        for L in itertools.chain(Les, Lis):
+            L.clear_residual()
 
-        # for L in itertools.chain(Les, Lis):
-            # L.R = None
-
-        # print_step = max(1, int(n / 10))
-        # to_percent = 100.0 / n
-        # utils.tic("Douglas:\t")
-        # for k in range(n):
-            # if not k % print_step:
+        print_step = max(1, int(n / 10))
+        to_percent = 100.0 / n
+        utils.tic("Douglas:\t")
+        for k in range(n):
+            if not k % print_step:
                 # if np.isnan(V).any():
                     # print "Douglas fail @ t = %f (%i steps)" % (dt * k, k)
                     # return V
-                # print int(k * to_percent),
-                # sys.stdout.flush()
-            # if callback is not None:
-                # callback(V, ((n - k) * dt))
+                print int(k * to_percent),
+                sys.stdout.flush()
+            Y = V.copy(True)
+            for L in Firsts:
+                X = V.copy(True)
+                L.apply_(X)
+                Y.pluseq(X)
 
-            # Y = V.copy()
-            # for L in Firsts:
-                # Y += L.apply(V)
+            for Le, Li in zip(Les, Lis):
+                X = V.copy(True)
+                Le.apply_(X)
+                Y.minuseq(X)
+                Li.solve_(Y)
+            V = Y
 
-            # for Le, Li in zip(Les, Lis):
-                # Y -= Le.apply(V)
-                # Y = Li.solve(Y)
-            # V = Y
-
-        # utils.toc(':  \t')
-        # return V
+        utils.toc(':  \t')
+        return V
 
 
     # def solve_smooth(self, n, dt, initial=None, callback=None, smoothing_steps=2,

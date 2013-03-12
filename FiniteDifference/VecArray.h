@@ -5,6 +5,9 @@
 #include <thrust/device_vector.h>
 #include <thrust/device_free.h>
 #include <thrust/device_malloc.h>
+#include <thrust/iterator/constant_iterator.h>
+#include <thrust/functional.h>
+#include <thrust/transform.h>
 
 #include <iostream>
 #include <sstream>
@@ -16,6 +19,7 @@
 
 using thrust::device_malloc;
 using thrust::device_free;
+using thrust::make_constant_iterator;
 
 template <typename T>
 struct GPUVec : thrust::device_vector<T> {
@@ -286,22 +290,62 @@ struct SizedArray {
         return idx;
     }
 
-    SizedArray<T> & plus(T x) {
+    void minuseq(SizedArray<T> x) {
+        thrust::transform(
+                data, data+size,
+                x.data,
+                data,
+                thrust::minus<T>());
+        return;
+    }
+
+    void pluseq(SizedArray<T> x) {
+        if (x.size != size) {
+            DIE("Dimention mismatch.");
+        }
+        thrust::transform(
+                data, data+size,
+                x.data,
+                data,
+                thrust::plus<T>());
+        return;
+    }
+
+    void timeseq(SizedArray<T> x) {
+        thrust::transform(
+                data, data+size,
+                x.data,
+                data,
+                thrust::multiplies<T>());
+        return;
+    }
+
+
+    void minuseq_scalar(T x) {
+        thrust::transform(
+                data, data+size,
+                make_constant_iterator(x),
+                data,
+                thrust::minus<T>());
+        return;
+    }
+
+    void pluseq_scalar(T x) {
         thrust::transform(
                 data, data+size,
                 make_constant_iterator(x),
                 data,
                 thrust::plus<T>());
-        return *this;
+        return;
     }
 
-    SizedArray<T> & times(T x) {
+    void timeseq_scalar(T x) {
         thrust::transform(
                 data, data+size,
                 make_constant_iterator(x),
                 data,
                 thrust::multiplies<T>());
-        return *this;
+        return;
     }
 
 

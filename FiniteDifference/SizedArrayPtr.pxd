@@ -15,6 +15,12 @@ cdef class SizedArrayPtr(object):
     cpdef from_numpy(self, np.ndarray a, cpp_string tag=*)
     cpdef to_numpy(self)
     cpdef SizedArrayPtr copy(self, cbool deep)
+    cpdef pluseq(self, SizedArrayPtr other)
+    cpdef minuseq(self, SizedArrayPtr other)
+    cpdef timeseq(self, SizedArrayPtr other)
+    cpdef pluseq_scalar(self, double other)
+    cpdef minuseq_scalar(self, double other)
+    cpdef timeseq_scalar(self, double other)
 
 
 cdef class SizedArrayPtr_i(object):
@@ -24,6 +30,13 @@ cdef class SizedArrayPtr_i(object):
     cpdef from_numpy(self, np.ndarray a, cpp_string tag=*)
     cpdef to_numpy(self)
     cpdef SizedArrayPtr_i copy(self, cbool deep)
+    cpdef pluseq(self, SizedArrayPtr_i other)
+    cpdef minuseq(self, SizedArrayPtr_i other)
+    cpdef timeseq(self, SizedArrayPtr_i other)
+    cpdef pluseq_scalar(self, int other)
+    cpdef minuseq_scalar(self, int other)
+    cpdef timeseq_scalar(self, int other)
+
 
 cdef from_SizedArray(SizedArray[double] &v)
 cdef from_SizedArray_i(SizedArray[int] &v)

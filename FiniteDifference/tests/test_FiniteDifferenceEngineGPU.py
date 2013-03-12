@@ -58,13 +58,13 @@ class BlackScholesOption_test(unittest.TestCase):
         # print "Price:", V, ans, V - ans
         npt.assert_allclose(V, ans, rtol=0.001)
 
-    # def test_douglas(self):
-        # t, dt = self.F.option.tenor, self.dt
-        # V = self.F.solve_douglas(t/dt, dt)[self.F.idx]
-        # ans = self.F.option.analytical
-        # # print "Spot:", self.F.option.spot
-        # # print "Price:", V, ans, V - ans
-        # npt.assert_allclose(V, ans, rtol=0.001)
+    def test_douglas(self):
+        t, dt = self.F.option.tenor, self.dt
+        V = self.FG.solve_douglas(t/dt, dt, self.F.grid.domain[-1])[self.F.idx]
+        ans = self.F.option.analytical
+        # print "Spot:", self.F.option.spot
+        # print "Price:", V, ans, V - ans
+        npt.assert_allclose(V, ans, rtol=0.001)
 
     # def test_smooth(self):
         # t, dt = self.F.option.tenor, self.dt

@@ -56,6 +56,25 @@ cdef class SizedArrayPtr(object):
         u.store(x)
         return u
 
+    cpdef pluseq(self, SizedArrayPtr other):
+        self.p.pluseq(deref(other.p))
+
+    cpdef minuseq(self, SizedArrayPtr other):
+        self.p.minuseq(deref(other.p))
+
+    cpdef timeseq(self, SizedArrayPtr other):
+        self.p.timeseq(deref(other.p))
+
+    cpdef pluseq_scalar(self, double other):
+        self.p.pluseq_scalar(other)
+
+    cpdef minuseq_scalar(self, double other):
+        self.p.minuseq_scalar(other)
+
+    cpdef timeseq_scalar(self, double other):
+        self.p.timeseq_scalar(other)
+
+
     def __dealloc__(self):
         if self.p:
             print "Freeing %s:" % (self.tag,), to_string(self.p)
@@ -97,6 +116,24 @@ cdef class SizedArrayPtr_i(object):
         a = from_SizedArray_i(deref(self.p))
         assert a.ndim == self.p.ndim
         return a
+
+    cpdef pluseq(self, SizedArrayPtr_i other):
+        self.p.pluseq(deref(other.p))
+
+    cpdef minuseq(self, SizedArrayPtr_i other):
+        self.p.minuseq(deref(other.p))
+
+    cpdef timeseq(self, SizedArrayPtr_i other):
+        self.p.timeseq(deref(other.p))
+
+    cpdef pluseq_scalar(self, int other):
+        self.p.pluseq_scalar(other)
+
+    cpdef minuseq_scalar(self, int other):
+        self.p.minuseq_scalar(other)
+
+    cpdef timeseq_scalar(self, int other):
+        self.p.timeseq_scalar(other)
 
     def __dealloc__(self):
         if self.p:

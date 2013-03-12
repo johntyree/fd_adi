@@ -339,6 +339,10 @@ cdef class BandedOperator(object):
         return V
 
 
+    cpdef clear_residual(self):
+        if self.thisptr_tri:
+            self.thisptr_tri.has_residual = False
+
     cdef inline no_mixed(self):
         if self.is_mixed_derivative:
             raise ValueError("Operation not supported with mixed operator.")
