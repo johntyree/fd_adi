@@ -227,7 +227,9 @@ struct SizedArray {
 
     void transpose(int strategy) {
         if (ndim != 2) {
-            DIE("Can only transpose 2D matrix");
+            /* Skip transposing for 1D case */
+            return;
+            // DIE("Can only transpose 2D matrix");
         }
         //XXX
         thrust::device_ptr<T> out = device_malloc<T>(size);
