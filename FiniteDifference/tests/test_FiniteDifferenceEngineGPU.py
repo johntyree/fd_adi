@@ -26,6 +26,57 @@ from FiniteDifference.blackscholes import BlackScholesFiniteDifferenceEngine, Bl
 from FiniteDifference.heston import HestonBarrierOption
 
 
+
+class BlackScholesOption_test(unittest.TestCase):
+
+    def setUp(self):
+        v = 0.04
+        r = 0.06
+        k = 99.0
+        spot = 100.0
+        t = 1.0
+        self.dt = 1.0/150.0
+        BS = BlackScholesOption(spot=spot, strike=k, interest_rate=r, variance=v, tenor=t)
+
+        self.F = BlackScholesFiniteDifferenceEngine( BS
+                                                   , spot_max=5000.0
+                                                   , nspots=150
+                                                   , spotdensity=1.0
+                                                   , force_exact=True
+                                                   , flip_idx_spot=False
+                                                     )
+        self.F.init()
+        self.FG = FDG.FiniteDifferenceEngineADI(self.F)
+
+    def test_implicit(self):
+        t, dt = self.F.option.tenor, self.dt
+        for o in self.F.operators.values():
+            assert o.is_tridiagonal()
+        V = self.FG.solve_implicit(t/dt, dt, self.F.grid.domain[-1])[self.F.idx]
+        ans = self.F.option.analytical
+        # print "Spot:", self.F.option.spot
+        # print "Price:", V, ans, V - ans
+        npt.assert_allclose(V, ans, rtol=0.001)
+
+    # def test_douglas(self):
+        # t, dt = self.F.option.tenor, self.dt
+        # V = self.F.solve_douglas(t/dt, dt)[self.F.idx]
+        # ans = self.F.option.analytical
+        # # print "Spot:", self.F.option.spot
+        # # print "Price:", V, ans, V - ans
+        # npt.assert_allclose(V, ans, rtol=0.001)
+
+    # def test_smooth(self):
+        # t, dt = self.F.option.tenor, self.dt
+        # for o in self.F.operators.values():
+            # assert o.is_tridiagonal()
+        # V = self.F.solve_smooth(t/dt, dt)[self.F.idx]
+        # ans = self.F.option.analytical
+        # # print "Spot:", self.F.option.spot
+        # # print "Price:", V, ans, V - ans
+        # npt.assert_allclose(V, ans, rtol=0.001)
+
+
 class FiniteDifferenceEngineADI_test(unittest.TestCase):
 
     def setUp(self):
