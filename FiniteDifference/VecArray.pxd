@@ -21,7 +21,7 @@ cdef extern from "VecArray.h":
         Py_ssize_t ndim
         Py_ssize_t[8] shape
         cpp_string name
-        SizedArray()
+        SizedArray() except +
         SizedArray(Py_ssize_t, cpp_string) except +
         SizedArray(SizedArray[T], cbool) except +
         SizedArray(T*, Py_ssize_t, cpp_string name, cbool) except +
