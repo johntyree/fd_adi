@@ -3,6 +3,8 @@
 
 #include <thrust/host_vector.h>
 #include <thrust/device_vector.h>
+#include <thrust/device_free.h>
+#include <thrust/device_malloc.h>
 
 #include <iostream>
 #include <sstream>
@@ -11,6 +13,9 @@
 
 #include "common.h"
 #include "_kernels.h"
+
+using thrust::device_malloc;
+using thrust::device_free;
 
 template <typename T>
 struct GPUVec : thrust::device_vector<T> {
@@ -107,7 +112,6 @@ std::ostream & operator<<(std::ostream &os, thrust::device_vector<T> const &v) {
     return os << "]";
 }
 
-using thrust::device_malloc;
 template<typename T>
 struct SizedArray {
     bool owner;
@@ -128,6 +132,7 @@ struct SizedArray {
         : owner(deep),
           data(owner ? device_malloc<T>(S.size) : S.data),
           ndim(S.ndim), size(S.size), name(S.name) {
+        // LOG("Owner("<<owner<<")");
         if (owner) {
             thrust::copy(S.data, S.data + S.size, data);
         }
@@ -135,44 +140,59 @@ struct SizedArray {
             shape[i] = S.shape[i];
         }
         sanity_check();
+        FULLTRACE;
     }
 
     SizedArray(T *rawptr, Py_ssize_t size, std::string name, bool from_host)
-        : owner(!from_host),
-          data(owner ? device_malloc<T>(size) : rawptr),
+        : owner(from_host),
+          data(),
           ndim(1),
           size(size),
           name(name) {
+        // LOG("Owner("<<owner<<")");
         if (owner) {
+            data = device_malloc<T>(size);
             thrust::copy(rawptr, rawptr + size, data);
+        } else {
+            data = thrust::device_pointer_cast(rawptr);
         }
         shape[0] = size;
         sanity_check();
+        FULLTRACE;
     }
 
     SizedArray(T *rawptr, int ndim, intptr_t *s, std::string name, bool from_host)
-        : owner(!from_host),
-          data(owner ? device_malloc<T>(size) : rawptr),
+        : owner(from_host),
           ndim(ndim),
           size(1),
           name(name) {
-        if (owner) {
-            thrust::copy(rawptr, rawptr + size, data);
-        }
+        // LOG("Owner("<<owner<<")");
         for (Py_ssize_t i = 0; i < ndim; ++i) {
             shape[i] = s[i];
             size *= shape[i];
         }
+        if (owner) {
+            data = device_malloc<T>(size);
+            thrust::copy(rawptr, rawptr + size, data);
+        } else {
+            data = thrust::device_pointer_cast(rawptr);
+        }
         sanity_check();
+        FULLTRACE;
     }
 
     ~SizedArray() {
+        // LOG("Owner("<<owner<<") ptr("<<data.get()<<")");
         if (owner) {
-            thrust::device_free(data);
+            device_free(data);
         }
+        FULLTRACE;
     }
 
     void sanity_check() {
+        if (!owner) {
+            DIE("Just take ownership for now...");
+        }
         if (data.get() == NULL) {
             if (owner) {
                 DIE(name << ": Failed to alloc memory of size("<<size<<")");
@@ -210,7 +230,7 @@ struct SizedArray {
             DIE("Can only transpose 2D matrix");
         }
         //XXX
-        thrust::device_ptr<T> out = thrust::device_malloc<T>(size);
+        thrust::device_ptr<T> out = device_malloc<T>(size);
         switch (strategy) {
             case 1:
                 transposeNoBankConflicts(out.get(), data.get(), shape[0], shape[1]);
@@ -224,7 +244,7 @@ struct SizedArray {
         } else {
             thrust::copy(out, out+size, data);
         }
-        thrust::device_free(out);
+        device_free(out);
     }
 
     std::string show() {
@@ -300,11 +320,11 @@ struct SizedArray {
 
 template <typename T>
 std::ostream & operator<<(std::ostream & os, SizedArray<T> const &sa) {
-    std::ostream_iterator<T> out = std::ostream_iterator<T>(std::cout, " ");
-    std::copy(sa.data, sa.data+sa.size, out);
+    std::ostringstream s;
+    std::copy(sa.data, sa.data+sa.size, std::ostream_iterator<T>(s, " "));
     return os << sa.name << ": addr("<<&sa<<") size("
         <<sa.size<<") ndim("<<sa.ndim<< ") ["
-        << out.str() << " ]";
+        << s.str() << " ]";
 }
 
 

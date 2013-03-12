@@ -19,7 +19,7 @@ class _CSRBandedOperator {
         Py_ssize_t blocks;
         std::string name;
 
-        SizedArray<double> *apply(SizedArray<double> &);
+        void apply(SizedArray<double> &);
         void vectorized_scale(SizedArray<double> &vector);
 
         _CSRBandedOperator(

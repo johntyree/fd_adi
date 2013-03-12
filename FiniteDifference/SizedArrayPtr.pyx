@@ -50,7 +50,7 @@ cdef class SizedArrayPtr(object):
         assert a.ndim == self.p.ndim
         return a
 
-    cpdef copy(self, cbool deep):
+    cpdef SizedArrayPtr copy(self, cbool deep):
         cdef SizedArray[double] *x = new SizedArray[double](deref(self.p), deep)
         u = SizedArrayPtr()
         u.store(x)
@@ -78,7 +78,7 @@ cdef class SizedArrayPtr_i(object):
         self.p = p
         # print "SAPtr -> Storing %s:" % tag, to_string(p)
 
-    cpdef copy(self, cbool deep):
+    cpdef SizedArrayPtr_i copy(self, cbool deep):
         cdef SizedArray[int] *x = new SizedArray[int](deref(self.p), deep)
         u = SizedArrayPtr_i()
         u.store(x)
@@ -111,7 +111,6 @@ cdef class SizedArrayPtr_i(object):
 cdef SizedArray[double]* to_SizedArray(np.ndarray v, name):
     assert v.dtype.type == np.float64, ("Types don't match! Got (%s) expected (%s)."
                                       % (v.dtype.type, np.float64))
-    cdef double *ptr
     if not v.flags.c_contiguous:
         v = v.copy("C")
     return new SizedArray[double](<double *>np.PyArray_DATA(v), v.ndim, v.shape, name, True)

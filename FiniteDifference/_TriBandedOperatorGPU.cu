@@ -30,6 +30,12 @@
 
 #include "_TriBandedOperatorGPU.cuh"
 
+using thrust::make_constant_iterator;
+using thrust::make_counting_iterator;
+using thrust::make_zip_iterator;
+using thrust::make_tuple;
+
+
 template <typename T, typename U>
 int find_index(T haystack, U needle, int max) {
     FULLTRACE;
@@ -67,31 +73,33 @@ _TriBandedOperator::_TriBandedOperator(
         std::string bottom_fold_status,
         bool has_residual
         ) :
-    diags(data),
-    R(R),
-    high_dirichlet(high_dirichlet),
-    low_dirichlet(low_dirichlet),
-    top_factors(top_factors),
-    bottom_factors(bottom_factors),
+    diags(data, true),
+    R(R, true),
+    high_dirichlet(high_dirichlet, true),
+    low_dirichlet(low_dirichlet, true),
+    top_factors(top_factors, true),
+    bottom_factors(bottom_factors, true),
     axis(axis),
     main_diag(1),
     operator_rows(operator_rows),
     blocks(blocks),
     block_len(operator_rows / blocks),
-    sup(diags.data.ptr()),
-    mid(diags.data.ptr() + operator_rows),
-    sub(diags.data.ptr() + 2*operator_rows),
+    sup(diags.data),
+    mid(diags.data + operator_rows),
+    sub(diags.data + 2*operator_rows),
     has_high_dirichlet(has_high_dirichlet),
     has_low_dirichlet(has_low_dirichlet),
     top_fold_status(top_fold_status),
     bottom_fold_status(bottom_fold_status),
     has_residual(has_residual)
     {
+        /* LOG("TriBandedOperator initialize START."); */
         verify_diag_ptrs();
         status = cusparseCreate(&handle);
         if (status != CUSPARSE_STATUS_SUCCESS) {
             DIE("CUSPARSE Library initialization failed.");
         }
+        /* LOG("TriBandedOperator initialize END."); */
     }
 
 void _TriBandedOperator::verify_diag_ptrs() {
@@ -154,14 +162,14 @@ void _TriBandedOperator::DMVPY(SizedArray<double> &V, char operation, SizedArray
     const unsigned N = V.size;
 
     if (has_low_dirichlet) {
-        thrust::copy(low_dirichlet.data.begin(),
-                low_dirichlet.data.end(),
-                V.data.begin());
+        thrust::copy(low_dirichlet.data,
+                low_dirichlet.data + low_dirichlet.size,
+                V.data);
     }
     if (has_high_dirichlet) {
-        thrust::copy(high_dirichlet.data.begin(),
-                high_dirichlet.data.end(),
-                V.data.end() - V.shape[1]);
+        thrust::copy(high_dirichlet.data,
+                high_dirichlet.data + high_dirichlet.size,
+                V.data + V.size - V.shape[1]);
     }
 
     if (axis == 0) {
@@ -174,15 +182,15 @@ void _TriBandedOperator::DMVPY(SizedArray<double> &V, char operation, SizedArray
                 - (mid[0]*V.data[0] + sup[0]*V.data[1]);
 
             thrust::transform(
-                thrust::make_zip_iterator(thrust::make_tuple(
+                make_zip_iterator(make_tuple(
                     sub+1, mid+1, sup+1,
-                    V.data.begin(), V.data.begin()+1, V.data.begin()+2,
-                    Y.data.begin()+1)),
-                thrust::make_zip_iterator(thrust::make_tuple(
+                    V.data, V.data+1, V.data+2,
+                    Y.data+1)),
+                make_zip_iterator(make_tuple(
                     sub+N-1, mid+N-1, sup+N-1,
-                    V.data.begin()+N-2, V.data.begin()+N-1, V.data.begin()+N,
-                    Y.data.begin()+N-1)),
-                out.data.begin()+1,
+                    V.data+N-2, V.data+N-1, V.data+N,
+                    Y.data+N-1)),
+                out.data+1,
                 DMVPY_f(operation));
 
             out.data[N-1] = Y.data[N-1]
@@ -210,7 +218,7 @@ struct zipdot3 : thrust::binary_function<const Triple &, const Triple &, REAL_t>
     }
 };
 
-SizedArray<double> &_TriBandedOperator::apply(SizedArray<double> &V) {
+void _TriBandedOperator::apply(SizedArray<double> &V) {
     FULLTRACE;
     verify_diag_ptrs();
     const unsigned N = V.size;
@@ -221,14 +229,14 @@ SizedArray<double> &_TriBandedOperator::apply(SizedArray<double> &V) {
     U->sanity_check();
 
     if (has_low_dirichlet) {
-        thrust::copy(low_dirichlet.data.begin(),
-                low_dirichlet.data.end(),
-                V.data.begin());
+        thrust::copy(low_dirichlet.data,
+                low_dirichlet.data + low_dirichlet.size,
+                V.data);
     }
     if (has_high_dirichlet) {
-        thrust::copy(high_dirichlet.data.begin(),
-                high_dirichlet.data.end(),
-                V.data.end() - V.shape[1]);
+        thrust::copy(high_dirichlet.data,
+                high_dirichlet.data + high_dirichlet.size,
+                V.data + V.size - V.shape[1]);
     }
 
     if (axis == 0) {
@@ -239,30 +247,31 @@ SizedArray<double> &_TriBandedOperator::apply(SizedArray<double> &V) {
     thrust::transform(
         make_zip_iterator(make_tuple(sub+1, mid+1, sup+1)),
         make_zip_iterator(make_tuple(sub+N-1, mid+N-1, sup+N-1)),
-        make_zip_iterator(make_tuple(V.data.begin(), V.data.begin()+1, V.data.begin()+2)),
-        U->data.begin()+1,
+        make_zip_iterator(make_tuple(V.data, V.data+1, V.data+2)),
+        U->data+1,
         zipdot3()
     );
     U->data[N-1] = sub[N-1]*V.data[N-2] + mid[N-1]*V.data[N-1];
 
     if (is_folded()) {
-        fold_vector(U->data, true);
+        fold_vector(*U, true);
     }
 
     if (has_residual) {
-        thrust::transform(U->data.begin(), U->data.end(),
-                R.data.begin(),
-                V.data.begin(),
+        thrust::transform(U->data, U->data + U->size,
+                R.data,
+                V.data,
                 thrust::plus<double>());
     } else {
-        thrust::copy(U->data.begin(), U->data.end(), V.data.begin());
+        thrust::copy(U->data, U->data + U->size, V.data);
     }
 
     if (axis == 0) {
         V.transpose(1);
     }
+    delete U;
     FULLTRACE;
-    return V;
+    return;
 }
 
 
@@ -302,7 +311,7 @@ void _TriBandedOperator::add_operator(_TriBandedOperator &other) {
                     &diags.data[diags.idx(to, 0)],
                     &diags.data[diags.idx(to, 0)] + operator_rows,
                     &other.diags.data[diags.idx(fro, 0)],
-                    thrust::make_counting_iterator(0),
+                    make_counting_iterator(0),
                     &diags.data[diags.idx(to, 0)],
                     thrust::plus<double>(),
                     periodic_from_to_mask(begin, end, block_len));
@@ -317,38 +326,38 @@ void _TriBandedOperator::add_operator(_TriBandedOperator &other) {
     }
 
     if (other.top_fold_status == CAN_FOLD) {
-        int them = other.top_factors.data.size();
-        int us = top_factors.data.size();
+        int them = other.top_factors.size;
+        int us = top_factors.size;
         if (them != us) {
             DIE("Bottom_factors are different sizes:" << us << ", " << them);
         }
         thrust::transform(
-            top_factors.data.begin(),
-            top_factors.data.end(),
-            other.top_factors.data.begin(),
-            top_factors.data.begin(),
+            top_factors.data,
+            top_factors.data + top_factors.size,
+            other.top_factors.data,
+            top_factors.data,
             thrust::plus<double>());
     }
     if (other.bottom_fold_status == "CAN_FOLD") {
-        int them = other.bottom_factors.data.size();
-        int us = bottom_factors.data.size();
+        int them = other.bottom_factors.size;
+        int us = bottom_factors.size;
         if (them != us) {
             DIE("Bottom_factors are different sizes:" << us << ", " << them);
         }
         thrust::transform(
-            bottom_factors.data.begin(),
-            bottom_factors.data.end(),
-            other.bottom_factors.data.begin(),
-            bottom_factors.data.begin(),
+            bottom_factors.data,
+            bottom_factors.data + bottom_factors.size,
+            other.bottom_factors.data,
+            bottom_factors.data,
             thrust::plus<double>());
     }
 
     /* LOG("Adding R."); */
     thrust::transform(
-            R.data.begin(),
-            R.data.end(),
-            other.R.data.begin(),
-            R.data.begin(),
+            R.data,
+            R.data + R.size,
+            other.R.data,
+            R.data,
             thrust::plus<double>());
     FULLTRACE;
 }
@@ -372,8 +381,8 @@ void _TriBandedOperator::add_scalar(double val) {
     thrust::transform_if(
             &diags.data[diags.idx(main_diag, 0)],
             &diags.data[diags.idx(main_diag, 0)] + operator_rows,
-            thrust::make_constant_iterator(val),
-            thrust::make_counting_iterator(0),
+            make_constant_iterator(val),
+            make_counting_iterator(0),
             &diags.data[diags.idx(main_diag, 0)],
             thrust::plus<double>(),
             periodic_from_to_mask(begin, end, block_len));
@@ -386,47 +395,46 @@ bool _TriBandedOperator::is_folded() {
 
 
 
-SizedArray<double> &
-_TriBandedOperator::solve(SizedArray<double> &V) {
+void _TriBandedOperator::solve(SizedArray<double> &V) {
     FULLTRACE;
     verify_diag_ptrs();
     const unsigned N = V.size;
-    SizedArray<double> *U = new SizedArray<double>(N, "U from V solve");
-    U->ndim = V.ndim;
-    U->shape[0] = V.shape[0];
-    U->shape[1] = V.shape[1];
-    U->sanity_check();
+    /* SizedArray<double> *U = new SizedArray<double>(N, "U from V solve"); */
+    /* U->ndim = V.ndim; */
+    /* U->shape[0] = V.shape[0]; */
+    /* U->shape[1] = V.shape[1]; */
+    /* U->sanity_check(); */
 
     if (has_low_dirichlet) {
-        thrust::copy(low_dirichlet.data.begin(),
-                low_dirichlet.data.end(),
-                V.data.begin());
+        thrust::copy(low_dirichlet.data,
+                low_dirichlet.data + low_dirichlet.size,
+                V.data);
     }
     if (has_high_dirichlet) {
-        thrust::copy(high_dirichlet.data.begin(),
-                high_dirichlet.data.end(),
-                V.data.end() - V.shape[1]);
+        thrust::copy(high_dirichlet.data,
+                high_dirichlet.data + high_dirichlet.size,
+                V.data + V.size - V.shape[1]);
     }
     if (axis == 0) {
         V.transpose(1);
     }
 
     if (has_residual) {
-        thrust::transform(V.data.begin(), V.data.end(),
-                R.data.begin(),
-                V.data.begin(),
+        thrust::transform(V.data, V.data + V.size,
+                R.data,
+                V.data,
                 thrust::minus<double>());
     }
 
 
     if (is_folded()) {
-        fold_vector(V.data);
+        fold_vector(V);
     }
 
-    /* thrust::copy(V.data.begin(), V.data.end(), U->data.begin()); */
+    /* thrust::copy(V.data, V.data + V.size, U->data); */
     status = cusparseDgtsvStridedBatch(handle, N,
             sub.get(), mid.get(), sup.get(),
-            V.data.raw(),
+            V.data.get(),
             1, N);
     cudaDeviceSynchronize();
     if (status != CUSPARSE_STATUS_SUCCESS) {
@@ -437,7 +445,7 @@ _TriBandedOperator::solve(SizedArray<double> &V) {
         V.transpose(1);
     }
     FULLTRACE;
-    return V;
+    return;
 }
 
 template <typename Tuple, typename OP>
@@ -464,28 +472,25 @@ struct add_multiply3 : public thrust::unary_function<Tuple, Result> {
 };
 
 
-void _TriBandedOperator::fold_vector(GPUVec<double> &vector, bool unfold) {
+void _TriBandedOperator::fold_vector(SizedArray<double> &vector, bool unfold) {
     FULLTRACE;
-
-    using thrust::make_zip_iterator;
-    using thrust::make_tuple;
 
     typedef GPUVec<REAL_t>::iterator Iterator;
     typedef thrust::tuple<REAL_t,REAL_t,REAL_t> REALTuple;
 
-    strided_range<Iterator> u0(vector.begin(), vector.end(), block_len);
-    strided_range<Iterator> u1(vector.begin()+1, vector.end(), block_len);
+    strided_range<Iterator> u0(vector.data, vector.data + vector.size, block_len);
+    strided_range<Iterator> u1(vector.data+1, vector.data + vector.size, block_len);
 
-    strided_range<Iterator> un(vector.begin()+block_len-1, vector.end(), block_len);
-    strided_range<Iterator> un1(vector.begin()+block_len-2, vector.end(), block_len);
+    strided_range<Iterator> un(vector.data+block_len-1, vector.data + vector.size, block_len);
+    strided_range<Iterator> un1(vector.data+block_len-2, vector.data + vector.size, block_len);
 
     /* LOG("top_is_folded("<<top_is_folded<<") bottom_is_folded("<<bottom_is_folded<<")"); */
     // Top fold
     if (top_fold_status == FOLDED) {
         /* LOG("Folding top. direction("<<unfold<<") top_factors("<<top_factors<<")"); */
         thrust::transform(
-            make_zip_iterator(make_tuple(u0.begin(), u1.begin(), top_factors.data.begin())),
-            make_zip_iterator(make_tuple(u0.end(), u1.end(), top_factors.data.end())),
+            make_zip_iterator(make_tuple(u0.begin(), u1.begin(), top_factors.data)),
+            make_zip_iterator(make_tuple(u0.end(), u1.end(), top_factors.data + top_factors.size)),
             u0.begin(),
             add_multiply3<REALTuple, REAL_t>(unfold ? -1 : 1));
     }
@@ -493,8 +498,8 @@ void _TriBandedOperator::fold_vector(GPUVec<double> &vector, bool unfold) {
     if (bottom_fold_status == FOLDED) {
         /* LOG("Folding bottom. direction("<<unfold<<") bottom_factors("<<bottom_factors<<")"); */
         thrust::transform(
-            make_zip_iterator(make_tuple(un.begin(), un1.begin(), bottom_factors.data.begin())),
-            make_zip_iterator(make_tuple(un.end(), un1.end(), bottom_factors.data.end())),
+            make_zip_iterator(make_tuple(un.begin(), un1.begin(), bottom_factors.data)),
+            make_zip_iterator(make_tuple(un.end(), un1.end(), bottom_factors.data + bottom_factors.size)),
             un.begin(),
             add_multiply3<REALTuple, REAL_t>(unfold ? -1 : 1));
     }
@@ -580,7 +585,7 @@ void _TriBandedOperator::fold_top(bool unfold) {
                 c0.begin(), c1.begin(),
                 b0.begin(), b1.begin(),
                             a1.begin(),
-                top_factors.data.begin()
+                top_factors.data
             )
         ),
         make_zip_iterator(
@@ -588,7 +593,7 @@ void _TriBandedOperator::fold_top(bool unfold) {
                 c0.end(), c1.end(),
                 b0.end(), b1.end(),
                           a1.end(),
-                top_factors.data.end()
+                top_factors.data + top_factors.size
             )
         ),
         fold_operator<REALTuple>(unfold)
@@ -617,7 +622,7 @@ void _TriBandedOperator::fold_bottom(bool unfold) {
                 an.begin(), an1.begin(),
                 bn.begin(), bn1.begin(),
                             cn1.begin(),
-                bottom_factors.data.begin()
+                bottom_factors.data
             )
         ),
         make_zip_iterator(
@@ -625,7 +630,7 @@ void _TriBandedOperator::fold_bottom(bool unfold) {
                 an.end(), an1.end(),
                 bn.end(), bn1.end(),
                           cn1.end(),
-                bottom_factors.data.end()
+                bottom_factors.data + bottom_factors.size
             )
         ),
         fold_operator<REALTuple>(unfold)
@@ -643,10 +648,10 @@ void _TriBandedOperator::vectorized_scale(SizedArray<double> &vector) {
     Py_ssize_t block_len = operator_rows / blocks;
 
     typedef thrust::device_vector<REAL_t>::iterator Iterator;
-    tiled_range<Iterator> v(vector.data.begin(), vector.data.end(), operator_rows / vsize);
+    tiled_range<Iterator> v(vector.data, vector.data + vector.size, operator_rows / vsize);
     /*
      * LOG("op_rows("<<operator_rows<<") vsize("<<vsize<<") "
-     *     "v.d.size("<<vector.data.size()<<") "
+     *     "v.d.size("<<vector.size<<") "
      *     "v.size()("<<v.end()-v.begin()<<") "
      *     "diags.shape("<<diags.shape[0]<<","<<diags.shape[1]<<") "
      *     "diags.idx(1,0)("<<diags.idx(1,0)<<") "
@@ -664,7 +669,6 @@ void _TriBandedOperator::vectorized_scale(SizedArray<double> &vector) {
             "evenly into operator size. Cannot scale."
             << "\n vsize("<<vsize<<") operator_rows("<<operator_rows<<")");
     }
-    if ((size_t)vsize != vector.data.size()) {DIE("vsize != vector.data.size()")}
     if (vsize == 0) {DIE("vsize == 0")}
 
     if (has_low_dirichlet) {
@@ -682,23 +686,23 @@ void _TriBandedOperator::vectorized_scale(SizedArray<double> &vector) {
     for (Py_ssize_t row = 0; row < 3; ++row) {
         int o = 1 - row;
         if (o >= 0) { // upper diags
-            thrust::transform(diags.data.begin() + diags.idx(row, 0),
-                    diags.data.begin() + diags.idx(row, 0) + operator_rows - o,
+            thrust::transform(diags.data + diags.idx(row, 0),
+                    diags.data + diags.idx(row, 0) + operator_rows - o,
                     v.begin(),
-                    diags.data.begin() + diags.idx(row, 0),
+                    diags.data + diags.idx(row, 0),
                     thrust::multiplies<REAL_t>());
         } else { // lower diags
-            thrust::transform(diags.data.begin() + diags.idx(row, -o),
-                    diags.data.begin() + diags.idx(row, 0) + operator_rows,
+            thrust::transform(diags.data + diags.idx(row, -o),
+                    diags.data + diags.idx(row, 0) + operator_rows,
                     v.begin() + -o,
-                    diags.data.begin() + diags.idx(row, -o),
+                    diags.data + diags.idx(row, -o),
                     thrust::multiplies<REAL_t>());
         }
     }
     /* LOG("Scaled data."); */
-    thrust::transform(R.data.begin(), R.data.end(),
+    thrust::transform(R.data, R.data + R.size,
             v.begin(),
-            R.data.begin(),
+            R.data,
             thrust::multiplies<REAL_t>());
     /* LOG("Scaled R."); */
     FULLTRACE;
@@ -715,8 +719,8 @@ int main () {
     thrust::transform_if(
             a.begin(),
             a.end(),
-            thrust::make_constant_iterator(2),
-            thrust::make_counting_iterator(0),
+            make_constant_iterator(2),
+            make_counting_iterator(0),
             a.begin(),
             thrust::plus<double>(),
             periodic_from_to_mask(begin, end, block_len));

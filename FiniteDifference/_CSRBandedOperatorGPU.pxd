@@ -12,7 +12,7 @@ cdef extern from "_CSRBandedOperatorGPU.cuh":
         SizedArray[int] row_ptr
         SizedArray[int] row_ind
         SizedArray[int] col_ind
-        SizedArray[double] *apply(SizedArray[double] &) except +
+        void apply(SizedArray[double] &) except +
         void vectorized_scale(SizedArray[double] &vector) except +
 
 

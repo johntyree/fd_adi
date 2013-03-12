@@ -14,7 +14,7 @@ cdef class SizedArrayPtr(object):
     cdef store(self, SizedArray[double] *p, cpp_string tag=*)
     cpdef from_numpy(self, np.ndarray a, cpp_string tag=*)
     cpdef to_numpy(self)
-    cpdef copy(self, cbool deep)
+    cpdef SizedArrayPtr copy(self, cbool deep)
 
 
 cdef class SizedArrayPtr_i(object):
@@ -23,7 +23,7 @@ cdef class SizedArrayPtr_i(object):
     cdef store(self, SizedArray[int] *p, cpp_string tag=*)
     cpdef from_numpy(self, np.ndarray a, cpp_string tag=*)
     cpdef to_numpy(self)
-    cpdef copy(self, cbool deep)
+    cpdef SizedArrayPtr_i copy(self, cbool deep)
 
 cdef from_SizedArray(SizedArray[double] &v)
 cdef from_SizedArray_i(SizedArray[int] &v)

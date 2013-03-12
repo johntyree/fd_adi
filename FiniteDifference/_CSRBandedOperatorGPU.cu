@@ -45,15 +45,15 @@ _CSRBandedOperator::_CSRBandedOperator(
         Py_ssize_t blocks,
         std::string name
         ) :
-    data(data),
-    row_ptr(row_ptr),
-    row_ind(row_ind),
-    col_ind(col_ind),
+    data(data, true),
+    row_ptr(row_ptr, true),
+    row_ind(row_ind, true),
+    col_ind(col_ind, true),
     name(name),
     operator_rows(operator_rows),
     blocks(blocks),
     block_len(operator_rows / blocks),
-    nnz(data.data.size())
+    nnz(data.size)
     {
         status = cusparseCreate(&handle);
         if (status != CUSPARSE_STATUS_SUCCESS) {
@@ -63,21 +63,17 @@ _CSRBandedOperator::_CSRBandedOperator(
         /* LOG("CSRBandedOperator constructed: " << *this); */
     }
 
-SizedArray<double> *_CSRBandedOperator::apply(SizedArray<double> &V) {
+void _CSRBandedOperator::apply(SizedArray<double> &V) {
     FULLTRACE;
     if (V.size != operator_rows) {
         DIE(V.name << ": Dimension mismatch. V(" <<V.size<<") vs "<<operator_rows);
     }
-    // XXX: This can possibly be optimized to run in place...
-    SizedArray<double> *U = new SizedArray<double>(V.size, "CSR Solve U from V");
-    U->shape[0] = V.shape[0];
-    U->shape[1] = V.shape[1];
-    U->ndim = V.ndim;
     cusparseMatDescr_t mat_description;
     status = cusparseCreateMatDescr(&mat_description);
     if (status != CUSPARSE_STATUS_SUCCESS) {
         DIE("CUSPARSE matrix description init failed.");
     }
+    GPUVec<double> U(V.data, V.data + V.size);
     double zero = 0, one = 1;
     status = cusparseDcsrmv(handle,
             CUSPARSE_OPERATION_NON_TRANSPOSE,
@@ -86,19 +82,18 @@ SizedArray<double> *_CSRBandedOperator::apply(SizedArray<double> &V) {
             nnz,
             &one,
             mat_description,
-            data.data.raw(),
-            row_ptr.data.raw(),
-            col_ind.data.raw(),
-            V.data.raw(),
+            data.data.get(),
+            row_ptr.data.get(),
+            col_ind.data.get(),
+            U.raw(),
             &zero,
-            U->data.raw()
+            V.data.get()
             );
-
     if (status != CUSPARSE_STATUS_SUCCESS) {
         DIE("CUSPARSE CSR MV product failed.");
     }
     FULLTRACE;
-    return U;
+    return;
 }
 
 template<typename Tuple>
@@ -133,18 +128,18 @@ void _CSRBandedOperator::vectorized_scale(SizedArray<double> &vector) {
     typedef thrust::tuple<int, int> IntTuple;
     typedef thrust::device_vector<REAL_t>::iterator Iterator;
 
-    repeated_range<Iterator> v(vector.data.begin(), vector.data.end(), operator_rows / vsize);
+    repeated_range<Iterator> v(vector.data, vector.data + vector.size, operator_rows / vsize);
     /* This can be optimized by noting that we only use the row_ind and can make do with project_1st(). */
-    thrust::transform(data.data.begin(), data.data.end(),
+    thrust::transform(data.data, data.data + data.size,
         thrust::make_permutation_iterator(v.begin(),
             thrust::make_transform_iterator(
                 thrust::make_zip_iterator(
-                    thrust::make_tuple(row_ind.data.begin(), col_ind.data.begin())
+                    thrust::make_tuple(row_ind.data, col_ind.data)
                     ),
                 compute_index<IntTuple>(block_len, block_len)
                 )
             ),
-            data.data.begin(),
+            data.data,
             thrust::multiplies<double>());
     FULLTRACE;
     return;

@@ -30,8 +30,8 @@ class _TriBandedOperator {
         SizedArray<double> top_factors;
         SizedArray<double> bottom_factors;
 
-        SizedArray<double> &apply(SizedArray<double> &);
-        SizedArray<double> &solve(SizedArray<double> &);
+        void apply(SizedArray<double> &);
+        void solve(SizedArray<double> &);
         bool is_folded();
         void DMVPY(SizedArray<double> &V, char operation, SizedArray<double> &Y, SizedArray<double> &out);
         void add_operator(_TriBandedOperator &other);
@@ -39,7 +39,7 @@ class _TriBandedOperator {
         void diagonalize();
         void fold_bottom(bool=false);
         void fold_top(bool=false);
-        void fold_vector(GPUVec<double> &vector, bool=false);
+        void fold_vector(SizedArray<double> &vector, bool=false);
         void undiagonalize();
         void vectorized_scale(SizedArray<double> &vector);
         void verify_diag_ptrs();

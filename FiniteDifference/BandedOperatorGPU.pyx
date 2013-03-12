@@ -305,22 +305,16 @@ cdef class BandedOperator(object):
         else:
             sa_U = sa_V.copy(True)
 
-        # if self.thisptr_tri:
-            # self.thisptr_tri.apply(deref(sa_U.p))
-        # else:
-            # self.thisptr_csr.apply(deref(sa_U.p))
+        if self.thisptr_tri:
+            self.thisptr_tri.apply(deref(sa_U.p))
+        else:
+            self.thisptr_csr.apply(deref(sa_U.p))
         return sa_U
 
 
     cpdef apply(self, np.ndarray V, overwrite=False):
         cdef SizedArrayPtr sa_V = SizedArrayPtr(V, "sa_V apply")
-        cdef SizedArrayPtr sa_U
-        sa_U = self.apply_(sa_V, overwrite)
-        # if not overwrite:
-            # sa_U = SizedArrayPtr()
-            # sa_U.store(x)
-        # else:
-            # sa_U = sa_V
+        cdef SizedArrayPtr sa_U = self.apply_(sa_V, overwrite)
         V = sa_U.to_numpy()
         del sa_V, sa_U
         return V
@@ -333,7 +327,7 @@ cdef class BandedOperator(object):
             sa_U = sa_V
         else:
             sa_U = sa_V.copy(True)
-        # self.thisptr_tri.solve(deref(sa_U.p))
+        self.thisptr_tri.solve(deref(sa_U.p))
         return sa_U
 
 
