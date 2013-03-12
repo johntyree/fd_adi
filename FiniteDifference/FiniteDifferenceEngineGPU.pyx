@@ -218,7 +218,56 @@ cdef class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
         return ret
 
 
-    # def solve_hundsdorferverwer(self, n, dt, initial=None, theta=0.5, callback=None,
+    def solve_douglas(self, n, dt, np.ndarray initial, theta=0.5):
+        n = int(n)
+        cdef SizedArrayPtr V = SizedArrayPtr(initial)
+        self.solve_douglas_(n, dt, V)
+        ret = V.to_numpy()
+        del V
+        return ret
+
+
+    cpdef solve_douglas_(self, int n, double dt, SizedArrayPtr V, double theta=0.5):
+        Firsts = [(o * dt) for d, o in self.operators.items()]
+
+        Les = [(o * theta * dt)
+               for d, o in sorted(self.operators.iteritems())
+               if type(d) != tuple]
+        Lis = [(o * (theta * -dt)).add(1, inplace=True)
+               for d, o in sorted(self.operators.iteritems())
+               if type(d) != tuple]
+
+        for L in itertools.chain(Les, Lis):
+            L.clear_residual()
+
+        print_step = max(1, int(n / 10))
+        to_percent = 100.0 / n
+        utils.tic("Douglas:\t")
+        for k in range(n):
+            if not k % print_step:
+                # if np.isnan(V).any():
+                    # print "Douglas fail @ t = %f (%i steps)" % (dt * k, k)
+                    # return V
+                print int(k * to_percent),
+                sys.stdout.flush()
+            Y = V.copy(True)
+            for L in Firsts:
+                X = V.copy(True)
+                L.apply_(X)
+                Y.pluseq(X)
+
+            for Le, Li in zip(Les, Lis):
+                X = V.copy(True)
+                Le.apply_(X)
+                Y.minuseq(X)
+                Li.solve_(Y)
+            V = Y
+
+        utils.toc(':  \t')
+        return V
+
+
+    # def solve_craigsneyd(self, n, dt, initial=None, theta=0.5, callback=None,
             # numpy=False):
 
         # n = int(n)
@@ -238,11 +287,11 @@ cdef class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
 
         # print_step = max(1, int(n / 10))
         # to_percent = 100.0 / n
-        # utils.tic("Hundsdorfer-Verwer:\t")
+        # utils.tic("Craig-Sneyd:\t")
         # for k in range(n):
             # if not k % print_step:
                 # if np.isnan(V).any():
-                    # print "Hundsdorfer-Verwer fail @ t = %f (%i steps)" % (dt * k, k)
+                    # print "Craig-Sneyd fail @ t = %f (%i steps)" % (dt * k, k)
                     # return V
                 # print int(k * to_percent),
                 # sys.stdout.flush()
@@ -257,21 +306,11 @@ cdef class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
             # for Le, Li in zip(Les, Lis):
                 # Y -= Le.apply(V)
                 # Y = Li.solve(Y)
-            # Y2 = Y.copy()
 
-            # Y = Y0
-            # for L in Firsts:
-                # no_residual = L.R
-                # L.R = None
-                # Y += 0.5 * L.apply(Y2-V)
-                # L.R = no_residual
-
-            # V = Y2
-
+            # Y = Y0 + (0.5*dt) * self.cross_term(Y - V, numpy=False)
             # for Le, Li in zip(Les, Lis):
                 # Y -= Le.apply(V)
                 # Y = Li.solve(Y)
-
             # V = Y
 
         # utils.toc(':  \t')
@@ -333,7 +372,7 @@ cdef class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
         # return V
 
 
-    # def solve_craigsneyd(self, n, dt, initial=None, theta=0.5, callback=None,
+    # def solve_hundsdorferverwer(self, n, dt, initial=None, theta=0.5, callback=None,
             # numpy=False):
 
         # n = int(n)
@@ -353,11 +392,11 @@ cdef class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
 
         # print_step = max(1, int(n / 10))
         # to_percent = 100.0 / n
-        # utils.tic("Craig-Sneyd:\t")
+        # utils.tic("Hundsdorfer-Verwer:\t")
         # for k in range(n):
             # if not k % print_step:
                 # if np.isnan(V).any():
-                    # print "Craig-Sneyd fail @ t = %f (%i steps)" % (dt * k, k)
+                    # print "Hundsdorfer-Verwer fail @ t = %f (%i steps)" % (dt * k, k)
                     # return V
                 # print int(k * to_percent),
                 # sys.stdout.flush()
@@ -372,63 +411,25 @@ cdef class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
             # for Le, Li in zip(Les, Lis):
                 # Y -= Le.apply(V)
                 # Y = Li.solve(Y)
+            # Y2 = Y.copy()
 
-            # Y = Y0 + (0.5*dt) * self.cross_term(Y - V, numpy=False)
+            # Y = Y0
+            # for L in Firsts:
+                # no_residual = L.R
+                # L.R = None
+                # Y += 0.5 * L.apply(Y2-V)
+                # L.R = no_residual
+
+            # V = Y2
+
             # for Le, Li in zip(Les, Lis):
                 # Y -= Le.apply(V)
                 # Y = Li.solve(Y)
+
             # V = Y
 
         # utils.toc(':  \t')
         # return V
-
-    def solve_douglas(self, n, dt, np.ndarray initial, theta=0.5):
-        n = int(n)
-        cdef SizedArrayPtr V = SizedArrayPtr(initial)
-        self.solve_douglas_(n, dt, V)
-        ret = V.to_numpy()
-        del V
-        return ret
-
-
-    cpdef solve_douglas_(self, int n, double dt, SizedArrayPtr V, double theta=0.5):
-        Firsts = [(o * dt) for d, o in self.operators.items()]
-
-        Les = [(o * theta * dt)
-               for d, o in sorted(self.operators.iteritems())
-               if type(d) != tuple]
-        Lis = [(o * (theta * -dt)).add(1, inplace=True)
-               for d, o in sorted(self.operators.iteritems())
-               if type(d) != tuple]
-
-        for L in itertools.chain(Les, Lis):
-            L.clear_residual()
-
-        print_step = max(1, int(n / 10))
-        to_percent = 100.0 / n
-        utils.tic("Douglas:\t")
-        for k in range(n):
-            if not k % print_step:
-                # if np.isnan(V).any():
-                    # print "Douglas fail @ t = %f (%i steps)" % (dt * k, k)
-                    # return V
-                print int(k * to_percent),
-                sys.stdout.flush()
-            Y = V.copy(True)
-            for L in Firsts:
-                X = V.copy(True)
-                L.apply_(X)
-                Y.pluseq(X)
-
-            for Le, Li in zip(Les, Lis):
-                X = V.copy(True)
-                Le.apply_(X)
-                Y.minuseq(X)
-                Li.solve_(Y)
-            V = Y
-
-        utils.toc(':  \t')
-        return V
 
 
     # def solve_smooth(self, n, dt, initial=None, callback=None, smoothing_steps=2,
