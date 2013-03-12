@@ -10,8 +10,8 @@ from FiniteDifference.thrust.device_ptr cimport device_ptr
 cdef extern from "VecArray.h":
 
     cdef cppclass GPUVec[T](device_vector):
-        GPUVec(GPUVec)
-        T* raw()
+        GPUVec(GPUVec) except +
+        T* raw() except +
 
 
     cdef cppclass SizedArray[T]:
@@ -37,11 +37,11 @@ cdef extern from "VecArray.h":
         void reshape(Py_ssize_t h, Py_ssize_t w) except +
         void flatten() except +
         void transpose(int) except +
-        cpp_string show()
+        cpp_string show() except +
 
-    void cout(void *)
-    cpp_string to_string(void  *)
-    cpp_string to_string(cbool)
-    cpp_string to_string(SizedArray[double])
-    cpp_string to_string(SizedArray[int])
+    void cout(void *) except +
+    cpp_string to_string(void  *) except +
+    cpp_string to_string(cbool) except +
+    cpp_string to_string(SizedArray[double]) except +
+    cpp_string to_string(SizedArray[int]) except +
 
