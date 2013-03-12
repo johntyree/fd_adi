@@ -290,61 +290,62 @@ struct SizedArray {
         return idx;
     }
 
-    void minuseq(SizedArray<T> x) {
-        thrust::transform(
-                data, data+size,
-                x.data,
-                data,
-                thrust::minus<T>());
+    void minuseq(SizedArray<T> &x) {
+        // thrust::transform(
+                // data, data+size,
+                // x.data,
+                // data,
+                // thrust::minus<T>());
         return;
     }
 
-    void pluseq(SizedArray<T> x) {
+    void pluseq(SizedArray<T> &x) {
         if (x.size != size) {
             DIE("Dimention mismatch.");
         }
-        thrust::transform(
-                data, data+size,
-                x.data,
-                data,
-                thrust::plus<T>());
+        // thrust::transform(
+                // data, data+size,
+                // x.data,
+                // data,
+                // thrust::plus<T>());
         return;
     }
 
-    void timeseq(SizedArray<T> x) {
-        thrust::transform(
-                data, data+size,
-                x.data,
-                data,
-                thrust::multiplies<T>());
+    void timeseq(SizedArray<T> &x) {
+        TRACE;
+        // thrust::transform(
+                // data, data+size,
+                // x.data,
+                // data,
+                // thrust::multiplies<T>());
         return;
     }
 
 
     void minuseq_scalar(T x) {
-        thrust::transform(
-                data, data+size,
-                make_constant_iterator(x),
-                data,
-                thrust::minus<T>());
+        // thrust::transform(
+                // data, data+size,
+                // make_constant_iterator(x),
+                // data,
+                // thrust::minus<T>());
         return;
     }
 
     void pluseq_scalar(T x) {
-        thrust::transform(
-                data, data+size,
-                make_constant_iterator(x),
-                data,
-                thrust::plus<T>());
+        // thrust::transform(
+                // data, data+size,
+                // make_constant_iterator(x),
+                // data,
+                // thrust::plus<T>());
         return;
     }
 
     void timeseq_scalar(T x) {
-        thrust::transform(
-                data, data+size,
-                make_constant_iterator(x),
-                data,
-                thrust::multiplies<T>());
+        // thrust::transform(
+                // data, data+size,
+                // make_constant_iterator(x),
+                // data,
+                // thrust::multiplies<T>());
         return;
     }
 
