@@ -21,9 +21,6 @@ import FiniteDifference.Grid as Grid
 
 import FiniteDifference.FiniteDifferenceEngine as FD
 
-from FiniteDifference.blackscholes import BlackScholesFiniteDifferenceEngine, BlackScholesOption
-from FiniteDifference.heston import HestonBarrierOption
-
 
 class FiniteDifferenceEngineADI_test(unittest.TestCase):
 

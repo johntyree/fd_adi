@@ -47,6 +47,7 @@ class BlackScholesOption_test(unittest.TestCase):
                                                      )
         self.F.init()
         self.FG = FDG.FiniteDifferenceEngineADI(self.F)
+        print self.F.operators.items()
 
     def test_implicit(self):
         t, dt = self.F.option.tenor, self.dt
