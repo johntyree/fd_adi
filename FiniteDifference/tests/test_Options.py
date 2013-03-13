@@ -129,21 +129,31 @@ class HestonOption_test(unittest.TestCase):
                         , vol_of_variance = 0.3
                         , correlation = 0.4
                         )
-        H = DefaultHeston
+        option = DefaultHeston
+        # option = HestonOption(tenor=1, strike=99.0, volatility=0.2,
+                                        # mean_reversion=3, mean_variance=0.04,
+                                        # vol_of_variance=0.6, correlation=-0.7)
+
 
         self.dt = 1.0/150.0
+        self.F = HestonFiniteDifferenceEngine(option, nspots=150,
+                                                   nvols=80,
+                                                   force_bandwidth=None,
+                                                   flip_idx_var=False)
 
-        self.F = HestonFiniteDifferenceEngine(H, nspots=100,
-                                         nvols=100, spotdensity=10, varexp=4,
-                                         var_max=12, flip_idx_spot=False,
-                                         flip_idx_var=False, verbose=False,
-                                         force_bandwidth=None,
-                                         force_exact=False)
+
+        # self.F = HestonFiniteDifferenceEngine(H, nspots=100,
+                                         # nvols=100, spotdensity=10, varexp=4,
+                                         # var_max=12, flip_idx_spot=False,
+                                         # flip_idx_var=False, verbose=False,
+                                         # force_bandwidth=None,
+                                         # force_exact=False)
         self.F.init()
-        self.F.operators[1].diagonalize()
+        # self.F.operators[1].diagonalize()
 
     def test_implicit(self):
         t, dt = self.F.option.tenor, self.dt
+        dt = 1/400.0
         for d, o in self.F.operators.items():
             if type(d) != tuple:
                 assert o.is_tridiagonal(), "%s, %s" % (d, o.D.offsets)
