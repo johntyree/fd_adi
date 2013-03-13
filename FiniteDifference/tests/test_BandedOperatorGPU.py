@@ -65,11 +65,11 @@ class Cpp_test(unittest.TestCase):
 
 
     def test_SizedArray_roundtrip(self):
-        npt.assert_array_equal(self.v1, FD.BOG.test_SizedArray1_roundtrip(self.v1.copy()))
+        npt.assert_array_equal(self.v1, BOG.test_SizedArray1_roundtrip(self.v1.copy()))
 
 
     def test_SizedArray_roundtrip2D(self):
-        npt.assert_array_equal(self.v2, FD.BOG.test_SizedArray2_roundtrip(self.v2.copy()))
+        npt.assert_array_equal(self.v2, BOG.test_SizedArray2_roundtrip(self.v2.copy()))
 
 
     def test_migrate_0(self):
@@ -125,7 +125,7 @@ class Cpp_test(unittest.TestCase):
         for i in range(ntests):
             shape = tuple(np.random.random_integers(1, 100, 2))
             v2 = np.arange(shape[0]*shape[1], dtype=float).reshape(shape)
-            npt.assert_array_equal(v2.T, FD.BOG.test_SizedArray_transpose(v2.copy()))
+            npt.assert_array_equal(v2.T, BOG.test_SizedArray_transpose(v2.copy()))
 
 
     def test_tri_apply_axis_0(self):

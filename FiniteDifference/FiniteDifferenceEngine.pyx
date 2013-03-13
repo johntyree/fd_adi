@@ -27,9 +27,6 @@ import itertools as it
 
 import FiniteDifference.utils as utils
 
-import FiniteDifference.BandedOperatorGPU as BOG
-cimport FiniteDifference.BandedOperatorGPU as BOG
-
 import FiniteDifference.BandedOperator as BO
 cimport FiniteDifference.BandedOperator as BO
 BandedOperator = BO.BandedOperator
