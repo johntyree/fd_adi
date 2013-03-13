@@ -293,10 +293,6 @@ cdef class BandedOperator(object):
                 or self.bottom_fold_status == FOLDED)
 
 
-    # cpdef apply_mul(self, SizedArrayPtr sa_V, double x):
-        # self.apply_(sa_V, overwrite=True)
-
-
     cpdef apply_(self, SizedArrayPtr sa_V, overwrite=False):
         cdef SizedArrayPtr sa_U
 
