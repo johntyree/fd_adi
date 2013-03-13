@@ -234,6 +234,7 @@ struct SizedArray {
           size(1),
           name(name) {
         // LOG("Owner("<<owner<<")");
+        FULLTRACE;
         for (Py_ssize_t i = 0; i < ndim; ++i) {
             shape[i] = s[i];
             size *= shape[i];
@@ -250,6 +251,7 @@ struct SizedArray {
 
     ~SizedArray() {
         // LOG("Owner("<<owner<<") ptr("<<data.get()<<")");
+        FULLTRACE;
         if (owner) {
             device_free(data);
         }
