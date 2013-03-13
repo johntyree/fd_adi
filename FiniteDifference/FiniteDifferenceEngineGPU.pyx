@@ -243,6 +243,7 @@ cdef class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
         print_step = max(1, int(n / 10))
         to_percent = 100.0 / n
         utils.tic("Douglas:\t")
+        Y = V.copy(True)
         for k in range(n):
             if not k % print_step:
                 # if np.isnan(V).any():
@@ -250,18 +251,19 @@ cdef class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
                     # return V
                 print int(k * to_percent),
                 sys.stdout.flush()
-            Y = V.copy(True)
             for L in Firsts:
-                X = V.copy(True)
-                L.apply_(X)
-                Y.pluseq(X)
+                X = Y.copy(True)
+                L.apply_(X, overwrite=True)
+                V.pluseq(X)
+                del X
 
             for Le, Li in zip(Les, Lis):
-                X = V.copy(True)
-                Le.apply_(X)
-                Y.minuseq(X)
-                Li.solve_(Y)
-            V = Y
+                X = Y.copy(True)
+                Le.apply_(X, overwrite=True)
+                V.minuseq(X)
+                del X
+                Li.solve_(V, overwrite=True)
+            Y = V.copy(True)
 
         utils.toc(':  \t')
         return V
@@ -372,64 +374,64 @@ cdef class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
         # return V
 
 
-    # def solve_hundsdorferverwer(self, n, dt, initial=None, theta=0.5, callback=None,
-            # numpy=False):
+    def solve_hundsdorferverwer(self, n, dt, initial=None, theta=0.5, callback=None,
+            numpy=False):
+        Firsts = [(o * dt) for o in self.operators.values()]
 
-        # n = int(n)
-        # cdef SizedArray[double] V = initial.copy()
+        Les = [(o * theta * dt)
+               for d, o in sorted(self.operators.iteritems())
+               if type(d) != tuple]
+        Lis = [(o * (theta * -dt)).add(1, inplace=True)
+               for d, o in sorted(self.operators.iteritems())
+               if type(d) != tuple]
 
-        # Firsts = [(o * dt) for o in self.operators.values()]
+        for L in itertools.chain(Les, Lis):
+            L.clear_residual()
 
-        # Les = [(o * theta * dt)
-               # for d, o in sorted(self.operators.iteritems())
-               # if type(d) != tuple]
-        # Lis = [(o * (theta * -dt)).add(1, inplace=True)
-               # for d, o in sorted(self.operators.iteritems())
-               # if type(d) != tuple]
-
-        # for L in itertools.chain(Les, Lis):
-            # L.R = None
-
-        # print_step = max(1, int(n / 10))
-        # to_percent = 100.0 / n
-        # utils.tic("Hundsdorfer-Verwer:\t")
-        # for k in range(n):
-            # if not k % print_step:
+        print_step = max(1, int(n / 10))
+        to_percent = 100.0 / n
+        utils.tic("Hundsdorfer-Verwer:\t")
+        for k in range(n):
+            if not k % print_step:
                 # if np.isnan(V).any():
                     # print "Hundsdorfer-Verwer fail @ t = %f (%i steps)" % (dt * k, k)
                     # return V
-                # print int(k * to_percent),
-                # sys.stdout.flush()
-            # if callback is not None:
-                # callback(V, ((n - k) * dt))
+                print int(k * to_percent),
+                sys.stdout.flush()
 
-            # Y = V.copy()
-            # for L in Firsts:
-                # Y += L.apply(V)
-            # Y0 = Y.copy()
+            Y = V.copy()
+            for L in Firsts:
+                X = Y.copy(True)
+                L.apply_(X, overwrite=True)
+                V.pluseq(X)
+                del X
+            Y0 = V.copy()
 
-            # for Le, Li in zip(Les, Lis):
-                # Y -= Le.apply(V)
-                # Y = Li.solve(Y)
-            # Y2 = Y.copy()
+            for Le, Li in zip(Les, Lis):
+                X = Y.copy(True)
+                Le.apply_(X, overwrite=True)
+                V.minuseq(X)
+                del X
+                Li.solve(V)
+            Y2 = Y.copy()
 
-            # Y = Y0
-            # for L in Firsts:
-                # no_residual = L.R
-                # L.R = None
-                # Y += 0.5 * L.apply(Y2-V)
-                # L.R = no_residual
+            Y = Y0
+            for L in Firsts:
+                no_residual = L.R
+                L.R = None
+                Y += 0.5 * L.apply(Y2-V)
+                L.R = no_residual
 
-            # V = Y2
+            V = Y2
 
-            # for Le, Li in zip(Les, Lis):
-                # Y -= Le.apply(V)
-                # Y = Li.solve(Y)
+            for Le, Li in zip(Les, Lis):
+                Y -= Le.apply(V)
+                Y = Li.solve(Y)
 
-            # V = Y
+            V = Y
 
-        # utils.toc(':  \t')
-        # return V
+        utils.toc(':  \t')
+        return V
 
 
     # def solve_smooth(self, n, dt, initial=None, callback=None, smoothing_steps=2,

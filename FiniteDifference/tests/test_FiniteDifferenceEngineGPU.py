@@ -59,7 +59,6 @@ class BlackScholesOption_test(unittest.TestCase):
         npt.assert_allclose(V, ans, rtol=0.001)
 
     def test_douglas(self):
-        raise unittest.SkipTest
         t, dt = self.F.option.tenor, self.dt
         V = self.FG.solve_douglas(t/dt, dt, self.F.grid.domain[-1])[self.F.idx]
         ans = self.F.option.analytical
