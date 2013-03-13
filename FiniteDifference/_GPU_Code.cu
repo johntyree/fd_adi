@@ -6,5 +6,6 @@
 #include "_kernels.cu"
 #include "_CSRBandedOperatorGPU.cu"
 #include "_TriBandedOperatorGPU.cu"
+#include "VecArray.cu"
 
 #endif /* end of include guard */

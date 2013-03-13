@@ -21,6 +21,69 @@ using thrust::device_malloc;
 using thrust::device_free;
 using thrust::make_constant_iterator;
 
+namespace impl {
+    /* Vector Vector double */
+    void pluseq(
+        thrust::device_ptr<double> &out,
+        thrust::device_ptr<double> &in,
+        Py_ssize_t size);
+    void minuseq(
+        thrust::device_ptr<double> &out,
+        thrust::device_ptr<double> &in,
+        Py_ssize_t size);
+    void timeseq(
+        thrust::device_ptr<double> &out,
+        thrust::device_ptr<double> &in,
+        Py_ssize_t size);
+
+
+    /* Vector Vector int */
+    void pluseq(
+        thrust::device_ptr<int> &out,
+        thrust::device_ptr<int> &in,
+        Py_ssize_t size);
+    void minuseq(
+        thrust::device_ptr<int> &out,
+        thrust::device_ptr<int> &in,
+        Py_ssize_t size);
+    void timeseq(
+        thrust::device_ptr<int> &out,
+        thrust::device_ptr<int> &in,
+        Py_ssize_t size);
+
+
+    /* Vector Scalar double */
+    void minuseq(
+        thrust::device_ptr<double> &data,
+        Py_ssize_t size,
+        double x);
+    void timeseq(
+        thrust::device_ptr<double> &data,
+        Py_ssize_t size,
+        double x);
+    void pluseq(
+        thrust::device_ptr<double> &data,
+        Py_ssize_t size,
+        double x);
+
+
+    /* Vector Scalar int */
+    void minuseq(
+        thrust::device_ptr<int> &data,
+        Py_ssize_t size,
+        int x);
+    void timeseq(
+        thrust::device_ptr<int> &data,
+        Py_ssize_t size,
+        int x);
+    void pluseq(
+        thrust::device_ptr<int> &data,
+        Py_ssize_t size,
+        int x);
+} // namespace impl
+
+
+
 template <typename T>
 struct GPUVec : thrust::device_vector<T> {
 
@@ -194,9 +257,9 @@ struct SizedArray {
     }
 
     void sanity_check() {
-        if (!owner) {
-            DIE("Just take ownership for now...");
-        }
+        // if (!owner) {
+            // DIE("Just take ownership for now...");
+        // }
         if (data.get() == NULL) {
             if (owner) {
                 DIE(name << ": Failed to alloc memory of size("<<size<<")");
@@ -290,62 +353,77 @@ struct SizedArray {
         return idx;
     }
 
-    void minuseq(SizedArray<T> &x) {
-        // thrust::transform(
-                // data, data+size,
-                // x.data,
-                // data,
-                // thrust::minus<T>());
-        return;
-    }
-
-    void pluseq(SizedArray<T> &x) {
+    void timeseq(SizedArray<double> &x) {
         if (x.size != size) {
             DIE("Dimention mismatch.");
         }
-        // thrust::transform(
-                // data, data+size,
-                // x.data,
-                // data,
-                // thrust::plus<T>());
+        impl::timeseq(data, x.data, size);
         return;
     }
-
-    void timeseq(SizedArray<T> &x) {
-        TRACE;
-        // thrust::transform(
-                // data, data+size,
-                // x.data,
-                // data,
-                // thrust::multiplies<T>());
+    void timeseq(SizedArray<int> &x) {
+        if (x.size != size) {
+            DIE("Dimention mismatch.");
+        }
+        impl::timeseq(data, x.data, size);
         return;
     }
 
 
-    void minuseq_scalar(T x) {
-        // thrust::transform(
-                // data, data+size,
-                // make_constant_iterator(x),
-                // data,
-                // thrust::minus<T>());
+    void pluseq(SizedArray<double> &x) {
+        if (x.size != size) {
+            DIE("Dimention mismatch.");
+        }
+        impl::pluseq(data, x.data, size);
+        return;
+    }
+    void pluseq(SizedArray<int> &x) {
+        if (x.size != size) {
+            DIE("Dimention mismatch.");
+        }
+        impl::pluseq(data, x.data, size);
         return;
     }
 
-    void pluseq_scalar(T x) {
-        // thrust::transform(
-                // data, data+size,
-                // make_constant_iterator(x),
-                // data,
-                // thrust::plus<T>());
+    void minuseq(SizedArray<double> &x) {
+        if (x.size != size) {
+            DIE("Dimention mismatch.");
+        }
+        impl::minuseq(data, x.data, size);
+        return;
+    }
+    void minuseq(SizedArray<int> &x) {
+        if (x.size != size) {
+            DIE("Dimention mismatch.");
+        }
+        impl::minuseq(data, x.data, size);
         return;
     }
 
-    void timeseq_scalar(T x) {
-        // thrust::transform(
-                // data, data+size,
-                // make_constant_iterator(x),
-                // data,
-                // thrust::multiplies<T>());
+
+
+    void minuseq(double x) {
+        impl::minuseq(data, size, x);
+        return;
+    }
+    void pluseq(double x) {
+        impl::pluseq(data, size, x);
+        return;
+    }
+    void timeseq(double x) {
+        impl::timeseq(data, size, x);
+        return;
+    }
+
+    void minuseq(int x) {
+        impl::minuseq(data, size, x);
+        return;
+    }
+    void pluseq(int x) {
+        impl::pluseq(data, size, x);
+        return;
+    }
+    void timeseq(int x) {
+        impl::timeseq(data, size, x);
         return;
     }
 
