@@ -3,7 +3,7 @@
 # cython: infer_types = True
 # cython: embedsignature = True
 # distutils: language = c++
-# distutils: sources = FiniteDifference/backtrace.c FiniteDifference/filter.c
+# distutils: sources = FiniteDifference/backtrace.c FiniteDifference/filter.c FiniteDifference/_GPU_Code.cu
 
 from __future__ import division
 
@@ -66,18 +66,18 @@ cdef class SizedArrayPtr(object):
         self.p.timeseq(deref(other.p))
 
     cpdef pluseq_scalar(self, double other):
-        self.p.pluseq_scalar(other)
+        self.p.pluseq(other)
 
     cpdef minuseq_scalar(self, double other):
-        self.p.minuseq_scalar(other)
+        self.p.minuseq(other)
 
     cpdef timeseq_scalar(self, double other):
-        self.p.timeseq_scalar(other)
+        self.p.timeseq(other)
 
 
     def __dealloc__(self):
         if self.p:
-            print "Freeing %s:" % (self.tag,), to_string(self.p)
+            # print "Freeing %s:" % (self.tag,), to_string(self.p)
             del self.p
 
     def __str__(self):
@@ -127,17 +127,17 @@ cdef class SizedArrayPtr_i(object):
         self.p.timeseq(deref(other.p))
 
     cpdef pluseq_scalar(self, int other):
-        self.p.pluseq_scalar(other)
+        self.p.pluseq(other)
 
     cpdef minuseq_scalar(self, int other):
-        self.p.minuseq_scalar(other)
+        self.p.minuseq(other)
 
     cpdef timeseq_scalar(self, int other):
-        self.p.timeseq_scalar(other)
+        self.p.timeseq(other)
 
     def __dealloc__(self):
         if self.p:
-            print "Freeing %s:" % (self.tag,), to_string(self.p)
+            # print "Freeing %s:" % (self.tag,), to_string(self.p)
             del self.p
 
     def __str__(self):
@@ -145,7 +145,7 @@ cdef class SizedArrayPtr_i(object):
 
 
 
-cdef SizedArray[double]* to_SizedArray(np.ndarray v, name):
+cdef SizedArray[double]* to_SizedArray(np.ndarray v, cpp_string name) except +:
     assert v.dtype.type == np.float64, ("Types don't match! Got (%s) expected (%s)."
                                       % (v.dtype.type, np.float64))
     if not v.flags.c_contiguous:
@@ -153,7 +153,7 @@ cdef SizedArray[double]* to_SizedArray(np.ndarray v, name):
     return new SizedArray[double](<double *>np.PyArray_DATA(v), v.ndim, v.shape, name, True)
 
 
-cdef SizedArray[int]* to_SizedArray_i(np.ndarray v, cpp_string name):
+cdef SizedArray[int]* to_SizedArray_i(np.ndarray v, cpp_string name) except +:
     assert v.dtype.type == np.int32, ("Types don't match! Got (%s) expected (%s)."
                                       % (v.dtype.type, np.int32))
     if not v.flags.c_contiguous:

@@ -40,3 +40,5 @@ cdef class SizedArrayPtr_i(object):
 
 cdef from_SizedArray(SizedArray[double] &v)
 cdef from_SizedArray_i(SizedArray[int] &v)
+cdef SizedArray[double]* to_SizedArray(np.ndarray v, cpp_string name) except +
+cdef SizedArray[int]* to_SizedArray_i(np.ndarray v, cpp_string name) except +
