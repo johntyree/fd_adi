@@ -23,7 +23,7 @@ import FiniteDifference.FiniteDifferenceEngine as FD
 import FiniteDifference.FiniteDifferenceEngineGPU as FDG
 
 from FiniteDifference.blackscholes import BlackScholesFiniteDifferenceEngine, BlackScholesOption
-from FiniteDifference.heston import HestonBarrierOption
+from FiniteDifference.heston import HestonOption, HestonBarrierOption, HestonFiniteDifferenceEngine
 
 
 
@@ -77,6 +77,80 @@ class BlackScholesOption_test(unittest.TestCase):
         # print "Spot:", self.F.option.spot
         # print "Price:", V, ans, V - ans
         npt.assert_allclose(V, ans, rtol=0.001)
+
+
+class HestonOption_test(unittest.TestCase):
+
+    def setUp(self):
+        DefaultHeston = HestonOption(spot=100
+                        , strike=100
+                        , interest_rate=0.03
+                        , volatility = 0.2
+                        , tenor=1.0
+                        , mean_reversion = 1
+                        , mean_variance = 0.12
+                        , vol_of_variance = 0.3
+                        , correlation = 0.4
+                        )
+        option = DefaultHeston
+        # option = HestonOption(tenor=1, strike=99.0, volatility=0.2,
+                                        # mean_reversion=3, mean_variance=0.04,
+                                        # vol_of_variance=0.6, correlation=-0.7)
+
+
+        self.dt = 1.0/150.0
+        self.F = HestonFiniteDifferenceEngine(option, nspots=150,
+                                                   nvols=80,
+                                                   force_bandwidth=None,
+                                                   flip_idx_var=False)
+
+
+        # self.F = HestonFiniteDifferenceEngine(H, nspots=100,
+                                         # nvols=100, spotdensity=10, varexp=4,
+                                         # var_max=12, flip_idx_spot=False,
+                                         # flip_idx_var=False, verbose=False,
+                                         # force_bandwidth=None,
+                                         # force_exact=False)
+        self.F.init()
+        self.F.operators[1].diagonalize()
+        self.FG = FDG.FiniteDifferenceEngineADI(self.F)
+
+    def test_implicit(self):
+        t, dt = self.F.option.tenor, self.dt
+        dt = 1/500.0
+        for d, o in self.F.operators.items():
+            if type(d) != tuple:
+                assert o.is_tridiagonal(), "%s, %s" % (d, o.D.offsets)
+        V = self.FG.solve_implicit(t/dt, dt, self.F.grid.domain[-1])[self.F.idx]
+        ans = self.F.option.analytical
+        # print "Spot:", self.F.option.spot
+        # print "Price:", V, ans, V - ans
+        npt.assert_allclose(V, ans, rtol=0.001)
+
+    def test_douglas(self):
+        t, dt = self.F.option.tenor, self.dt
+        for d, o in self.F.operators.items():
+            if type(d) != tuple:
+                assert o.is_tridiagonal(), "%s, %s" % (d, o.D.offsets)
+        V = self.FG.solve_douglas(t/dt, dt, self.F.grid.domain[-1])[self.F.idx]
+        ans = self.F.option.analytical
+        # print "Spot:", self.F.option.spot
+        # print "Price:", V, ans, V - ans
+        npt.assert_allclose(V, ans, rtol=0.001)
+
+    def test_smooth(self):
+        raise unittest.SkipTest
+        t, dt = self.F.option.tenor, self.dt
+        for d, o in self.F.operators.items():
+            if type(d) != tuple:
+                assert o.is_tridiagonal(), "%s, %s" % (d, o.D.offsets)
+        V = self.FG.solve_smooth(t/dt, dt, self.F.grid.domain[-1])[self.F.idx]
+        ans = self.F.option.analytical
+        # print "Spot:", self.F.option.spot
+        # print "Price:", V, ans, V - ans
+        npt.assert_allclose(V, ans, rtol=0.001)
+
+
 
 
 class FiniteDifferenceEngineADI_test(unittest.TestCase):
