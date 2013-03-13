@@ -20,10 +20,11 @@ from FiniteDifference.visualize import fp
 import FiniteDifference.Grid as Grid
 
 import FiniteDifference.FiniteDifferenceEngine as FD
+import FiniteDifference.FiniteDifferenceEngineGPU as FDG
 import FiniteDifference.BandedOperatorGPU as BOG
 
 from FiniteDifference.blackscholes import BlackScholesFiniteDifferenceEngine, BlackScholesOption
-from FiniteDifference.heston import HestonBarrierOption
+from FiniteDifference.heston import HestonOption, HestonBarrierOption, HestonFiniteDifferenceEngine
 
 
 class BarrierOption_test(unittest.TestCase):
@@ -108,6 +109,66 @@ class BlackScholesOption_test(unittest.TestCase):
         t, dt = self.F.option.tenor, self.dt
         for o in self.F.operators.values():
             assert o.is_tridiagonal()
+        V = self.F.solve_smooth(t/dt, dt)[self.F.idx]
+        ans = self.F.option.analytical
+        # print "Spot:", self.F.option.spot
+        # print "Price:", V, ans, V - ans
+        npt.assert_allclose(V, ans, rtol=0.001)
+
+
+class HestonOption_test(unittest.TestCase):
+
+    def setUp(self):
+        DefaultHeston = HestonOption(spot=100
+                        , strike=100
+                        , interest_rate=0.03
+                        , volatility = 0.2
+                        , tenor=1.0
+                        , mean_reversion = 1
+                        , mean_variance = 0.12
+                        , vol_of_variance = 0.3
+                        , correlation = 0.4
+                        )
+        H = DefaultHeston
+
+        self.dt = 1.0/150.0
+
+        self.F = HestonFiniteDifferenceEngine(H, nspots=100,
+                                         nvols=100, spotdensity=10, varexp=4,
+                                         var_max=12, flip_idx_spot=False,
+                                         flip_idx_var=False, verbose=False,
+                                         force_bandwidth=None,
+                                         force_exact=False)
+        self.F.init()
+        self.F.operators[1].diagonalize()
+
+    def test_implicit(self):
+        t, dt = self.F.option.tenor, self.dt
+        for d, o in self.F.operators.items():
+            if type(d) != tuple:
+                assert o.is_tridiagonal(), "%s, %s" % (d, o.D.offsets)
+        V = self.F.solve_implicit(t/dt, dt)[self.F.idx]
+        ans = self.F.option.analytical
+        # print "Spot:", self.F.option.spot
+        # print "Price:", V, ans, V - ans
+        npt.assert_allclose(V, ans, rtol=0.001)
+
+    def test_douglas(self):
+        t, dt = self.F.option.tenor, self.dt
+        for d, o in self.F.operators.items():
+            if type(d) != tuple:
+                assert o.is_tridiagonal(), "%s, %s" % (d, o.D.offsets)
+        V = self.F.solve_douglas(t/dt, dt)[self.F.idx]
+        ans = self.F.option.analytical
+        # print "Spot:", self.F.option.spot
+        # print "Price:", V, ans, V - ans
+        npt.assert_allclose(V, ans, rtol=0.001)
+
+    def test_smooth(self):
+        t, dt = self.F.option.tenor, self.dt
+        for d, o in self.F.operators.items():
+            if type(d) != tuple:
+                assert o.is_tridiagonal(), "%s, %s" % (d, o.D.offsets)
         V = self.F.solve_smooth(t/dt, dt)[self.F.idx]
         ans = self.F.option.analytical
         # print "Spot:", self.F.option.spot
