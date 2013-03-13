@@ -25,6 +25,7 @@ def filterprint(domain, prec=1, fmt="f", predicate=lambda x: x == 0, blank='- ')
     # if domain.ndim == 1: # Print 1-D vectors as columns
         # domain = domain[:,np.newaxis]
     tmp = "% .{0}{1}".format(prec, fmt)
+    domain = np.atleast_2d(domain)
     xdim, ydim = np.shape(domain)
     pad = max(len(tmp % x) for x in domain.flat)
     fmt = "% {pad}.{prec}{fmt}".format(pad=pad, prec=prec, fmt=fmt)
