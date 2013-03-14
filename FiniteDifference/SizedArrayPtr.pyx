@@ -145,7 +145,7 @@ cdef class SizedArrayPtr_i(object):
 
 
 
-cdef SizedArray[double]* to_SizedArray(np.ndarray v, cpp_string name) except +:
+cdef SizedArray[double]* to_SizedArray(np.ndarray v, cpp_string name) except NULL:
     assert v.dtype.type == np.float64, ("Types don't match! Got (%s) expected (%s)."
                                       % (v.dtype.type, np.float64))
     if not v.flags.c_contiguous:
@@ -153,7 +153,7 @@ cdef SizedArray[double]* to_SizedArray(np.ndarray v, cpp_string name) except +:
     return new SizedArray[double](<double *>np.PyArray_DATA(v), v.ndim, v.shape, name, True)
 
 
-cdef SizedArray[int]* to_SizedArray_i(np.ndarray v, cpp_string name) except +:
+cdef SizedArray[int]* to_SizedArray_i(np.ndarray v, cpp_string name) except NULL:
     assert v.dtype.type == np.int32, ("Types don't match! Got (%s) expected (%s)."
                                       % (v.dtype.type, np.int32))
     if not v.flags.c_contiguous:
