@@ -153,7 +153,7 @@ class HestonOption_test(unittest.TestCase):
 
 
 
-class FiniteDifferenceEngineADI_test(unittest.TestCase):
+class FiniteDifferenceEngineADIGPU_test(unittest.TestCase):
 
     def setUp(self):
         s1_enable = 1
@@ -213,30 +213,48 @@ class FiniteDifferenceEngineADI_test(unittest.TestCase):
         self.F = FD.FiniteDifferenceEngineADI(self.G, coefficients=coeffs,
                 boundaries=bounds, schemes=schemes, force_bandwidth=None)
         self.F.init()
-        self.F.operators[1].diagonalize()
+        # self.F.operators[1].diagonalize()
         self.FG = FDG.FiniteDifferenceEngineADI(self.F)
 
 
     def test_verify_simple_operators_0(self):
-        ref = self.F.simple_operators[(0,)]
-        tst = self.FG.simple_operators[(0,)].immigrate()
+        ref = self.F.simple_operators[(0,)].copy()
+        tst = self.FG.simple_operators[(0,)].copy().immigrate()
+        npt.assert_equal(tst, ref)
+        ref = self.F.simple_operators[(0,)].copy()
+        tst = self.FG.simple_operators[(0,)].copy()
+        ref.diagonalize(), tst.diagonalize()
+        tst = tst.immigrate()
         npt.assert_equal(tst, ref)
 
     def test_verify_simple_operators_1(self):
-        ref = self.F.simple_operators[(1,)]
-        tst = self.FG.simple_operators[(1,)].immigrate()
+        ref = self.F.simple_operators[(1,)].copy()
+        tst = self.FG.simple_operators[(1,)].copy().immigrate()
+        npt.assert_equal(tst, ref)
+        ref = self.F.simple_operators[(1,)].copy()
+        tst = self.FG.simple_operators[(1,)].copy()
+        ref.diagonalize(), tst.diagonalize()
+        tst = tst.immigrate()
         npt.assert_equal(tst, ref)
 
     def test_verify_simple_operators_00(self):
-        ref = self.F.simple_operators[(0,0)]
-        tst = self.FG.simple_operators[(0,0)].immigrate()
+        ref = self.F.simple_operators[(0,0)].copy()
+        tst = self.FG.simple_operators[(0,0)].copy().immigrate()
+        npt.assert_equal(tst, ref)
+        ref = self.F.simple_operators[(0,0)].copy()
+        tst = self.FG.simple_operators[(0,0)].copy()
+        ref.diagonalize(), tst.diagonalize()
+        tst = tst.immigrate()
         npt.assert_equal(tst, ref)
 
     def test_verify_simple_operators_11(self):
-        ref = self.F.simple_operators[(1,1)]
-        ref.diagonalize()
-        tst = self.FG.simple_operators[(1,1)]
-        tst.diagonalize()
+        ref = self.F.simple_operators[(1,1)].copy()
+        tst = self.FG.simple_operators[(1,1)].copy()
+        tst = tst.immigrate()
+        npt.assert_equal(tst, ref)
+        ref = self.F.simple_operators[(1,1)].copy()
+        tst = self.FG.simple_operators[(1,1)].copy()
+        ref.diagonalize(), tst.diagonalize()
         tst = tst.immigrate()
         npt.assert_equal(tst, ref)
 
