@@ -282,12 +282,16 @@ cdef class BandedOperator(object):
 
 
     cpdef diagonalize(self):
+        if self.thisptr_tri == NULL:
+            raise RuntimeError("Diagonalize called but C++ tridiag is NULL. CSR? Mixed(%s)" % self.is_mixed_derivative)
         self.top_fold_status = FOLDED if self.top_fold_status == CAN_FOLD else CANNOT_FOLD
         self.bottom_fold_status = FOLDED if self.bottom_fold_status == CAN_FOLD else CANNOT_FOLD
         self.thisptr_tri.diagonalize()
 
 
     cpdef undiagonalize(self):
+        if self.thisptr_tri == NULL:
+            raise RuntimeError("Undiagonalize called but C++ tridiag is NULL. CSR? Mixed(%s)" % self.is_mixed_derivative)
         self.top_fold_status = CAN_FOLD if self.top_fold_status == FOLDED else CANNOT_FOLD
         self.bottom_fold_status = CAN_FOLD if self.bottom_fold_status == FOLDED else CANNOT_FOLD
         self.thisptr_tri.undiagonalize()
