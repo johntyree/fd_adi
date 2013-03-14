@@ -252,7 +252,10 @@ cdef class BandedOperator(object):
         if self.bottom_fold_status == CAN_FOLD:
             data[-1,block_len-1::block_len] = bots
 
-        R = from_SizedArray(self.thisptr_tri.R) if self.thisptr_tri.has_residual else None
+        if self.thisptr_tri.has_residual:
+            R = from_SizedArray(self.thisptr_tri.R)
+        else:
+            R = np.zeros(self.thisptr_tri.operator_rows)
 
         B = BO((data, offsets), residual=R, inplace=False,
             deltas=self.deltas,
