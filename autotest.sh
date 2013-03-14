@@ -25,6 +25,10 @@ if [ "$1" == '--force' ]; then
     shift
     CMD+="touch FiniteDifference/_GPU_Code.cu;"
 fi
+if [ "$1" == '--all' ]; then
+    shift
+    CMD+="rm .noseids;"
+fi
 CMD+="(set -o pipefail; python setup.py build_ext --inplace 2>&1 | grep -Ei --color -e '' -e error) \
     && nosetests --failed --rednose --verbosity=3 --with-id $@ \
     || echo -ne '\a'
