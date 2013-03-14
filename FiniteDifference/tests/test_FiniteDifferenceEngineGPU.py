@@ -279,8 +279,6 @@ class FiniteDifferenceEngineADI_test(unittest.TestCase):
         crossOp = self.F.operators[(0,1)]
         crossOpGPU = self.FG.simple_operators[(0,1)]
         g = self.F.grid.domain[-1]
-        x = self.F.grid.mesh[0]
-        y = self.F.grid.mesh[1]
 
         d2gdxdy = crossOp.apply(g)
         d2gdxdyGPU = crossOpGPU.apply(g)
