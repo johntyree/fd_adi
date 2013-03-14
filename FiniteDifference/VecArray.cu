@@ -22,66 +22,66 @@ using thrust::make_constant_iterator;
 namespace impl {
     /* Vector Vector double */
     void pluseq(
-        thrust::device_ptr<double> &out,
-        thrust::device_ptr<double> &in,
+        thrust::device_ptr<double> &us,
+        thrust::device_ptr<double> &them,
         Py_ssize_t size) {
         thrust::transform(
-                in, in+size,
-                out,
-                out,
+                us, us+size,
+                them,
+                us,
                 thrust::plus<double>());
     }
     void minuseq(
-        thrust::device_ptr<double> &out,
-        thrust::device_ptr<double> &in,
+        thrust::device_ptr<double> &us,
+        thrust::device_ptr<double> &them,
         Py_ssize_t size) {
         thrust::transform(
-                in, in+size,
-                out,
-                out,
+                us, us+size,
+                them,
+                us,
                 thrust::minus<double>());
     }
     void timeseq(
-        thrust::device_ptr<double> &out,
-        thrust::device_ptr<double> &in,
+        thrust::device_ptr<double> &us,
+        thrust::device_ptr<double> &them,
         Py_ssize_t size) {
         thrust::transform(
-                in, in+size,
-                out,
-                out,
+                us, us+size,
+                them,
+                us,
                 thrust::multiplies<double>());
     }
 
 
     /* Vector Vector int */
     void pluseq(
-        thrust::device_ptr<int> &out,
-        thrust::device_ptr<int> &in,
+        thrust::device_ptr<int> &us,
+        thrust::device_ptr<int> &them,
         Py_ssize_t size) {
         thrust::transform(
-                in, in+size,
-                out,
-                out,
+                us, us+size,
+                them,
+                us,
                 thrust::plus<int>());
     }
     void minuseq(
-        thrust::device_ptr<int> &out,
-        thrust::device_ptr<int> &in,
+        thrust::device_ptr<int> &us,
+        thrust::device_ptr<int> &them,
         Py_ssize_t size) {
         thrust::transform(
-                in, in+size,
-                out,
-                out,
+                us, us+size,
+                them,
+                us,
                 thrust::minus<int>());
     }
     void timeseq(
-        thrust::device_ptr<int> &out,
-        thrust::device_ptr<int> &in,
+        thrust::device_ptr<int> &us,
+        thrust::device_ptr<int> &them,
         Py_ssize_t size) {
         thrust::transform(
-                in, in+size,
-                out,
-                out,
+                us, us+size,
+                them,
+                us,
                 thrust::multiplies<int>());
     }
 
