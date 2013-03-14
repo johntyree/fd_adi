@@ -55,7 +55,7 @@ class SizedArray_test(unittest.TestCase):
         npt.assert_array_equal(ref, tst)
 
     def test_pluseq(self):
-        ref = self.v2 + self.v
+        ref = self.v + self.v2
         self.S.pluseq(self.S2)
         tst = self.S.to_numpy()
         # Preservation
@@ -63,7 +63,7 @@ class SizedArray_test(unittest.TestCase):
         npt.assert_array_equal(ref, tst)
 
     def test_minuseq(self):
-        ref = self.v2 - self.v
+        ref = self.v - self.v2
         self.S.minuseq(self.S2)
         tst = self.S.to_numpy()
         # Preservation
@@ -71,7 +71,7 @@ class SizedArray_test(unittest.TestCase):
         npt.assert_array_equal(ref, tst)
 
     def test_timeseq(self):
-        ref = self.v2 * self.v
+        ref = self.v * self.v2
         self.S.timeseq(self.S2)
         tst = self.S.to_numpy()
         # Preservation
@@ -79,7 +79,7 @@ class SizedArray_test(unittest.TestCase):
         npt.assert_array_equal(ref, tst)
 
 
-class SizedArray_test(unittest.TestCase):
+class SizedArray_i_test(unittest.TestCase):
 
     def setUp(self):
         self.scalar = 23
@@ -120,7 +120,7 @@ class SizedArray_test(unittest.TestCase):
         npt.assert_array_equal(ref, tst)
 
     def test_pluseq(self):
-        ref = self.v2 + self.v
+        ref = self.v + self.v2
         self.S.pluseq(self.S2)
         tst = self.S.to_numpy()
         # Preservation
@@ -128,7 +128,7 @@ class SizedArray_test(unittest.TestCase):
         npt.assert_array_equal(ref, tst)
 
     def test_minuseq(self):
-        ref = self.v2 - self.v
+        ref = self.v - self.v2
         self.S.minuseq(self.S2)
         tst = self.S.to_numpy()
         # Preservation
@@ -136,7 +136,7 @@ class SizedArray_test(unittest.TestCase):
         npt.assert_array_equal(ref, tst)
 
     def test_timeseq(self):
-        ref = self.v2 * self.v
+        ref = self.v * self.v2
         self.S.timeseq(self.S2)
         tst = self.S.to_numpy()
         # Preservation
