@@ -289,7 +289,8 @@ cdef class BandedOperator(object):
     cpdef cbool is_tridiagonal(self):
         return (    self.D.offsets[0] == 1
                 and self.D.offsets[1] == 0
-                and self.D.offsets[2] == -1)
+                and self.D.offsets[2] == -1
+                and len(self.D.offsets) == 3)
 
 
     cpdef apply(self, V, overwrite=False):
