@@ -48,6 +48,7 @@ cdef class BandedOperator(object):
     cpdef apply_(self, SizedArrayPtr V, overwrite=*)
     cpdef clear_residual(self)
     cpdef cbool is_folded(self)
+    cpdef cbool is_foldable(self)
     cpdef copy(self)
     cpdef diagonalize(self)
     cpdef emigrate(self, other, tag=*)

@@ -286,6 +286,11 @@ cdef class BandedOperator(object):
                 or self.bottom_fold_status == FOLDED)
 
 
+    cpdef cbool is_foldable(self):
+        return (self.top_fold_status == CAN_FOLD
+                or self.bottom_fold_status == CAN_FOLD)
+
+
     cpdef cbool is_tridiagonal(self):
         return (    self.D.offsets[0] == 1
                 and self.D.offsets[1] == 0

@@ -297,6 +297,10 @@ cdef class BandedOperator(object):
         return (self.top_fold_status == FOLDED
                 or self.bottom_fold_status == FOLDED)
 
+    cpdef cbool is_foldable(self):
+        return (self.top_fold_status == CAN_FOLD
+                or self.bottom_fold_status == CAN_FOLD)
+
 
     cpdef apply_(self, SizedArrayPtr sa_V, overwrite=False):
         cdef SizedArrayPtr sa_U

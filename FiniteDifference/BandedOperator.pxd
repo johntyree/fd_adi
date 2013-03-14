@@ -29,6 +29,7 @@ cdef class BandedOperator(object):
     cpdef apply(self, V, overwrite=*)
     cpdef applyboundary(self, boundary, mesh)
     cpdef cbool is_folded(self)
+    cpdef cbool is_foldable(self)
     cpdef cbool is_tridiagonal(self)
     cpdef clear_residual(self)
     cpdef copy(self)
