@@ -295,6 +295,61 @@ class FiniteDifferenceEngineADI_test(unittest.TestCase):
         npt.assert_array_almost_equal(d2gdxdy_scaled, d2gdxdyGPU_scaled)
 
 
+    def test_firsts(self):
+        r = self.F.dummy()[0]
+        t = self.FG.dummy()[0]
+        for ref, tstG in zip(r, t):
+            tst = tstG.immigrate()
+            npt.assert_array_equal(ref.D.data, tst.D.data)
+            npt.assert_equal(ref, tst)
+
+
+    def test_Les(self):
+        r = self.F.dummy()[1]
+        t = self.FG.dummy()[1]
+        for ref, tstG in zip(r, t):
+            tst = tstG.immigrate()
+            npt.assert_array_equal(ref.D.data, tst.D.data)
+            npt.assert_equal(ref, tst)
+
+
+    def test_Lis(self):
+        r = self.F.dummy()[2]
+        t = self.FG.dummy()[2]
+        for ref, tstG in zip(r, t):
+            tst = tstG.immigrate()
+            npt.assert_array_equal(ref.D.data, tst.D.data)
+            npt.assert_equal(ref, tst)
+
+
+    def test_Orig(self):
+        ref = self.F.dummy()[3]
+        tst = self.FG.dummy()[3]
+        print
+        fp(ref - tst, 'e')
+        npt.assert_array_equal(ref, tst)
+
+
+    def test_Y(self):
+        ref = self.F.dummy()[4]
+        tst = self.FG.dummy()[4]
+        print
+        fp(ref - tst, 'e')
+        npt.assert_array_equal(ref, tst)
+
+
+    def test_V(self):
+        ref = self.F.dummy()[5]
+        tst = self.FG.dummy()[5]
+        print
+        fp(ref - tst, 'e')
+        npt.assert_array_equal(ref, tst)
+
+
+
+
+
+
 def main():
     """Run main."""
     import nose

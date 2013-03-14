@@ -218,6 +218,54 @@ cdef class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
         return ret
 
 
+    def dummy(self):
+        n = 1
+        dt = 0.01
+        theta = 0.5
+        initial = np.arange(self.operators[0].shape[0], dtype=float)
+        initial.reshape(-1, len(initial) // self.operators[0].blocks)
+
+        Firsts = [(o * dt) for d, o in self.operators.items()]
+
+        Les = [(o * theta * dt)
+               for d, o in sorted(self.operators.iteritems())
+               if type(d) != tuple]
+        Lis = [(o * (theta * -dt)).add(1, inplace=True)
+               for d, o in sorted(self.operators.iteritems())
+               if type(d) != tuple]
+
+        for L in itertools.chain(Les, Lis):
+            L.clear_residual()
+
+        print_step = max(1, int(n / 10))
+        to_percent = 100.0 / n if n != 0 else 0
+        utils.tic("Douglas:\t")
+        cdef SizedArrayPtr V = SizedArrayPtr(initial)
+        Orig = V.copy(True)
+        Y = V.copy(True)
+        return Firsts, Les, Lis, Orig.to_numpy(), Y.to_numpy(), V.to_numpy()
+        for k in range(n):
+            if not k % print_step:
+                print int(k * to_percent),
+                sys.stdout.flush()
+
+            Y = V.copy(True)
+            for L in Firsts:
+                X = Y.copy(True)
+                L.apply_(X, overwrite=True)
+                V.pluseq(X)
+                del X
+
+            for Le, Li in zip(Les, Lis):
+                X = Y.copy(True)
+                Le.apply_(X, overwrite=True)
+                V.minuseq(X)
+                del X
+                Li.solve_(V, overwrite=True)
+
+        return Firsts, Les, Lis, Orig.to_numpy(), Y.to_numpy(), V.to_numpy()
+
+
     def solve_douglas(self, n, dt, np.ndarray initial, theta=0.5):
         n = int(n)
         cdef SizedArrayPtr V = SizedArrayPtr(initial)

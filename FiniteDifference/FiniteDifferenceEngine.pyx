@@ -866,6 +866,49 @@ cdef class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
 
 
     @initialized
+    def dummy(self):
+        n = 0
+        dt = 0.01
+        theta = 0.5
+        initial = np.arange(self.operators[0].shape[0], dtype=float)
+        initial.reshape(-1, len(initial) // self.operators[0].blocks)
+
+        Firsts = [(o * dt) for d, o in self.operators.items()]
+
+        Les = [(o * theta * dt)
+               for d, o in sorted(self.operators.iteritems())
+               if type(d) != tuple]
+        Lis = [(o * (theta * -dt)).add(1, inplace=True)
+               for d, o in sorted(self.operators.iteritems())
+               if type(d) != tuple]
+
+        for L in itertools.chain(Les, Lis):
+            L.clear_residual()
+
+        print_step = max(1, int(n / 10))
+        to_percent = 100.0 / n if n != 0 else 0
+        utils.tic("Douglas:\t")
+        V = initial
+        Orig = V.copy()
+        Y = V.copy()
+        return Firsts, Les, Lis, Orig, V, Y
+        for k in range(n):
+            if not k % print_step:
+                print int(k * to_percent),
+                sys.stdout.flush()
+
+            Y = V.copy()
+            for L in Firsts:
+                Y += L.apply(V)
+
+            for Le, Li in zip(Les, Lis):
+                Y -= Le.apply(V)
+                Y = Li.solve(Y)
+
+        return Firsts, Les, Lis, Orig, V, Y
+
+
+    @initialized
     def solve_douglas(self, n, dt, initial=None, theta=0.5, callback=None,
             numpy=False):
 
