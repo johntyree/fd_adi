@@ -648,7 +648,8 @@ void _TriBandedOperator::vectorized_scale(SizedArray<double> &vector) {
     Py_ssize_t block_len = operator_rows / blocks;
 
     typedef thrust::device_vector<REAL_t>::iterator Iterator;
-    tiled_range<Iterator> v(vector.data, vector.data + vector.size, operator_rows / vsize);
+    tiled_range<Iterator> v(vector.data, vector.data + vector.size, block_len);
+    typedef tiled_range<Iterator>::iterator TiledIterator;
     /*
      * LOG("op_rows("<<operator_rows<<") vsize("<<vsize<<") "
      *     "v.d.size("<<vector.size<<") "
@@ -699,6 +700,27 @@ void _TriBandedOperator::vectorized_scale(SizedArray<double> &vector) {
                     thrust::multiplies<REAL_t>());
         }
     }
+
+    strided_range<TiledIterator> u0(v.begin(), v.end(), block_len);
+    strided_range<TiledIterator> u1(v.begin()+block_len-1, v.end(), block_len);
+
+    if (top_fold_status == CAN_FOLD) {
+        thrust::transform(
+            top_factors.data,
+            top_factors.data+top_factors.size,
+            u0.begin(),
+            top_factors.data,
+            thrust::multiplies<REAL_t>());
+    }
+    if (bottom_fold_status == CAN_FOLD) {
+        thrust::transform(
+            bottom_factors.data,
+            bottom_factors.data+bottom_factors.size,
+            u1.begin(),
+            bottom_factors.data,
+            thrust::multiplies<REAL_t>());
+    }
+
     /* LOG("Scaled data."); */
     thrust::transform(R.data, R.data + R.size,
             v.begin(),
