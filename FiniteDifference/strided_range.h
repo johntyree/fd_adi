@@ -59,6 +59,6 @@ class strided_range
 };
 
 template <typename T, typename U>
-strided_range<T> & make_strided_range(T start, T end, U stride) {
-    return strided_range<T>(start, end, stride);
+strided_range<T> & make_strided_iterator(T start, T end, U stride) {
+    return strided_range<T>(start, end, stride).begin();
 }
