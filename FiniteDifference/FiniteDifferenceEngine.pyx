@@ -867,11 +867,11 @@ cdef class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
 
     @initialized
     def dummy(self):
-        n = 0
+        n = 1
         dt = 0.01
         theta = 0.5
-        initial = np.arange(self.operators[0].shape[0], dtype=float)
-        initial.reshape(-1, len(initial) // self.operators[0].blocks)
+        initial = np.arange(self.shape[0] * self.shape[1], dtype=float)
+        initial = initial.reshape(self.shape[0], self.shape[1])
 
         Firsts = [(o * dt) for d, o in self.operators.items()]
 
