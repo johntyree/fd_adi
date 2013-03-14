@@ -719,29 +719,27 @@ cdef class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
                 callback(V, ((n - k) * dt))
 
             Y = V.copy()
+
             for L in Firsts:
-                Y += L.apply(V)
-            Y0 = Y.copy()
+                V += L.apply(Y)
+
+            Z = V.copy()
 
             for Le, Li in zip(Les, Lis):
-                Y -= Le.apply(V)
-                Y = Li.solve(Y)
-            Y2 = Y.copy()
+                Z -= Le.apply(Y)
+                Z = Li.solve(Z)
 
-            Y = Y0
+            Y -= Z
+
             for L in Firsts:
                 no_residual = L.R
                 L.R = None
-                Y += 0.5 * L.apply(Y2-V)
+                V -= 0.5 * L.apply(Y)
                 L.R = no_residual
 
-            V = Y2
-
             for Le, Li in zip(Les, Lis):
-                Y -= Le.apply(V)
-                Y = Li.solve(Y)
-
-            V = Y
+                V -= Le.apply(Z)
+                V = Li.solve(V)
 
         utils.toc(':  \t')
         self.grid.domain.append(V.copy())
