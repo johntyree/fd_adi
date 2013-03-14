@@ -325,25 +325,25 @@ class FiniteDifferenceEngineADI_test(unittest.TestCase):
     def test_Orig(self):
         ref = self.F.dummy()[3]
         tst = self.FG.dummy()[3]
-        print
-        fp(ref - tst, 'e')
+        # print
+        # fp(ref - tst, 'e')
         npt.assert_array_equal(ref, tst)
 
 
     def test_Y(self):
         ref = self.F.dummy()[4]
         tst = self.FG.dummy()[4]
-        print
-        fp(ref - tst, 'e')
-        npt.assert_array_equal(ref, tst)
+        # print
+        # fp(ref - tst, 'e')
+        npt.assert_array_almost_equal(ref, tst)
 
 
     def test_V(self):
         ref = self.F.dummy()[5]
         tst = self.FG.dummy()[5]
-        print
-        fp(ref - tst, 'e')
-        npt.assert_array_equal(ref, tst)
+        # print
+        # fp(ref - tst, 'e')
+        npt.assert_array_almost_equal(ref, tst)
 
 
 

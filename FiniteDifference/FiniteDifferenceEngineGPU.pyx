@@ -243,7 +243,6 @@ cdef class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
         cdef SizedArrayPtr V = SizedArrayPtr(initial)
         Orig = V.copy(True)
         Y = V.copy(True)
-        return Firsts, Les, Lis, Orig.to_numpy(), Y.to_numpy(), V.to_numpy()
         for k in range(n):
             if not k % print_step:
                 print int(k * to_percent),

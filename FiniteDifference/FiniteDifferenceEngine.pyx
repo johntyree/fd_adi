@@ -891,7 +891,6 @@ cdef class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
         V = initial
         Orig = V.copy()
         Y = V.copy()
-        return Firsts, Les, Lis, Orig, V, Y
         for k in range(n):
             if not k % print_step:
                 print int(k * to_percent),
