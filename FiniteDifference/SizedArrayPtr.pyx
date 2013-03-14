@@ -3,7 +3,7 @@
 # cython: infer_types = True
 # cython: embedsignature = True
 # distutils: language = c++
-# distutils: sources = FiniteDifference/backtrace.c FiniteDifference/filter.c FiniteDifference/_GPU_Code.cu
+# distutils: sources = FiniteDifference/backtrace.c FiniteDifference/filter.c FiniteDifference/_SizedArrayPtr_GPU_Code.cu
 
 from __future__ import division
 

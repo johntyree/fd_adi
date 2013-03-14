@@ -3,7 +3,7 @@
 # cython: infer_types = True
 # cython: embedsignature = True
 # distutils: language = c++
-# distutils: sources = FiniteDifference/_GPU_Code.cu FiniteDifference/backtrace.c FiniteDifference/filter.c
+# distutils: sources = FiniteDifference/_BandedOperator_GPU_Code.cu FiniteDifference/backtrace.c FiniteDifference/filter.c
 
 
 from bisect import bisect_left
