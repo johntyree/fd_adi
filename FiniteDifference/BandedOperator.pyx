@@ -751,6 +751,8 @@ cdef class BandedOperator(object):
             R[i] *= vector[i]
         return
 
+    cpdef clear_residual(self):
+        self.R *= 0
 
     cpdef scale(self, func):
         """
