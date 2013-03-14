@@ -231,20 +231,38 @@ void _TriBandedOperator::apply(SizedArray<double> &V) {
     U->shape[1] = V.shape[1];
     U->sanity_check();
 
-    if (has_low_dirichlet) {
-        thrust::copy(low_dirichlet.data,
+    typedef GPUVec<REAL_t>::iterator Iterator;
+    strided_range<Iterator> u0(V.data, V.data+V.size, block_len);
+    strided_range<Iterator> u1(V.data+block_len-1, V.data+V.size, block_len);
+    if (axis == 1) {
+        if (has_low_dirichlet) {
+            thrust::copy(
+                low_dirichlet.data,
                 low_dirichlet.data + low_dirichlet.size,
-                V.data);
-    }
-    if (has_high_dirichlet) {
-        thrust::copy(high_dirichlet.data,
+                u1.begin()
+                );
+        }
+        if (has_high_dirichlet) {
+            thrust::copy(
+                high_dirichlet.data,
                 high_dirichlet.data + high_dirichlet.size,
-                V.data + V.size - V.shape[1]);
-    }
-
-    if (axis == 0) {
+                u0.begin()
+                );
+        }
+    } else {
+        if (has_low_dirichlet) {
+            thrust::copy(low_dirichlet.data,
+                    low_dirichlet.data + low_dirichlet.size,
+                    V.data);
+        }
+        if (has_high_dirichlet) {
+            thrust::copy(high_dirichlet.data,
+                    high_dirichlet.data + high_dirichlet.size,
+                    V.data + V.size - V.shape[1]);
+        }
         V.transpose(1);
     }
+
 
     U->data[0] = mid[0]*V.data[0] + sup[0]*V.data[1];
     thrust::transform(
