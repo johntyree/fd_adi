@@ -334,7 +334,10 @@ class FiniteDifferenceEngineADIGPU_test(unittest.TestCase):
         t = self.FG.dummy()[2]
         for ref, tstG in zip(r, t):
             tst = tstG.immigrate()
-            npt.assert_array_equal(ref.D.data, tst.D.data)
+            # fp(ref.D.data - tst.D.data, 'e')
+            npt.assert_array_almost_equal(ref.D.data, tst.D.data, decimal=15)
+            ref.D *= 0
+            tst.D *= 0
             npt.assert_equal(ref, tst)
 
 
