@@ -149,12 +149,13 @@ class HestonOption_test(unittest.TestCase):
                                          # force_bandwidth=None,
                                          # force_exact=False)
         self.F.init()
-        # self.F.operators[1].diagonalize()
+        self.F.operators[1].diagonalize()
 
     def test_implicit(self):
         t, dt = self.F.option.tenor, self.dt
-        dt = 1/400.0
+        dt = 1.0/600.0
         for d, o in self.F.operators.items():
+            print d, o.is_tridiagonal(), o.D.offsets
             if type(d) != tuple:
                 assert o.is_tridiagonal(), "%s, %s" % (d, o.D.offsets)
         V = self.F.solve_implicit(t/dt, dt)[self.F.idx]
