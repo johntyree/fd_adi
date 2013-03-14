@@ -887,7 +887,7 @@ cdef class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
 
         print_step = max(1, int(n / 10))
         to_percent = 100.0 / n if n != 0 else 0
-        utils.tic("Douglas:\t")
+        utils.tic("Dummy CPU:\t")
         V = initial
         Orig = V.copy()
         Y = V.copy()

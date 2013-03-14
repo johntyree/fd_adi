@@ -239,7 +239,7 @@ cdef class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
 
         print_step = max(1, int(n / 10))
         to_percent = 100.0 / n if n != 0 else 0
-        utils.tic("Douglas:\t")
+        utils.tic("Dummy GPU:\t")
         cdef SizedArrayPtr V = SizedArrayPtr(initial)
         Orig = V.copy(True)
         Y = V.copy(True)
