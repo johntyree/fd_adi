@@ -220,6 +220,9 @@ struct zipdot3 : thrust::binary_function<const Triple &, const Triple &, REAL_t>
 
 void _TriBandedOperator::apply(SizedArray<double> &V) {
     FULLTRACE;
+    if (top_fold_status == CAN_FOLD || bottom_fold_status == CAN_FOLD) {
+        DIE("Must be tridiagonal to apply operator on GPU.");
+    }
     verify_diag_ptrs();
     const unsigned N = V.size;
     SizedArray<double> *U = new SizedArray<double>(N, "U from V apply");
@@ -389,14 +392,17 @@ void _TriBandedOperator::add_scalar(double val) {
     FULLTRACE;
 }
 
+
 bool _TriBandedOperator::is_folded() {
     return (top_fold_status == FOLDED || bottom_fold_status == FOLDED);
 }
 
 
-
 void _TriBandedOperator::solve(SizedArray<double> &V) {
     FULLTRACE;
+    if (top_fold_status == CAN_FOLD || bottom_fold_status == CAN_FOLD) {
+        DIE("Must be tridiagonal to apply inverse operator on GPU.");
+    }
     verify_diag_ptrs();
     const unsigned N = V.size;
     /* SizedArray<double> *U = new SizedArray<double>(N, "U from V solve"); */

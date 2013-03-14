@@ -213,7 +213,7 @@ class FiniteDifferenceEngineADI_test(unittest.TestCase):
         self.F = FD.FiniteDifferenceEngineADI(self.G, coefficients=coeffs,
                 boundaries=bounds, schemes=schemes, force_bandwidth=None)
         self.F.init()
-        self.F.operators[1]
+        self.F.operators[1].diagonalize()
         self.FG = FDG.FiniteDifferenceEngineADI(self.F)
 
 
