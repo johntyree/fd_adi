@@ -243,6 +243,13 @@ cdef class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
         cdef SizedArrayPtr V = SizedArrayPtr(initial)
         Orig = V.copy(True)
         Y = V.copy(True)
+
+        tags = dict()
+        for L in itertools.chain(Les, Lis, Firsts):
+            if L.is_foldable():
+                L.diagonalize()
+                tags[id(L)] = 1
+
         for k in range(n):
             if not k % print_step:
                 print int(k * to_percent),
@@ -261,6 +268,12 @@ cdef class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
                 V.minuseq(X)
                 del X
                 Li.solve_(V, overwrite=True)
+
+        for i in tags:
+            for L in itertools.chain(Les, Lis, Firsts):
+                if id(L) == i:
+                    L.undiagonalize()
+                    break
 
         return Firsts, Les, Lis, Orig.to_numpy(), Y.to_numpy(), V.to_numpy()
 
