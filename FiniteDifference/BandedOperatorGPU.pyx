@@ -184,8 +184,9 @@ cdef class BandedOperator(object):
         if other.top_fold_status == CAN_FOLD or other.bottom_fold_status == CAN_FOLD:
             diad = True
             other.diagonalize()
-            self.top_fold_status = other.top_fold_status
-            self.bottom_fold_status = other.bottom_fold_status
+
+        self.top_fold_status = other.top_fold_status
+        self.bottom_fold_status = other.bottom_fold_status
 
         scipy_to_cublas(other)
 
