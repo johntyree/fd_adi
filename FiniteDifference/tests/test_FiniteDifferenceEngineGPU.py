@@ -138,6 +138,18 @@ class HestonOption_test(unittest.TestCase):
         # print "Price:", V, ans, V - ans
         npt.assert_allclose(V, ans, rtol=0.001)
 
+    def test_hundsdorferverwer(self):
+        t, dt = self.F.option.tenor, self.dt
+        for d, o in self.F.operators.items():
+            if type(d) != tuple:
+                assert o.is_tridiagonal(), "%s, %s" % (d, o.D.offsets)
+        V = self.FG.solve_hundsdorferverwer(1, dt, self.F.grid.domain[-1])[self.F.idx]
+        V2 = self.F.solve_hundsdorferverwer(1, dt, self.F.grid.domain[-1])[self.F.idx]
+        ans = self.F.option.analytical
+        # print "Spot:", self.F.option.spot
+        print "Price:", V2, V, ans, V - ans
+        npt.assert_allclose(V, ans, rtol=0.001)
+
     def test_smooth(self):
         raise unittest.SkipTest
         t, dt = self.F.option.tenor, self.dt

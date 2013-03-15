@@ -356,6 +356,12 @@ cdef class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
         for L in itertools.chain(Les, Lis):
             L.enable_residual(False)
 
+        tags = dict()
+        for L in itertools.chain(Les, Lis, Firsts):
+            if L.is_foldable():
+                L.diagonalize()
+                tags[id(L)] = 1
+
         print_step = max(1, int(n / 10))
         to_percent = 100.0 / n
         utils.tic("Hundsdorfer-Verwer:\t")
@@ -367,39 +373,47 @@ cdef class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
                 print int(k * to_percent),
                 sys.stdout.flush()
 
-            Y = V.copy()
+            Y = V.copy(True)
             for L in Firsts:
                 X = Y.copy(True)
                 L.apply_(X, overwrite=True)
                 V.pluseq(X)
                 del X
-            Y0 = V.copy()
+
+            Z = V.copy(True)
 
             for Le, Li in zip(Les, Lis):
                 X = Y.copy(True)
                 Le.apply_(X, overwrite=True)
-                V.minuseq(X)
+                Z.minuseq(X)
+                Li.solve_(Z, overwrite=True)
                 del X
-                Li.solve(V)
-            Y2 = Y.copy()
 
-            Y = Y0
+            Y.minuseq(Z)
+            Y.timeseq_scalar(0.5)
+
             for L in Firsts:
-                no_residual = L.R
-                L.R = None
-                Y += 0.5 * L.apply(Y2-V)
-                L.R = no_residual
-
-            V = Y2
+                L.enable_residual(False)
+                X = Y.copy(True)
+                L.apply_(X, overwrite=True)
+                V.minuseq(X)
+                L.enable_residual(True)
+                del X
 
             for Le, Li in zip(Les, Lis):
-                Y -= Le.apply(V)
-                Y = Li.solve(Y)
-
-            V = Y
+                X = Z.copy(True)
+                Le.apply_(X, overwrite=True)
+                V.minuseq(X)
+                Li.solve_(V)
 
         utils.toc(':  \t')
-        return V
+
+        for i in tags:
+            for L in itertools.chain(Les, Lis, Firsts):
+                if id(L) == i:
+                    L.undiagonalize()
+                    break
+
 
 
     def solve_smooth(self, n, dt, initial=None, callback=None, smoothing_steps=2,
