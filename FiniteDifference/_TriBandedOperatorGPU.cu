@@ -159,7 +159,7 @@ struct DMVPY_f : thrust::unary_function<const Septuple &, REAL_t> {
 void _TriBandedOperator::DMVPY(SizedArray<double> &V, char operation, SizedArray<double> &Y,
         SizedArray<double> &out) {
     FULLTRACE;
-    verify_diag_ptrs();
+    /* verify_diag_ptrs(); */
     const unsigned N = V.size;
 
     if (has_low_dirichlet) {
@@ -252,7 +252,7 @@ void _TriBandedOperator::apply(SizedArray<double> &V) {
     if (top_fold_status == CAN_FOLD || bottom_fold_status == CAN_FOLD) {
         DIE("Must be tridiagonal to apply operator on GPU.");
     }
-    verify_diag_ptrs();
+    /* verify_diag_ptrs(); */
     const unsigned N = V.size;
     /* SizedArray<double> *U = new SizedArray<double>(N, "U from V apply"); */
     /* U->ndim = V.ndim; */
@@ -462,7 +462,7 @@ void _TriBandedOperator::solve(SizedArray<double> &V) {
     if (top_fold_status == CAN_FOLD || bottom_fold_status == CAN_FOLD) {
         DIE("Must be tridiagonal to apply inverse operator on GPU.");
     }
-    verify_diag_ptrs();
+    /* verify_diag_ptrs(); */
     const unsigned N = V.size;
     /* SizedArray<double> *U = new SizedArray<double>(N, "U from V solve"); */
     /* U->ndim = V.ndim; */
