@@ -32,7 +32,7 @@ class Cpp_test(unittest.TestCase):
 
     def setUp(self):
         # print "Setting up Params for CPP tests"
-        shape = (4,4)
+        shape = (15,15)
         self.v1 = np.arange(shape[0]*shape[1], dtype=float)**2
         self.v2 = self.v1.copy()
         self.v2.resize(shape)
@@ -105,8 +105,8 @@ class Cpp_test(unittest.TestCase):
         B = B.immigrate("test 1")
         npt.assert_array_equal([1, 0, -1], B.D.offsets)
         npt.assert_equal(B.bottom_fold_status, "FOLDED")
-        fp(ref.D)
-        fp(B.D)
+        # fp(ref.D)
+        # fp(B.D)
         assert ref == B
 
 
@@ -166,10 +166,13 @@ class Cpp_test(unittest.TestCase):
 
     def test_csr_apply_01(self):
         B01  = self.F.operators[(0,1)]
+        B01G = BOG.BandedOperator(B01)
+        B01 *= 0.023934
+        B01G *= 0.023934
         ref = B01.apply(self.v2)
-        B01 = BOG.BandedOperator(B01)
-        tst = B01.apply(self.v2.copy())
-        npt.assert_array_equal(ref, tst)
+        tst = B01G.apply(self.v2.copy())
+        # fp(ref - tst, 'e')
+        npt.assert_array_almost_equal(ref, tst, decimal=15)
 
 
     def test_csr_apply_random(self):
@@ -198,6 +201,26 @@ class Cpp_test(unittest.TestCase):
         ref.resize(B.D.shape)
         B = BOG.BandedOperator(B)
         B.vectorized_scale(np.arange(B.operator_rows, dtype=float))
+        B = B.immigrate()
+        # fp(ref)
+        # print
+        # fp(B.D)
+        # print
+        # fp(B.D - ref)
+        npt.assert_array_equal(ref, B.D.todense())
+
+
+    def test_csr_scalar(self):
+        scalar = 0.235
+        B = self.F.operators[0]
+        B.D = scipy.sparse.csr_matrix(np.ones((5,5)))
+        B.R = None
+        B.dirichlet = (None, None)
+        B.is_mixed_derivative = True
+        ref = np.ones(B.D.shape[0], dtype=float).repeat(B.D.shape[1]) * scalar
+        ref.resize(B.D.shape)
+        B = BOG.BandedOperator(B)
+        B *= scalar
         B = B.immigrate()
         # fp(ref)
         # print
@@ -252,7 +275,7 @@ class Cpp_test(unittest.TestCase):
         tst = B.solve(self.v2.copy())
         B = B.immigrate()
         # fp(ref - tst, 3, 'e')
-        npt.assert_array_almost_equal(ref, tst, decimal=8)
+        npt.assert_array_almost_equal(ref, tst)
         npt.assert_array_equal(origdata, B.D.data)
 
 
@@ -263,16 +286,18 @@ class Cpp_test(unittest.TestCase):
         B.R = np.random.random(B.D.data.shape[1])
         B.D.data[0,0] = 0
         B.D.data[-1,-1] = 0
+        ref = B.solve(self.v2)
         B.undiagonalize()
         origdata = B.D.data.copy()
-        ref = B.solve(self.v2)
-        B = BOG.BandedOperator(B)
-        B.diagonalize()
-        tst = B.solve(self.v2.copy())
-        B.undiagonalize()
-        B = B.immigrate()
+
+        BG = BOG.BandedOperator(B)
+        BG.diagonalize()
+        tst = BG.solve(self.v2.copy())
+        BG.undiagonalize()
+        BG = BG.immigrate()
+        # fp(ref - tst, 3, 'e')
         npt.assert_array_equal(origdata, B.D.data)
-        npt.assert_array_almost_equal(ref, tst, decimal=8)
+        npt.assert_array_almost_equal(ref, tst)
 
 
 

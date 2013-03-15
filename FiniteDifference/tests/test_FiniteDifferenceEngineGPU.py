@@ -122,9 +122,22 @@ class HestonOption_test(unittest.TestCase):
             if type(d) != tuple:
                 assert o.is_tridiagonal(), "%s, %s" % (d, o.D.offsets)
         V = self.FG.solve_implicit(t/dt, dt, self.F.grid.domain[-1])[self.F.idx]
+        V2 = self.F.solve_implicit(t/dt, dt, self.F.grid.domain[-1])[self.F.idx]
+
+        op = self.F.operators[(0,1)]
+        opG = self.FG.operators[(0,1)].immigrate()
+
+        dom = np.arange(self.F.grid.size, dtype=float)
+        dom = dom.reshape(self.F.grid.shape)
+        ref = op.apply(dom)
+        tst = self.FG.operators[(0,1)].apply(dom)
+        npt.assert_array_almost_equal(tst, ref, decimal=10)
+
         ans = self.F.option.analytical
+        npt.assert_array_almost_equal(op.D.data, opG.D.data)
         # print "Spot:", self.F.option.spot
-        # print "Price:", V, ans, V - ans
+        # print "Price:", V2, V, ans, V - ans
+        npt.assert_allclose(V, V2)
         npt.assert_allclose(V, ans, rtol=0.001)
 
     def test_douglas(self):
@@ -143,8 +156,8 @@ class HestonOption_test(unittest.TestCase):
         for d, o in self.F.operators.items():
             if type(d) != tuple:
                 assert o.is_tridiagonal(), "%s, %s" % (d, o.D.offsets)
-        V = self.FG.solve_hundsdorferverwer(1, dt, self.F.grid.domain[-1])[self.F.idx]
-        V2 = self.F.solve_hundsdorferverwer(1, dt, self.F.grid.domain[-1])[self.F.idx]
+        V = self.FG.solve_hundsdorferverwer(t/dt, dt, self.F.grid.domain[-1])[self.F.idx]
+        V2 = self.F.solve_hundsdorferverwer(t/dt, dt, self.F.grid.domain[-1])[self.F.idx]
         ans = self.F.option.analytical
         # print "Spot:", self.F.option.spot
         print "Price:", V2, V, ans, V - ans
