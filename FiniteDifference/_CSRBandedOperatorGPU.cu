@@ -73,7 +73,7 @@ void _CSRBandedOperator::apply(SizedArray<double> &V) {
     if (status != CUSPARSE_STATUS_SUCCESS) {
         DIE("CUSPARSE matrix description init failed.");
     }
-    GPUVec<double> U(V.data, V.data + V.size);
+    thrust::copy(V.data, V.data + V.size, V.tempspace);
     double zero = 0, one = 1;
     status = cusparseDcsrmv(handle,
             CUSPARSE_OPERATION_NON_TRANSPOSE,
@@ -85,7 +85,7 @@ void _CSRBandedOperator::apply(SizedArray<double> &V) {
             data.data.get(),
             row_ptr.data.get(),
             col_ind.data.get(),
-            U.raw(),
+            V.tempspace.get(),
             &zero,
             V.data.get()
             );
