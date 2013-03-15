@@ -13,6 +13,8 @@ from FiniteDifference.blackscholes import BlackScholesOption
 
 from FiniteDifference.Grid import Grid
 
+from FiniteDifference.FiniteDifferenceEngineGPU import FiniteDifferenceEngineADI as FDE_ADI_GPU
+
 # FD.DEBUG = True
 
 from FiniteDifference.visualize import fp
@@ -26,7 +28,7 @@ DefaultHeston = HestonOption( spot=100
                  , mean_reversion = 1
                  , mean_variance = 0.12
                  , vol_of_variance = 0.041
-                 , correlation = 0.0
+                 , correlation = 0.4
                  )
 
 H = DefaultHeston
@@ -38,28 +40,32 @@ H = DefaultHeston
 
 # Does better without upwinding here
 
-def create(nspots=100, nvols=100):
-    schemes = {}
-    schemes[(1,)] = [{"scheme": "forward"}]
+def create(nspots=30, nvols=30):
+    # schemes[(1,)] = [{"scheme": "forward"}]
 
-    F = HestonFiniteDifferenceEngine(H, schemes=schemes, nspots=nspots,
+    F = HestonFiniteDifferenceEngine(H, nspots=nspots,
                                         nvols=nvols, spotdensity=10, varexp=4,
-                                        var_max=12, flip_idx_spot=True,
-                                        flip_idx_var=True, verbose=False)
+                                        var_max=12, verbose=False)
+    F.init()
+    F.operators[1].diagonalize()
     return F
 
-def run(F=None, func=None):
+def run(F=None, func=None, initial=None):
     if F is None:
         F = create()
 
     if func is None:
         func = 'hv'
 
+    if initial is None:
+        initial = F.grid.domain[0].copy()
+
     funcs = {
-        'hv': lambda dt: F.solve_hundsdorferverwer(H.tenor/dt, dt, theta=0.65),
-        'i' : lambda dt: F.solve_implicit(H.tenor/dt, dt),
-        'd' : lambda dt: F.solve_implicit(H.tenor/dt, dt, theta=0.65),
-        'smooth': lambda dt: F.smooth(H.tenor/dt, dt, smoothing_steps=1, scheme=F.solve_hundsdorferverwer)
+        'hv': lambda dt: F.solve_hundsdorferverwer(H.tenor/dt, dt, initial, 0.65),
+        'i' : lambda dt: F.solve_implicit(H.tenor/dt, dt, initial),
+        'd' : lambda dt: F.solve_implicit(H.tenor/dt, dt, initial, 0.65),
+        # 'smooth': lambda dt: F.smooth(H.tenor/dt, dt, smoothing_steps=1, scheme=F.solve_hundsdorferverwer)
+        'smooth': lambda dt: F.smooth(H.tenor/dt, dt, initial, smoothing_steps=1)
     }
     labels = {
         'hv': "Hundsdorfer-Verwer",
@@ -71,7 +77,7 @@ def run(F=None, func=None):
     dt = 1.0 / 2.0**10
     Vs = funcs[func](dt)
 
-    return
+    return Vs
 
 def main():
     if len(sys.argv) > 1:
@@ -82,14 +88,18 @@ def main():
     if len(sys.argv) > 2:
         nspots = int(sys.argv[2])
     else:
-        nspots = 100
+        nspots = 300
     if len(sys.argv) > 3:
         nvols = int(sys.argv[3])
     else:
-        nvols = 100
+        nvols = 300
 
     F = create(nspots=nspots, nvols=nvols)
-    run(F)
+    idx = F.idx
+    FG = FDE_ADI_GPU(F)
+    print run(F, 'hv')[idx]
+    F.grid.reset()
+    print run(FG, 'hv', F.grid.domain[0])[idx]
 
 if __name__ == '__main__':
     main()
