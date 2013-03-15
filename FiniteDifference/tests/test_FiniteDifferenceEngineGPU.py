@@ -65,7 +65,6 @@ class BlackScholesOption_test(unittest.TestCase):
 
 
     def test_smooth(self):
-        raise unittest.SkipTest
         t, dt = self.F.option.tenor, self.dt
         for o in self.F.operators.values():
             assert o.is_tridiagonal()
@@ -165,7 +164,6 @@ class HestonOption_test(unittest.TestCase):
 
 
     def test_smooth(self):
-        raise unittest.SkipTest
         t, dt = self.F.option.tenor, self.dt
         for d, o in self.F.operators.items():
             if type(d) != tuple:
