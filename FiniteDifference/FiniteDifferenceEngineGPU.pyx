@@ -209,6 +209,7 @@ cdef class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
         cdef SizedArrayPtr V = SizedArrayPtr(initial)
         Orig = V.copy(True)
         Y = V.copy(True)
+        X = V.copy(True)
 
         tags = dict()
         for L in itertools.chain(Les, Lis, Firsts):
@@ -221,18 +222,16 @@ cdef class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
                 print int(k * to_percent),
                 sys.stdout.flush()
 
-            Y = V.copy(True)
+            Y.copy_from(V)
             for L in Firsts:
-                X = Y.copy(True)
+                X.copy_from(Y)
                 L.apply_(X, overwrite=True)
                 V.pluseq(X)
-                del X
 
             for Le, Li in zip(Les, Lis):
-                X = Y.copy(True)
+                X.copy_from(Y)
                 Le.apply_(X, overwrite=True)
                 V.minuseq(X)
-                del X
                 Li.solve_(V, overwrite=True)
 
         for i in tags:
@@ -311,6 +310,7 @@ cdef class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
         to_percent = 100.0 / n
         utils.tic("Douglas:\t")
         Y = V.copy(True)
+        X = SizedArrayPtr().alloc(V.size)
         for k in range(n):
             if not k % print_step:
                 # if np.isnan(V).any():
@@ -319,18 +319,16 @@ cdef class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
                 print int(k * to_percent),
                 sys.stdout.flush()
             for L in Firsts:
-                X = Y.copy(True)
+                X.copy_from(Y)
                 L.apply_(X, overwrite=True)
                 V.pluseq(X)
-                del X
 
             for Le, Li in zip(Les, Lis):
-                X = Y.copy(True)
+                X.copy_from(Y)
                 Le.apply_(X, overwrite=True)
                 V.minuseq(X)
-                del X
                 Li.solve_(V, overwrite=True)
-            Y = V.copy(True)
+            Y.copy_from(V)
 
         utils.toc(':  \t')
 
@@ -368,6 +366,10 @@ cdef class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
         print_step = max(1, int(n / 10))
         to_percent = 100.0 / n
         utils.tic("Hundsdorfer-Verwer:\t")
+        # Pre allocate
+        X = SizedArrayPtr().alloc(V.p.size)
+        Y = SizedArrayPtr().alloc(V.p.size)
+        Z = SizedArrayPtr().alloc(V.p.size)
         for k in range(n):
             if not k % print_step:
                 # if np.isnan(V).any():
@@ -376,35 +378,33 @@ cdef class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
                 print int(k * to_percent),
                 sys.stdout.flush()
 
-            Y = V.copy(True)
+            Y.copy_from(V)
             for L in Firsts:
-                X = Y.copy(True)
+                X.copy_from(Y)
                 L.apply_(X, overwrite=True)
                 V.pluseq(X)
-                del X
 
-            Z = V.copy(True)
+            Z.copy_from(V)
 
             for Le, Li in zip(Les, Lis):
-                X = Y.copy(True)
+                X.copy_from(Y)
                 Le.apply_(X, overwrite=True)
                 Z.minuseq(X)
                 Li.solve_(Z, overwrite=True)
-                del X
 
-            Y.minuseq(Z)
-            Y.timeseq_scalar(0.5)
+            # Y.minuseq(Z)
+            # Y.timeseq_scalar(0.5)
+            Y.minuseq_over2(Z)
 
             for L in Firsts:
                 L.enable_residual(False)
-                X = Y.copy(True)
+                X.copy_from(Y)
                 L.apply_(X, overwrite=True)
                 V.minuseq(X)
                 L.enable_residual(True)
-                del X
 
             for Le, Li in zip(Les, Lis):
-                X = Z.copy(True)
+                X.copy_from(Z)
                 Le.apply_(X, overwrite=True)
                 V.minuseq(X)
                 Li.solve_(V, overwrite=True)
