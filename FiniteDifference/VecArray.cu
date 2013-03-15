@@ -87,6 +87,16 @@ namespace impl {
 
 
     /* Vector Scalar double */
+    void pluseq(
+        thrust::device_ptr<double> &data,
+        Py_ssize_t size,
+        double x) {
+        thrust::transform(
+                data, data+size,
+                thrust::make_constant_iterator(x),
+                data,
+                thrust::plus<double>());
+    }
     void minuseq(
         thrust::device_ptr<double> &data,
         Py_ssize_t size,
@@ -107,19 +117,19 @@ namespace impl {
                 data,
                 thrust::multiplies<double>());
     }
+
+
+    /* Vector Scalar int */
     void pluseq(
-        thrust::device_ptr<double> &data,
+        thrust::device_ptr<int> &data,
         Py_ssize_t size,
-        double x) {
+        int x) {
         thrust::transform(
                 data, data+size,
                 thrust::make_constant_iterator(x),
                 data,
-                thrust::plus<double>());
+                thrust::plus<int>());
     }
-
-
-    /* Vector Scalar int */
     void minuseq(
         thrust::device_ptr<int> &data,
         Py_ssize_t size,
@@ -139,15 +149,5 @@ namespace impl {
                 thrust::make_constant_iterator(x),
                 data,
                 thrust::multiplies<int>());
-    }
-    void pluseq(
-        thrust::device_ptr<int> &data,
-        Py_ssize_t size,
-        int x) {
-        thrust::transform(
-                data, data+size,
-                thrust::make_constant_iterator(x),
-                data,
-                thrust::plus<int>());
     }
 } // namespace impl
