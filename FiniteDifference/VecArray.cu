@@ -105,7 +105,7 @@ namespace impl {
                 data, data+size,
                 thrust::make_constant_iterator(x),
                 data,
-                thrust::multiplies<int>());
+                thrust::multiplies<double>());
     }
     void pluseq(
         thrust::device_ptr<double> &data,
