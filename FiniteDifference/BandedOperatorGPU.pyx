@@ -441,6 +441,8 @@ cdef class BandedOperator(object):
         Add a scalar to the main diagonal
         Does not alter self.R, the residual vector.
         """
+        if self.thisptr_tri == NULL:
+            raise RuntimeError("add_scalar called but C++ tridiag is NULL. CSR? Mixed(%s)" % self.is_mixed_derivative)
         self.thisptr_tri.add_scalar(other)
         return
 
