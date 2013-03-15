@@ -607,31 +607,24 @@ void _TriBandedOperator::undiagonalize() {
 
 template <typename Tuple>
 struct fold_operator : public thrust::unary_function<Tuple, void> {
-    bool unfold;
-    fold_operator(bool x) : unfold(x) {}
     __host__ __device__
     void operator()(Tuple t) {
         using thrust::get;
-        int const c0   = 0;
-        int const c1   = 1;
-        int const b0   = 2;
-        int const b1   = 3;
-        int const a1   = 4;
-        int const fact = 5;
-        int nothing = c0 + c1 + b0 + b1 + a1 + fact;
-        nothing = nothing;
-        if (unfold) {
-            get<c0>(t) -= get<b1>(t) * get<fact>(t);
-            get<b0>(t) -= get<a1>(t) * get<fact>(t);
-            get<fact>(t) *= -get<c1>(t);
-        } else {
-            get<fact>(t) = get<c1>(t) == 0 ? 0 : -get<fact>(t) / get<c1>(t);
-            get<c0>(t) += get<b1>(t) * get<fact>(t);
-            get<b0>(t) += get<a1>(t) * get<fact>(t);
-        }
+        get<5>(t) = get<1>(t) == 0 ? 0 : -get<5>(t) / get<1>(t);
+        get<0>(t) += get<3>(t) * get<5>(t);
+        get<2>(t) += get<4>(t) * get<5>(t);
     }
 };
-
+template <typename Tuple>
+struct unfold_operator : public thrust::unary_function<Tuple, void> {
+    __host__ __device__
+    void operator()(Tuple t) {
+        using thrust::get;
+        get<0>(t) -= get<3>(t) * get<5>(t);
+        get<2>(t) -= get<4>(t) * get<5>(t);
+        get<5>(t) *= -get<1>(t);
+    }
+};
 void _TriBandedOperator::fold_top(bool unfold) {
     FULLTRACE;
     typedef thrust::tuple<REAL_t&, REAL_t&, REAL_t&, REAL_t&, REAL_t&, REAL_t&> REALTuple;
@@ -643,26 +636,47 @@ void _TriBandedOperator::fold_top(bool unfold) {
     strided_range<Ptr> b1 (mid+1, mid+operator_rows, block_len);
     strided_range<Ptr> a1 (sub+1, sub+operator_rows, block_len);
 
-    thrust::for_each(
-        make_zip_iterator(
-            make_tuple(
-                c0.begin(), c1.begin(),
-                b0.begin(), b1.begin(),
-                            a1.begin(),
-                top_factors.data
-            )
-        ),
-        make_zip_iterator(
-            make_tuple(
-                c0.end(), c1.end(),
-                b0.end(), b1.end(),
-                          a1.end(),
-                top_factors.data + top_factors.size
-            )
-        ),
-        fold_operator<REALTuple>(unfold)
-    );
-
+    if (unfold) {
+        thrust::for_each(
+            make_zip_iterator(
+                make_tuple(
+                    c0.begin(), c1.begin(),
+                    b0.begin(), b1.begin(),
+                                a1.begin(),
+                    top_factors.data
+                )
+            ),
+            make_zip_iterator(
+                make_tuple(
+                    c0.end(), c1.end(),
+                    b0.end(), b1.end(),
+                            a1.end(),
+                    top_factors.data + top_factors.size
+                )
+            ),
+            unfold_operator <REALTuple>()
+        );
+    } else {
+        thrust::for_each(
+            make_zip_iterator(
+                make_tuple(
+                    c0.begin(), c1.begin(),
+                    b0.begin(), b1.begin(),
+                                a1.begin(),
+                    top_factors.data
+                )
+            ),
+            make_zip_iterator(
+                make_tuple(
+                    c0.end(), c1.end(),
+                    b0.end(), b1.end(),
+                            a1.end(),
+                    top_factors.data + top_factors.size
+                )
+            ),
+            fold_operator<REALTuple>()
+        );
+    }
     if (unfold) top_fold_status = CAN_FOLD;
     else top_fold_status = FOLDED;
     FULLTRACE;
@@ -680,25 +694,47 @@ void _TriBandedOperator::fold_bottom(bool unfold) {
     strided_range<Ptr> an (sub+(block_len-1), sub+operator_rows, block_len);
     strided_range<Ptr> an1(sub+(block_len-1)-1, sub+operator_rows, block_len);
 
-    thrust::for_each(
-        make_zip_iterator(
-            make_tuple(
-                an.begin(), an1.begin(),
-                bn.begin(), bn1.begin(),
-                            cn1.begin(),
-                bottom_factors.data
-            )
-        ),
-        make_zip_iterator(
-            make_tuple(
-                an.end(), an1.end(),
-                bn.end(), bn1.end(),
-                          cn1.end(),
-                bottom_factors.data + bottom_factors.size
-            )
-        ),
-        fold_operator<REALTuple>(unfold)
-    );
+    if (unfold) {
+        thrust::for_each(
+            make_zip_iterator(
+                make_tuple(
+                    an.begin(), an1.begin(),
+                    bn.begin(), bn1.begin(),
+                                cn1.begin(),
+                    bottom_factors.data
+                )
+            ),
+            make_zip_iterator(
+                make_tuple(
+                    an.end(), an1.end(),
+                    bn.end(), bn1.end(),
+                            cn1.end(),
+                    bottom_factors.data + bottom_factors.size
+                )
+            ),
+            unfold_operator<REALTuple>()
+        );
+    } else {
+        thrust::for_each(
+            make_zip_iterator(
+                make_tuple(
+                    an.begin(), an1.begin(),
+                    bn.begin(), bn1.begin(),
+                                cn1.begin(),
+                    bottom_factors.data
+                )
+            ),
+            make_zip_iterator(
+                make_tuple(
+                    an.end(), an1.end(),
+                    bn.end(), bn1.end(),
+                            cn1.end(),
+                    bottom_factors.data + bottom_factors.size
+                )
+            ),
+            fold_operator<REALTuple>()
+        );
+    }
 
     if (unfold) bottom_fold_status = CAN_FOLD;
     else bottom_fold_status = FOLDED;
