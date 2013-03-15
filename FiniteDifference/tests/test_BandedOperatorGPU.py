@@ -28,7 +28,7 @@ class Cpp_test(unittest.TestCase):
 
     def setUp(self):
         # print "Setting up Params for CPP tests"
-        shape = (5,5)
+        shape = (25,25)
         self.v1 = np.arange(shape[0]*shape[1], dtype=float)**2
         self.v2 = self.v1.copy()
         self.v2.resize(shape)
@@ -258,28 +258,40 @@ class Cpp_test(unittest.TestCase):
 
 
     def test_GPUSolve_0(self):
+        v = np.arange(10, dtype=float)
+        B = BO.for_vector(v)
+        B.D.data[1,:] += 1
+        ref = B.solve(v**2)
+        BG = BOG.BandedOperator(B)
+        tst = BG.solve(v**2)
+        # fp(B.D.data)
+        npt.assert_allclose(tst, ref)
+
         B = self.F.operators[0]
-        B.D.data = np.random.random((B.D.data.shape))
-        B.R = np.random.random(B.D.data.shape[1])
-        B.D.data[0,0] = 0
-        B.D.data[-1,-1] = 0
+        blen = B.D.shape[0] / B.blocks
+        B.D.data = np.arange(B.D.data.size, dtype=float).reshape(B.D.data.shape)
+        B.R = np.zeros(B.D.data.shape[1])
+        B.D.data[0,0::blen] = 0
+        B.D.data[-1,blen-1::blen] = 0
         origdata = B.D.data.copy()
         ref = B.solve(self.v2)
         B = BOG.BandedOperator(B)
         tst = B.solve(self.v2.copy())
         B = B.immigrate()
         # fp(ref - tst, 3, 'e')
-        npt.assert_array_almost_equal(ref, tst)
-        npt.assert_array_equal(origdata, B.D.data)
+        npt.assert_array_almost_equal(origdata, B.D.data)
+        npt.assert_allclose(ref, tst)
 
 
     def test_GPUSolve_1(self):
         B = self.F.operators[1]
         B.diagonalize()
+        blen = B.D.shape[0] / B.blocks
+
         B.D.data = np.random.random((B.D.data.shape))
         B.R = np.random.random(B.D.data.shape[1])
-        B.D.data[0,0] = 0
-        B.D.data[-1,-1] = 0
+        B.D.data[0,0::blen] = 0
+        B.D.data[-1,blen-1::blen] = 0
         ref = B.solve(self.v2)
         B.undiagonalize()
         origdata = B.D.data.copy()
@@ -289,9 +301,9 @@ class Cpp_test(unittest.TestCase):
         tst = BG.solve(self.v2.copy())
         BG.undiagonalize()
         BG = BG.immigrate()
-        # fp(ref - tst, 3, 'e')
+        # fp(ref - tst, 2, 'e')
         npt.assert_array_equal(origdata, B.D.data)
-        npt.assert_array_almost_equal(ref, tst)
+        npt.assert_allclose(ref, tst)
 
 
 
