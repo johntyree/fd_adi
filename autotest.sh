@@ -19,15 +19,22 @@ onmodify () {
     done )
 }
 
-ALL=""
-CCC=""
+function force_rebuild() {
+    for i in FiniteDifference/*.pyx; do
+        rm ${i%%.pyx}.cpp;
+    done
+}
+function remove_ids() {
+    rm .noseids
+}
+
 while getopts ":acfb" opt; do
     case $opt in
         a)
-            ALL="rm .noseids;"
+            ALL="remove_ids"
             ;;
         c)
-            CCC="touch $(ls FiniteDifference/*Code.cu);"
+            CCC="force_rebuild"
             ;;
         f)
             failed="--failed"
