@@ -21,19 +21,25 @@ onmodify () {
 
 ALL=""
 CCC=""
-while getopts ":acf" opt; do
+while getopts ":acfb" opt; do
     case $opt in
         a)
             ALL="rm .noseids;"
             ;;
         c)
-            CCC="touch FiniteDifference/*Code.cu;"
+            CCC="touch $(ls FiniteDifference/*Code.cu);"
             ;;
         f)
             failed="--failed"
             ;;
+        b)
+            $CCC
+            python setup.py build_ext --inplace 2>&1
+            exit
+            ;;
     esac
 done
+shift $(($OPTIND-1))
 
 CMD="$ALL $CCC (set -o pipefail; python setup.py build_ext --inplace 2>&1 | grep -Ei --color -e '' -e error) \
     && nosetests $failed --rednose --verbosity=3 --with-id $@ \
