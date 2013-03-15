@@ -306,7 +306,7 @@ cdef class BandedOperator(object):
                 or self.bottom_fold_status == CAN_FOLD)
 
 
-    cpdef apply_(self, SizedArrayPtr sa_V, overwrite=False):
+    cpdef apply_(self, SizedArrayPtr sa_V, overwrite):
         cdef SizedArrayPtr sa_U
 
         if overwrite:
@@ -329,7 +329,7 @@ cdef class BandedOperator(object):
         return V
 
 
-    cpdef solve_(self, SizedArrayPtr sa_V, overwrite=False):
+    cpdef solve_(self, SizedArrayPtr sa_V, overwrite):
         assert not self.is_mixed_derivative
         cdef SizedArrayPtr sa_U
         if overwrite:

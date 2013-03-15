@@ -262,17 +262,20 @@ cdef class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
 
         Lis = np.roll(Lis, -1)
 
+        if (0,1) in self.operators:
+            self.operators[(0,1)] *= dt
+
         print_step = max(1, int(n / 10))
         to_percent = 100.0 / n
         utils.tic("solve_implicit:\t")
+
         for k in range(n):
             if not k % print_step:
                 print int(k * to_percent),
                 sys.stdout.flush()
             if (0,1) in self.operators:
                 U = V.copy(True)
-                self.operators[(0,1)].apply_(U)
-                U.timeseq_scalar(dt)
+                self.operators[(0,1)].apply_(U, overwrite=True)
                 V.pluseq(U)
                 del U
             for L in Lis:
@@ -404,7 +407,7 @@ cdef class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
                 X = Z.copy(True)
                 Le.apply_(X, overwrite=True)
                 V.minuseq(X)
-                Li.solve_(V)
+                Li.solve_(V, overwrite=True)
 
         utils.toc(':  \t')
 
