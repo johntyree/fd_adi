@@ -12,6 +12,7 @@
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/discard_iterator.h>
 #include <thrust/iterator/zip_iterator.h>
+#include <thrust/for_each.h>
 #include "tiled_range.h"
 #include "strided_range.h"
 
@@ -218,6 +219,34 @@ struct zipdot3 : thrust::binary_function<const Triple &, const Triple &, REAL_t>
     }
 };
 
+struct zipdot2by2 {
+/* struct zipdot2by2 : thru { */
+    template <typename T>
+    __host__ __device__
+    void operator()(T t) {
+        using thrust::get;
+
+        REAL_t &ret = get<0>(t);
+
+        const REAL_t &a = get<1>(t);
+        const REAL_t &x0 = get<2>(t);
+
+        const REAL_t &b = get<3>(t);
+        const REAL_t &x1 = get<4>(t);
+
+        REAL_t &retN = get<5>(t);
+
+        const REAL_t &b1 = get<6>(t);
+        const REAL_t &xN1 = get<7>(t);
+
+        const REAL_t &c1 = get<8>(t);
+        const REAL_t &xN = get<9>(t);
+
+        ret = a*x0 + b*x1;
+        retN = b1*xN1 + c1*xN;
+    }
+};
+
 void _TriBandedOperator::apply(SizedArray<double> &V) {
     FULLTRACE;
     if (top_fold_status == CAN_FOLD || bottom_fold_status == CAN_FOLD) {
@@ -264,7 +293,13 @@ void _TriBandedOperator::apply(SizedArray<double> &V) {
     }
 
 
-    V.tempspace[0] = mid[0]*V.data[0] + sup[0]*V.data[1];
+    thrust::for_each(
+        /* make_zip_iterator(make_tuple(U->data   , mid   , V.data   , sup   , V.data+1)), */
+        /* make_zip_iterator(make_tuple(U->data+1 , mid+1 , V.data+1 , sup+1 , V.data+2)), */
+        make_zip_iterator(make_tuple(V.tempspace   , mid   , V.data   , sup   , V.data+1 , V.tempspace+N-1 , sub+N-1 , V.data+N-2 , mid+N-1 , V.data+N-1)) ,
+        make_zip_iterator(make_tuple(V.tempspace+1 , mid+1 , V.data+1 , sup+1 , V.data+2 , V.tempspace+N   , sub+N   , V.data+N-1 , mid+N   , V.data+N))   ,
+        zipdot2by2()
+    );
     thrust::transform(
         make_zip_iterator(make_tuple(sub+1, mid+1, sup+1)),
         make_zip_iterator(make_tuple(sub+N-1, mid+N-1, sup+N-1)),
@@ -272,7 +307,6 @@ void _TriBandedOperator::apply(SizedArray<double> &V) {
         V.tempspace+1,
         zipdot3()
     );
-    V.tempspace[N-1] = sub[N-1]*V.data[N-2] + mid[N-1]*V.data[N-1];
 
     if (is_folded()) {
         std::swap(V.tempspace, V.data);
@@ -462,7 +496,6 @@ void _TriBandedOperator::solve(SizedArray<double> &V) {
         fold_vector(V);
     }
 
-    /* thrust::copy(V.data, V.data + V.size, U->data); */
     status = cusparseDgtsvStridedBatch(handle, N,
             sub.get(), mid.get(), sup.get(),
             V.data.get(),
