@@ -23,7 +23,7 @@ onmodify () {
 CMD=""
 if [ "$1" == '--force' ]; then
     shift
-    CMD+="touch FiniteDifference/_GPU_Code.cu;"
+    CMD+="touch FiniteDifference/*Code.cu;"
 fi
 if [ "$1" == '--all' ]; then
     shift
