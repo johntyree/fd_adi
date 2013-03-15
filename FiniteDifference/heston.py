@@ -277,7 +277,7 @@ class HestonFiniteDifferenceEngine(FiniteDifferenceEngineADI):
             boundaries=None,
             cache=True,
             verbose=True,
-            force_bandwidth=(-2,2)
+            force_bandwidth=None
             ):
         """@option@ is a HestonOption"""
         self.cache = cache
