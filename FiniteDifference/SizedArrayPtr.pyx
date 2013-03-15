@@ -27,6 +27,13 @@ cdef class SizedArrayPtr(object):
             self.from_numpy(a, tag)
             # print "imported from numpy in constructor"
 
+    cpdef alloc(self, int sz, cpp_string tag="Unknown"):
+        if self.p:
+            del self.p
+        self.p = new SizedArray[double](sz, tag)
+        self.size = sz
+        return self
+
     # def __iadd__(self, other):
         # self.p
 
@@ -34,6 +41,7 @@ cdef class SizedArrayPtr(object):
         if self.p:
             raise RuntimeError("SizedArrayPtr is single assignment")
         self.p = p
+        self.size = self.p.size
         # print "SAPtr -> Storing %s:" % tag, to_string(p)
 
     cpdef from_numpy(self, np.ndarray a, cpp_string tag="Unknown"):
@@ -41,6 +49,7 @@ cdef class SizedArrayPtr(object):
             print "SizedArrayPtr is single assignment"
             raise RuntimeError("SizedArrayPtr is single assignment")
         self.p = to_SizedArray(a, tag)
+        self.size = self.p.size
         # print "Numpy -> Storing %s: %s" % (tag, to_string(self.p))
 
     cpdef to_numpy(self):
@@ -56,11 +65,17 @@ cdef class SizedArrayPtr(object):
         u.store(x)
         return u
 
+    cpdef copy_from(self, SizedArrayPtr other):
+        self.p.copy_from(deref(other.p))
+
     cpdef pluseq(self, SizedArrayPtr other):
         self.p.pluseq(deref(other.p))
 
     cpdef minuseq(self, SizedArrayPtr other):
         self.p.minuseq(deref(other.p))
+
+    cpdef minuseq_over2(self, SizedArrayPtr other):
+        self.p.minuseq_over2(deref(other.p))
 
     cpdef timeseq(self, SizedArrayPtr other):
         self.p.timeseq(deref(other.p))
@@ -91,10 +106,18 @@ cdef class SizedArrayPtr_i(object):
             self.from_numpy(a, tag)
             # print "imported from numpy in constructor"
 
+    cpdef alloc(self, int sz, cpp_string tag="Unknown"):
+        if self.p:
+            del self.p
+        self.p = new SizedArray[int](sz, tag)
+        self.size = self.p.size
+        return self
+
     cdef store(self, SizedArray[int] *p, cpp_string tag="Unknown"):
         if self.p:
             raise RuntimeError("SizedArrayPtr_i is single assignment")
         self.p = p
+        self.size = self.p.size
         # print "SAPtr -> Storing %s:" % tag, to_string(p)
 
     cpdef SizedArrayPtr_i copy(self, cbool deep):
@@ -103,11 +126,15 @@ cdef class SizedArrayPtr_i(object):
         u.store(x)
         return u
 
+    cpdef copy_from(self, SizedArrayPtr_i other):
+        self.p.copy_from(deref(other.p))
+
     cpdef from_numpy(self, np.ndarray a, cpp_string tag="Unknown"):
         if self.p:
             print "SizedArrayPtr_i is single assignment"
             raise RuntimeError("SizedArrayPtr_i is single assignment")
         self.p = to_SizedArray_i(a, tag)
+        self.size = self.p.size
         # print "Numpy -> Storing %s: %s" % (tag, to_string(self.p))
 
     cpdef to_numpy(self):

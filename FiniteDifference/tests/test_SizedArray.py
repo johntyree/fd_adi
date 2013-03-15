@@ -35,6 +35,16 @@ class SizedArray_test(unittest.TestCase):
         del self.S
         npt.assert_raises(RuntimeError, S.to_numpy)
 
+    def test_copy_from(self):
+        v = self.v.copy()
+        S = self.S.copy(True)
+        X = SizedArrayPtr().alloc(S.size)
+        npt.assert_array_equal(v, S.to_numpy())
+        X.copy_from(S)
+        npt.assert_array_equal(X.to_numpy(), S.to_numpy())
+        del S
+        npt.assert_array_equal(v, X.to_numpy())
+
     def test_pluseq_scalar(self):
         self.S.pluseq_scalar(self.scalar)
         ref = self.v + self.scalar
@@ -105,6 +115,15 @@ class SizedArray_i_test(unittest.TestCase):
         npt.assert_array_equal(v, S.to_numpy())
         del self.S
         npt.assert_raises(RuntimeError, S.to_numpy)
+
+    def test_copy_from(self):
+        v = self.v.copy()
+        S = self.S.copy(True)
+        X = SizedArrayPtr_i().alloc(S.size)
+        npt.assert_array_equal(v, S.to_numpy())
+        X.copy_from(S)
+        npt.assert_array_equal(X.to_numpy(), S.to_numpy())
+        npt.assert_array_equal(v, S.to_numpy())
 
     def test_pluseq_scalar(self):
         self.S.pluseq_scalar(self.scalar)

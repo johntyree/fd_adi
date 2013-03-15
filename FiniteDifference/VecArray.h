@@ -36,6 +36,11 @@ namespace impl {
         thrust::device_ptr<double> &in,
         Py_ssize_t size);
 
+    void minuseq_over2(
+        thrust::device_ptr<double> &out,
+        thrust::device_ptr<double> &in,
+        Py_ssize_t size);
+
 
     /* Vector Vector int */
     void pluseq(
@@ -279,6 +284,26 @@ struct SizedArray {
         }
     }
 
+    void copy_from(SizedArray<T> &other) {
+        if (other.data.get() == NULL) {
+            DIE(name << "Copying from uninitialized memory");
+        }
+        if (other.size != size) {
+            DIE(name << "Dimension mismatch. ("<<size<<") <- ("<<other.size<<")");
+        }
+        thrust::copy(other.data, other.data + other.size, data);
+        copy_meta_data(other);
+
+    }
+
+    void copy_meta_data(SizedArray<T> &other) {
+        ndim = other.ndim;
+        for (Py_ssize_t i = 0; i < ndim; ++i) {
+            shape[i] = other.shape[i];
+        }
+    }
+
+
     void reshape(Py_ssize_t h, Py_ssize_t w) {
         if (h*w != size) {
             DIE("Height("<<h<<") x Width("<<w<<") != Size("<<size<<")");
@@ -398,6 +423,14 @@ struct SizedArray {
             DIE("Dimention mismatch.");
         }
         impl::minuseq(data, x.data, size);
+        return;
+    }
+
+    void minuseq_over2(SizedArray<double> &x) {
+        if (x.size != size) {
+            DIE("Dimention mismatch.");
+        }
+        impl::minuseq_over2(data, x.data, size);
         return;
     }
 

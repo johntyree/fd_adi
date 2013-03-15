@@ -10,13 +10,17 @@ from libcpp cimport bool as cbool
 
 cdef class SizedArrayPtr(object):
     cdef SizedArray[double] *p
-    cdef cpp_string tag
+    cdef public cpp_string tag
+    cdef public Py_ssize_t size
     cdef store(self, SizedArray[double] *p, cpp_string tag=*)
+    cpdef alloc(self, int sz, cpp_string tag=*)
     cpdef from_numpy(self, np.ndarray a, cpp_string tag=*)
     cpdef to_numpy(self)
     cpdef SizedArrayPtr copy(self, cbool deep)
+    cpdef copy_from(self, SizedArrayPtr other)
     cpdef pluseq(self, SizedArrayPtr other)
     cpdef minuseq(self, SizedArrayPtr other)
+    cpdef minuseq_over2(self, SizedArrayPtr other)
     cpdef timeseq(self, SizedArrayPtr other)
     cpdef pluseq_scalar(self, double other)
     cpdef minuseq_scalar(self, double other)
@@ -25,11 +29,14 @@ cdef class SizedArrayPtr(object):
 
 cdef class SizedArrayPtr_i(object):
     cdef SizedArray[int] *p
-    cdef cpp_string tag
+    cdef public cpp_string tag
+    cdef public Py_ssize_t size
     cdef store(self, SizedArray[int] *p, cpp_string tag=*)
+    cpdef alloc(self, int sz, cpp_string tag=*)
     cpdef from_numpy(self, np.ndarray a, cpp_string tag=*)
     cpdef to_numpy(self)
     cpdef SizedArrayPtr_i copy(self, cbool deep)
+    cpdef copy_from(self, SizedArrayPtr_i other)
     cpdef pluseq(self, SizedArrayPtr_i other)
     cpdef minuseq(self, SizedArrayPtr_i other)
     cpdef timeseq(self, SizedArrayPtr_i other)

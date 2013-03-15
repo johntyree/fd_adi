@@ -26,8 +26,10 @@ cdef extern from "VecArray.h":
         SizedArray(SizedArray[T] &, cbool) except +
         SizedArray(T*, Py_ssize_t, cpp_string name, cbool) except +
         SizedArray(T*, int, np.npy_intp*, cpp_string name, cbool) except +
+        void copy_from(SizedArray[T] & other) except +
         void pluseq(SizedArray[T] &x) except +
         void minuseq(SizedArray[T] &x) except +
+        void minuseq_over2(SizedArray[T] &x) except +
         void timeseq(SizedArray[T] &x) except +
         void pluseq(T x) except +
         void minuseq(T x) except +

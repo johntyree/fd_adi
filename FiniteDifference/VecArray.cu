@@ -18,6 +18,8 @@
 using thrust::device_malloc;
 using thrust::device_free;
 using thrust::make_constant_iterator;
+using thrust::placeholders::_1;
+using thrust::placeholders::_2;
 
 namespace impl {
     /* Vector Vector double */
@@ -40,6 +42,17 @@ namespace impl {
                 them,
                 us,
                 thrust::minus<double>());
+    }
+    void minuseq_over2(
+        thrust::device_ptr<double> &us,
+        thrust::device_ptr<double> &them,
+        Py_ssize_t size) {
+        thrust::transform(
+                us, us+size,
+                them,
+                us,
+                (_1 - _2)*0.5);
+                /* thrust::minus<double>()); */
     }
     void timeseq(
         thrust::device_ptr<double> &us,
