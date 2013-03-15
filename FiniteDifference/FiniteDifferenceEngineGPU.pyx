@@ -184,40 +184,6 @@ cdef class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
         return ret
 
 
-    def solve_implicit_(self, n, dt, SizedArrayPtr V):
-        Lis = [(o * -dt).add(1, inplace=True)
-               for d, o in sorted(self.operators.iteritems())
-               if type(d) != tuple]
-
-        Lis = np.roll(Lis, -1)
-
-        print_step = max(1, int(n / 10))
-        to_percent = 100.0 / n
-        utils.tic("solve_implicit:\t")
-        for k in range(n):
-            if not k % print_step:
-                print int(k * to_percent),
-                sys.stdout.flush()
-            if (0,1) in self.operators:
-                U = V.copy(True)
-                self.operators[(0,1)].apply_(U)
-                U.timeseq_scalar(dt)
-                V.pluseq(U)
-                del U
-            for L in Lis:
-                L.solve_(V, overwrite=True)
-        utils.toc(':  \t')
-
-
-    def solve_implicit(self, n, dt, np.ndarray initial):
-        n = int(n)
-        cdef SizedArrayPtr V = SizedArrayPtr(initial)
-        self.solve_implicit_(n, dt, V)
-        ret = V.to_numpy()
-        del V
-        return ret
-
-
     def dummy(self):
         n = 1
         dt = 0.01
@@ -278,7 +244,45 @@ cdef class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
         return Firsts, Les, Lis, Orig.to_numpy(), Y.to_numpy(), V.to_numpy()
 
 
-    def solve_douglas(self, n, dt, np.ndarray initial, theta=0.5):
+    def solve_implicit(self, n, dt, np.ndarray initial):
+        n = int(n)
+        cdef SizedArrayPtr V = SizedArrayPtr(initial)
+        self.solve_implicit_(n, dt, V)
+        ret = V.to_numpy()
+        del V
+        return ret
+
+
+    cpdef solve_implicit_(self, n, dt, SizedArrayPtr V, callback=None, numpy=False):
+        if callback or numpy:
+            raise NotImplementedError("Callbacks and Numpy not available for GPU solver.")
+        Lis = [(o * -dt).add(1, inplace=True)
+               for d, o in sorted(self.operators.iteritems())
+               if type(d) != tuple]
+
+        Lis = np.roll(Lis, -1)
+
+        print_step = max(1, int(n / 10))
+        to_percent = 100.0 / n
+        utils.tic("solve_implicit:\t")
+        for k in range(n):
+            if not k % print_step:
+                print int(k * to_percent),
+                sys.stdout.flush()
+            if (0,1) in self.operators:
+                U = V.copy(True)
+                self.operators[(0,1)].apply_(U)
+                U.timeseq_scalar(dt)
+                V.pluseq(U)
+                del U
+            for L in Lis:
+                L.solve_(V, overwrite=True)
+        utils.toc(':  \t')
+
+
+    def solve_douglas(self, n, dt, np.ndarray initial, theta=0.5, callback=None, numpy=False):
+        if callback or numpy:
+            raise NotImplementedError("Callbacks and Numpy not available for GPU solver.")
         n = int(n)
         cdef SizedArrayPtr V = SizedArrayPtr(initial)
         self.solve_douglas_(n, dt, V)
@@ -326,11 +330,20 @@ cdef class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
             Y = V.copy(True)
 
         utils.toc(':  \t')
-        return V
 
 
-    def solve_hundsdorferverwer(self, n, dt, initial=None, theta=0.5, callback=None,
-            numpy=False):
+    def solve_hundsdorferverwer(self, n, dt, initial=None, theta=0.5, callback=None, numpy=False):
+        if callback or numpy:
+            raise NotImplementedError("Callbacks and Numpy not available for GPU solver.")
+        n = int(n)
+        cdef SizedArrayPtr V = SizedArrayPtr(initial)
+        self.solve_hundsdorferverwer_(n, dt, V)
+        ret = V.to_numpy()
+        del V
+        return ret
+
+
+    cpdef solve_hundsdorferverwer_(self, n, dt, SizedArrayPtr V, theta=0.5):
         Firsts = [(o * dt) for o in self.operators.values()]
 
         Les = [(o * theta * dt)
@@ -389,10 +402,18 @@ cdef class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
         return V
 
 
-    # def solve_smooth(self, n, dt, initial=None, callback=None, smoothing_steps=2,
-            # scheme=None):
-        # if scheme is None:
-            # scheme = self.solve_hundsdorferverwer
-        # V = self.solve_implicit(smoothing_steps*2, dt*0.5, initial=initial)
-        # # V = self.solve_douglas(smoothing_steps*2, dt*0.5, theta=1, initial=initial)
-        # return scheme(n-smoothing_steps, dt, initial=V, theta=0.60)
+    def solve_smooth(self, n, dt, initial=None, callback=None, smoothing_steps=2,
+            scheme=None):
+        if scheme:
+            raise NotImplementedError("Changing smoothing schemes not supported on GPU.")
+        n = int(n)
+        cdef SizedArrayPtr V = SizedArrayPtr(initial)
+        self.solve_smooth_(n, dt, V, smoothing_steps)
+        ret = V.to_numpy()
+        del V
+        return ret
+
+
+    cpdef solve_smooth_(self, n, dt, SizedArrayPtr V, smoothing_steps=2):
+        self.solve_implicit_(smoothing_steps*2, dt*0.5, V)
+        self.solve_hundsdorferverwer_(n-smoothing_steps, dt, V, theta=0.60)
