@@ -1,7 +1,7 @@
 #include "_kernels.h"
 
-#define TILE_DIM 1
-#define BLOCK_ROWS 1
+#define TILE_DIM 32
+#define BLOCK_ROWS 8
 
 __global__
 void d_transposeNoBankConflicts(
@@ -36,9 +36,7 @@ void transposeNoBankConflicts(REAL_t *odata, REAL_t *idata,
     // printf("Grid: %i %i  Threads: %i %i", grid.x, grid.y, threads.x, threads.y);
     /* std::cout << "Grid: "<<grid.y<<", "<<grid.x */
         /* << " Threads: "<<threads.x<<", "<<threads.y<<"\n"; */
-    cudaDeviceSynchronize();
     d_transposeNoBankConflicts<<<grid, threads>>>(odata, idata, height, width);
-    cudaDeviceSynchronize();
 }
 
 
