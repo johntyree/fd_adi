@@ -50,7 +50,7 @@ def create(nspots=30, nvols=30):
     F.operators[1].diagonalize()
     return F
 
-def run(F=None, func=None, initial=None):
+def run(dt, F=None, func=None, initial=None):
     if F is None:
         F = create()
 
@@ -74,7 +74,6 @@ def run(F=None, func=None, initial=None):
         'smooth': "Smoothed HV"
     }
 
-    dt = 1.0 / 2.0**10
     Vs = funcs[func](dt)
 
     return Vs
@@ -88,18 +87,24 @@ def main():
     if len(sys.argv) > 2:
         nspots = int(sys.argv[2])
     else:
-        nspots = 300
+        nspots = 80
     if len(sys.argv) > 3:
         nvols = int(sys.argv[3])
     else:
-        nvols = 300
+        nvols = 80
+    if len(sys.argv) > 4:
+        dt = float(sys.argv[4])
+    else:
+        dt = 1.0 / 120
+
+    print func, nspots, nvols, dt
 
     F = create(nspots=nspots, nvols=nvols)
     idx = F.idx
     FG = FDE_ADI_GPU(F)
-    print run(F, 'hv')[idx]
-    F.grid.reset()
-    print run(FG, 'hv', F.grid.domain[0])[idx]
+    # print run(dt, F, func)[idx]
+    # F.grid.reset()
+    print run(dt, FG,func,F.grid.domain[0])[idx], F.option.analytical
 
 if __name__ == '__main__':
     main()
