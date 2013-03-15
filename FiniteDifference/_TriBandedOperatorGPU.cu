@@ -225,11 +225,11 @@ void _TriBandedOperator::apply(SizedArray<double> &V) {
     }
     verify_diag_ptrs();
     const unsigned N = V.size;
-    SizedArray<double> *U = new SizedArray<double>(N, "U from V apply");
-    U->ndim = V.ndim;
-    U->shape[0] = V.shape[0];
-    U->shape[1] = V.shape[1];
-    U->sanity_check();
+    /* SizedArray<double> *U = new SizedArray<double>(N, "U from V apply"); */
+    /* U->ndim = V.ndim; */
+    /* U->shape[0] = V.shape[0]; */
+    /* U->shape[1] = V.shape[1]; */
+    /* U->sanity_check(); */
 
     typedef GPUVec<REAL_t>::iterator Iterator;
     strided_range<Iterator> u0(V.data, V.data+V.size, block_len);
@@ -264,33 +264,40 @@ void _TriBandedOperator::apply(SizedArray<double> &V) {
     }
 
 
-    U->data[0] = mid[0]*V.data[0] + sup[0]*V.data[1];
+    V.tempspace[0] = mid[0]*V.data[0] + sup[0]*V.data[1];
     thrust::transform(
         make_zip_iterator(make_tuple(sub+1, mid+1, sup+1)),
         make_zip_iterator(make_tuple(sub+N-1, mid+N-1, sup+N-1)),
         make_zip_iterator(make_tuple(V.data, V.data+1, V.data+2)),
-        U->data+1,
+        V.tempspace+1,
         zipdot3()
     );
-    U->data[N-1] = sub[N-1]*V.data[N-2] + mid[N-1]*V.data[N-1];
+    V.tempspace[N-1] = sub[N-1]*V.data[N-2] + mid[N-1]*V.data[N-1];
 
     if (is_folded()) {
-        fold_vector(*U, true);
+        std::swap(V.tempspace, V.data);
+        fold_vector(V, true);
+        std::swap(V.tempspace, V.data);
     }
 
     if (has_residual) {
-        thrust::transform(U->data, U->data + U->size,
+        thrust::transform(
+                V.tempspace,
+                V.tempspace + V.size,
                 R.data,
                 V.data,
                 thrust::plus<double>());
     } else {
-        thrust::copy(U->data, U->data + U->size, V.data);
+        if (V.owner) {
+            std::swap(V.tempspace, V.data);
+        } else {
+            thrust::copy(V.tempspace, V.tempspace + V.size, V.data);
+        }
     }
 
     if (axis == 0) {
         V.transpose(1);
     }
-    delete U;
     FULLTRACE;
     return;
 }
