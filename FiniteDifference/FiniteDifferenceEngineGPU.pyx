@@ -4,14 +4,13 @@
 # distutils: language = c++
 
 
-from bisect import bisect_left
-
 import sys
+import itertools
+
 
 import numpy as np
 cimport numpy as np
 
-import itertools
 
 import FiniteDifference.utils as utils
 
@@ -27,19 +26,20 @@ from FiniteDifference.SizedArrayPtr cimport SizedArrayPtr
 
 
 cdef class FiniteDifferenceEngine(object):
+
     cdef public:
-        shape
-        ndim
         coefficients
-        t
-        default_scheme
         default_order
+        default_scheme
+        ndim
+        shape
+        simple_operators
+        operators
+        t
+
 
     cdef SizedArrayPtr grid
 
-    # Setup
-    cdef public operators
-    cdef public simple_operators
 
     def __init__(self, other):
         """
@@ -134,10 +134,10 @@ cdef class FiniteDifferenceEngine(object):
         self.operators = {k:BOG.BandedOperator(v) for k,v in other.operators.items()}
         self.simple_operators = {k:BOG.BandedOperator(v) for k,v in other.simple_operators.items()}
 
+
     def solve(self):
         """Run all the way to the terminal condition."""
         raise NotImplementedError
-
 
 
 cdef class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
@@ -392,8 +392,6 @@ cdef class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
                 Z.minuseq(X)
                 Li.solve_(Z, overwrite=True)
 
-            # Y.minuseq(Z)
-            # Y.timeseq_scalar(0.5)
             Y.minuseq_over2(Z)
 
             for L in Firsts:
@@ -416,7 +414,6 @@ cdef class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
                 if id(L) == i:
                     L.undiagonalize()
                     break
-
 
 
     def solve_smooth(self, n, dt, initial=None, callback=None, smoothing_steps=2,

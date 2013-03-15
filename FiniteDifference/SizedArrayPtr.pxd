@@ -1,17 +1,21 @@
 # coding: utf8
 
+
 import numpy as np
 cimport numpy as np
-
-from FiniteDifference.VecArray cimport SizedArray
 
 from libcpp.string cimport string as cpp_string
 from libcpp cimport bool as cbool
 
+from FiniteDifference.VecArray cimport SizedArray
+
+
 cdef class SizedArrayPtr(object):
+
     cdef SizedArray[double] *p
     cdef public cpp_string tag
     cdef public Py_ssize_t size
+
     cdef store(self, SizedArray[double] *p, cpp_string tag=*)
     cpdef alloc(self, int sz, cpp_string tag=*)
     cpdef from_numpy(self, np.ndarray a, cpp_string tag=*)
@@ -28,9 +32,11 @@ cdef class SizedArrayPtr(object):
 
 
 cdef class SizedArrayPtr_i(object):
+
     cdef SizedArray[int] *p
     cdef public cpp_string tag
     cdef public Py_ssize_t size
+
     cdef store(self, SizedArray[int] *p, cpp_string tag=*)
     cpdef alloc(self, int sz, cpp_string tag=*)
     cpdef from_numpy(self, np.ndarray a, cpp_string tag=*)
@@ -46,6 +52,10 @@ cdef class SizedArrayPtr_i(object):
 
 
 cdef from_SizedArray(SizedArray[double] &v)
+
 cdef from_SizedArray_i(SizedArray[int] &v)
+
+
 cdef SizedArray[double]* to_SizedArray(np.ndarray v, cpp_string name) except NULL
+
 cdef SizedArray[int]* to_SizedArray_i(np.ndarray v, cpp_string name) except NULL

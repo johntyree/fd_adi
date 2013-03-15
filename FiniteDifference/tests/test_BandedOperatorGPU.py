@@ -1,10 +1,7 @@
 #!/usr/bin/env python
 # coding: utf8
 
-# import sys
-# import os
 import itertools
-# from bisect import bisect_left
 import unittest
 
 import FiniteDifference.utils as utils
@@ -17,8 +14,6 @@ import scipy.linalg as spl
 from FiniteDifference.utils import todia, block_repeat, foldMatFor
 from FiniteDifference.utils import todia
 from FiniteDifference.visualize import fp
-# def fp(*x, **y):
-    # pass
 import FiniteDifference.Grid as Grid
 
 import FiniteDifference.FiniteDifferenceEngine as FD
@@ -28,11 +23,12 @@ import FiniteDifference.BandedOperator as BO
 from FiniteDifference.blackscholes import BlackScholesFiniteDifferenceEngine, BlackScholesOption
 from FiniteDifference.heston import HestonBarrierOption
 
+
 class Cpp_test(unittest.TestCase):
 
     def setUp(self):
         # print "Setting up Params for CPP tests"
-        shape = (15,15)
+        shape = (5,5)
         self.v1 = np.arange(shape[0]*shape[1], dtype=float)**2
         self.v2 = self.v1.copy()
         self.v2.resize(shape)
@@ -53,14 +49,12 @@ class Cpp_test(unittest.TestCase):
         schemes = {}
 
         self.G = Grid.Grid([np.arange(shape[0]), np.arange(shape[1])], lambda x, y: (x*shape[1]+y)**2)
-        # print self.G
         self.F = FD.FiniteDifferenceEngineADI(self.G, coefficients=coeffs,
                 boundaries=bounds, schemes=schemes, force_bandwidth=None)
         # print "Setting up FDE for CPP tests"
         self.F.init()
         self.F.operators[0].R = np.arange(self.G.size, dtype=float)
         self.F.operators[1].R = np.arange(self.G.size, dtype=float)
-        self.F.operators[1]
         # print "Setup complete for CPP test"
 
 
@@ -406,11 +400,6 @@ class Operator_Folding_test(unittest.TestCase):
         # fp(B.bottom_factors or np.array([np.nan]))
         npt.assert_array_equal(self.B.D.data, B.D.data, err_msg="Undiagonalize roundtrip doesn't preserve operator matrix.")
         npt.assert_(B == self.B, msg="Undiagonalize roundtrip doesn't preserve operator.")
-
-
-
-
-
 
 
 def main():

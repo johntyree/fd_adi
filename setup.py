@@ -1,16 +1,19 @@
 #!/usr/bin/env python
 # coding: utf8
 
-from setuptools import setup
-from Cython.Distutils import build_ext
-from Cython.Build import cythonize
 import os
 from os.path import join as pjoin
 
+from setuptools import setup
+from Cython.Distutils import build_ext
+from Cython.Build import cythonize
+
 import numpy
+
 
 NVCC_ARCH = os.environ['NVCC_ARCH'] or 'sm_13'
 thrust = map(os.path.expanduser, ["~/thrust", "~/thrust-contrib", "~/projects/thrust-contrib", "~/projects/thrust"])
+
 
 def find_in_path(name, path):
     "Find a file in a search path"
@@ -76,7 +79,9 @@ for m in cython_modules:
     embedded_gcc_args = ["-g", "-Wall", "-fPIC"] + both_args
     m.extra_compile_args = {}
     m.extra_compile_args['gcc'] = ["-Wextra", "-pedantic", "-std=c++0x"] + embedded_gcc_args
-    m.extra_compile_args['nvcc'] = ['-arch='+NVCC_ARCH, '--use_fast_math', '--ptxas-options=-v', '-c', '--compiler-options="%s"' % ' '.join(embedded_gcc_args)] + both_args
+    m.extra_compile_args['nvcc'] = ['-arch='+NVCC_ARCH, '--use_fast_math',
+        '--ptxas-options=-v', '-c', '--compiler-options="%s"'
+        % ' '.join(embedded_gcc_args)] + both_args
 
 
 def customize_compiler_for_nvcc(self):
@@ -122,7 +127,6 @@ class custom_build_ext(build_ext):
     def build_extensions(self):
         customize_compiler_for_nvcc(self.compiler)
         build_ext.build_extensions(self)
-
 
 
 

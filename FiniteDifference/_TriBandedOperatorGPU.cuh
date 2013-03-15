@@ -1,25 +1,20 @@
-
 #ifndef _TriBandedOperatorGPU_cuh
 #define _TriBandedOperatorGPU_cuh
 
-#include <thrust/tuple.h>
 #include <thrust/device_ptr.h>
+#include <thrust/tuple.h>
 
 #include <cusparse_v2.h>
 
-#include "common.h"
 #include "backtrace.h"
+#include "common.h"
 #include "VecArray.h"
 
-
-typedef GPUVec<REAL_t>::iterator VI;
-typedef thrust::tuple<REAL_t,REAL_t,REAL_t> Triple;
-typedef thrust::tuple<REAL_t, REAL_t, REAL_t, REAL_t,
-        REAL_t, REAL_t, REAL_t> Septuple;
 
 static const std::string FOLDED = "FOLDED";
 static const std::string CAN_FOLD = "CAN_FOLD";
 static const std::string CANNOT_FOLD = "CANNOT_FOLD";
+
 
 class _TriBandedOperator {
     public:
@@ -33,7 +28,7 @@ class _TriBandedOperator {
         void apply(SizedArray<double> &);
         void solve(SizedArray<double> &);
         bool is_folded();
-        void DMVPY(SizedArray<double> &V, char operation, SizedArray<double> &Y, SizedArray<double> &out);
+        /* void DMVPY(SizedArray<double> &V, char operation, SizedArray<double> &Y, SizedArray<double> &out); */
         void add_operator(_TriBandedOperator &other);
         void add_scalar(double val);
         void diagonalize();

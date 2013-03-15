@@ -1,15 +1,15 @@
-#include <thrust/host_vector.h>
-#include <thrust/device_vector.h>
-#include <thrust/device_free.h>
-#include <thrust/device_malloc.h>
-#include <thrust/iterator/constant_iterator.h>
-#include <thrust/functional.h>
-#include <thrust/transform.h>
-
 #include <iostream>
 #include <sstream>
 #include <algorithm>
 #include <cassert>
+
+#include <thrust/device_free.h>
+#include <thrust/device_malloc.h>
+#include <thrust/device_vector.h>
+#include <thrust/functional.h>
+#include <thrust/host_vector.h>
+#include <thrust/iterator/constant_iterator.h>
+#include <thrust/transform.h>
 
 #include "common.h"
 #include "_kernels.h"
@@ -21,7 +21,9 @@ using thrust::make_constant_iterator;
 using thrust::placeholders::_1;
 using thrust::placeholders::_2;
 
+
 namespace impl {
+
     /* Vector Vector double */
     void pluseq(
         thrust::device_ptr<double> &us,
@@ -31,8 +33,10 @@ namespace impl {
                 us, us+size,
                 them,
                 us,
-                thrust::plus<double>());
+                _1 + _2);
     }
+
+
     void minuseq(
         thrust::device_ptr<double> &us,
         thrust::device_ptr<double> &them,
@@ -41,8 +45,10 @@ namespace impl {
                 us, us+size,
                 them,
                 us,
-                thrust::minus<double>());
+                _1 - _2);
     }
+
+
     void minuseq_over2(
         thrust::device_ptr<double> &us,
         thrust::device_ptr<double> &them,
@@ -52,8 +58,9 @@ namespace impl {
                 them,
                 us,
                 (_1 - _2)*0.5);
-                /* thrust::minus<double>()); */
     }
+
+
     void timeseq(
         thrust::device_ptr<double> &us,
         thrust::device_ptr<double> &them,
@@ -62,11 +69,13 @@ namespace impl {
                 us, us+size,
                 them,
                 us,
-                thrust::multiplies<double>());
+                _1 * _2);
     }
 
 
+
     /* Vector Vector int */
+
     void pluseq(
         thrust::device_ptr<int> &us,
         thrust::device_ptr<int> &them,
@@ -75,8 +84,10 @@ namespace impl {
                 us, us+size,
                 them,
                 us,
-                thrust::plus<int>());
+                _1 + _2);
     }
+
+
     void minuseq(
         thrust::device_ptr<int> &us,
         thrust::device_ptr<int> &them,
@@ -85,8 +96,10 @@ namespace impl {
                 us, us+size,
                 them,
                 us,
-                thrust::minus<int>());
+                _1 - _2);
     }
+
+
     void timeseq(
         thrust::device_ptr<int> &us,
         thrust::device_ptr<int> &them,
@@ -95,11 +108,13 @@ namespace impl {
                 us, us+size,
                 them,
                 us,
-                thrust::multiplies<int>());
+                _1 * _2);
     }
 
 
+
     /* Vector Scalar double */
+
     void pluseq(
         thrust::device_ptr<double> &data,
         Py_ssize_t size,
@@ -108,8 +123,10 @@ namespace impl {
                 data, data+size,
                 thrust::make_constant_iterator(x),
                 data,
-                thrust::plus<double>());
+                _1 + _2);
     }
+
+
     void minuseq(
         thrust::device_ptr<double> &data,
         Py_ssize_t size,
@@ -120,6 +137,8 @@ namespace impl {
                 data,
                 thrust::minus<double>());
     }
+
+
     void timeseq(
         thrust::device_ptr<double> &data,
         Py_ssize_t size,
@@ -128,11 +147,13 @@ namespace impl {
                 data, data+size,
                 thrust::make_constant_iterator(x),
                 data,
-                thrust::multiplies<double>());
+                _1 * _2);
     }
 
 
+
     /* Vector Scalar int */
+
     void pluseq(
         thrust::device_ptr<int> &data,
         Py_ssize_t size,
@@ -141,8 +162,10 @@ namespace impl {
                 data, data+size,
                 thrust::make_constant_iterator(x),
                 data,
-                thrust::plus<int>());
+                _1 + _2);
     }
+
+
     void minuseq(
         thrust::device_ptr<int> &data,
         Py_ssize_t size,
@@ -151,8 +174,10 @@ namespace impl {
                 data, data+size,
                 thrust::make_constant_iterator(x),
                 data,
-                thrust::minus<int>());
+                _1 - _2);
     }
+
+
     void timeseq(
         thrust::device_ptr<int> &data,
         Py_ssize_t size,
@@ -161,6 +186,7 @@ namespace impl {
                 data, data+size,
                 thrust::make_constant_iterator(x),
                 data,
-                thrust::multiplies<int>());
+                _1 * _2);
     }
+
 } // namespace impl

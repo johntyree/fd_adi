@@ -3,19 +3,13 @@
 """Benchmarking the FiniteDifferenceEngine."""
 
 import sys
-# import os
-# import itertools as it
 
 from FiniteDifference import utils
 
+from FiniteDifference.Grid import Grid
+from FiniteDifference.FiniteDifferenceEngineGPU import FiniteDifferenceEngineADI as FDE_ADI_GPU
 from FiniteDifference.heston import HestonOption, hs_call_vector, HestonFiniteDifferenceEngine
 from FiniteDifference.blackscholes import BlackScholesOption
-
-from FiniteDifference.Grid import Grid
-
-from FiniteDifference.FiniteDifferenceEngineGPU import FiniteDifferenceEngineADI as FDE_ADI_GPU
-
-# FD.DEBUG = True
 
 from FiniteDifference.visualize import fp
 
@@ -38,17 +32,15 @@ H = DefaultHeston
 # trims = slice(None)
 # trimv = slice(None)
 
-# Does better without upwinding here
 
 def create(nspots=30, nvols=30):
-    # schemes[(1,)] = [{"scheme": "forward"}]
-
     F = HestonFiniteDifferenceEngine(H, nspots=nspots,
                                         nvols=nvols, spotdensity=10, varexp=4,
                                         var_max=12, verbose=False)
     F.init()
     F.operators[1].diagonalize()
     return F
+
 
 def run(dt, F=None, func=None, initial=None):
     if F is None:
@@ -75,8 +67,8 @@ def run(dt, F=None, func=None, initial=None):
     }
 
     Vs = funcs[func](dt)
-
     return Vs
+
 
 def main():
     if len(sys.argv) > 1:
@@ -88,10 +80,12 @@ def main():
         nspots = int(sys.argv[2])
     else:
         nspots = 80
+
     if len(sys.argv) > 3:
         nvols = int(sys.argv[3])
     else:
         nvols = 80
+
     if len(sys.argv) > 4:
         dt = float(sys.argv[4])
     else:
@@ -105,6 +99,7 @@ def main():
     # print run(dt, F, func)[idx]
     # F.grid.reset()
     print run(dt, FG,func,F.grid.domain[0])[idx], F.option.analytical
+
 
 if __name__ == '__main__':
     main()

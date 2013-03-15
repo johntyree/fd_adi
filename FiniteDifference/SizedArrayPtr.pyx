@@ -5,20 +5,18 @@
 # distutils: language = c++
 # distutils: sources = FiniteDifference/backtrace.c FiniteDifference/filter.c FiniteDifference/_SizedArrayPtr_GPU_Code.cu
 
-from __future__ import division
 
-import sys
-import os
-import itertools as it
+from __future__ import division
 
 import numpy as np
 cimport numpy as np
-from FiniteDifference.VecArray cimport to_string
 
 from libcpp.string cimport string as cpp_string
 from libcpp cimport bool as cbool
-
 from cython.operator cimport dereference as deref
+
+from FiniteDifference.VecArray cimport to_string
+
 
 cdef class SizedArrayPtr(object):
 
@@ -27,6 +25,7 @@ cdef class SizedArrayPtr(object):
             self.from_numpy(a, tag)
             # print "imported from numpy in constructor"
 
+
     cpdef alloc(self, int sz, cpp_string tag="Unknown"):
         if self.p:
             del self.p
@@ -34,8 +33,6 @@ cdef class SizedArrayPtr(object):
         self.size = sz
         return self
 
-    # def __iadd__(self, other):
-        # self.p
 
     cdef store(self, SizedArray[double] *p, cpp_string tag="Unknown"):
         if self.p:
@@ -43,6 +40,7 @@ cdef class SizedArrayPtr(object):
         self.p = p
         self.size = self.p.size
         # print "SAPtr -> Storing %s:" % tag, to_string(p)
+
 
     cpdef from_numpy(self, np.ndarray a, cpp_string tag="Unknown"):
         if self.p:
@@ -52,6 +50,7 @@ cdef class SizedArrayPtr(object):
         self.size = self.p.size
         # print "Numpy -> Storing %s: %s" % (tag, to_string(self.p))
 
+
     cpdef to_numpy(self):
         # print "Converting", to_string(deref(self.p))
         # print "ndim", self.p.ndim, self.p.shape[0], self.p.shape[1]
@@ -59,32 +58,41 @@ cdef class SizedArrayPtr(object):
         assert a.ndim == self.p.ndim
         return a
 
+
     cpdef SizedArrayPtr copy(self, cbool deep):
         cdef SizedArray[double] *x = new SizedArray[double](deref(self.p), deep)
         u = SizedArrayPtr()
         u.store(x)
         return u
 
+
     cpdef copy_from(self, SizedArrayPtr other):
         self.p.copy_from(deref(other.p))
+
 
     cpdef pluseq(self, SizedArrayPtr other):
         self.p.pluseq(deref(other.p))
 
+
     cpdef minuseq(self, SizedArrayPtr other):
         self.p.minuseq(deref(other.p))
+
 
     cpdef minuseq_over2(self, SizedArrayPtr other):
         self.p.minuseq_over2(deref(other.p))
 
+
     cpdef timeseq(self, SizedArrayPtr other):
         self.p.timeseq(deref(other.p))
+
 
     cpdef pluseq_scalar(self, double other):
         self.p.pluseq(other)
 
+
     cpdef minuseq_scalar(self, double other):
         self.p.minuseq(other)
+
 
     cpdef timeseq_scalar(self, double other):
         self.p.timeseq(other)
@@ -94,6 +102,7 @@ cdef class SizedArrayPtr(object):
         if self.p:
             # print "Freeing %s:" % (self.tag,), to_string(self.p)
             del self.p
+
 
     def __str__(self):
         return "SizedArrayPtr (%s)@%s" % (self.tag, to_string(self.p))
@@ -106,12 +115,14 @@ cdef class SizedArrayPtr_i(object):
             self.from_numpy(a, tag)
             # print "imported from numpy in constructor"
 
+
     cpdef alloc(self, int sz, cpp_string tag="Unknown"):
         if self.p:
             del self.p
         self.p = new SizedArray[int](sz, tag)
         self.size = self.p.size
         return self
+
 
     cdef store(self, SizedArray[int] *p, cpp_string tag="Unknown"):
         if self.p:
@@ -120,14 +131,17 @@ cdef class SizedArrayPtr_i(object):
         self.size = self.p.size
         # print "SAPtr -> Storing %s:" % tag, to_string(p)
 
+
     cpdef SizedArrayPtr_i copy(self, cbool deep):
         cdef SizedArray[int] *x = new SizedArray[int](deref(self.p), deep)
         u = SizedArrayPtr_i()
         u.store(x)
         return u
 
+
     cpdef copy_from(self, SizedArrayPtr_i other):
         self.p.copy_from(deref(other.p))
+
 
     cpdef from_numpy(self, np.ndarray a, cpp_string tag="Unknown"):
         if self.p:
@@ -137,6 +151,7 @@ cdef class SizedArrayPtr_i(object):
         self.size = self.p.size
         # print "Numpy -> Storing %s: %s" % (tag, to_string(self.p))
 
+
     cpdef to_numpy(self):
         # print "Converting", to_string(deref(self.p))
         # print "ndim", self.p.ndim, self.p.shape[0], self.p.shape[1]
@@ -144,32 +159,39 @@ cdef class SizedArrayPtr_i(object):
         assert a.ndim == self.p.ndim
         return a
 
+
     cpdef pluseq(self, SizedArrayPtr_i other):
         self.p.pluseq(deref(other.p))
+
 
     cpdef minuseq(self, SizedArrayPtr_i other):
         self.p.minuseq(deref(other.p))
 
+
     cpdef timeseq(self, SizedArrayPtr_i other):
         self.p.timeseq(deref(other.p))
+
 
     cpdef pluseq_scalar(self, int other):
         self.p.pluseq(other)
 
+
     cpdef minuseq_scalar(self, int other):
         self.p.minuseq(other)
 
+
     cpdef timeseq_scalar(self, int other):
         self.p.timeseq(other)
+
 
     def __dealloc__(self):
         if self.p:
             # print "Freeing %s:" % (self.tag,), to_string(self.p)
             del self.p
 
+
     def __str__(self):
         return "SizedArrayPtr (%s)@%s" % (self.tag, to_string(self.p))
-
 
 
 cdef SizedArray[double]* to_SizedArray(np.ndarray v, cpp_string name) except NULL:
@@ -203,7 +225,6 @@ cdef from_SizedArray_i(SizedArray[int] &v):
 
 
 cdef from_SizedArray(SizedArray[double] &v):
-    print "from_SizedArray:", v.name
     s = np.empty(v.size, dtype=float)
     cdef int i, j
     for i in range(v.size):

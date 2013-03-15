@@ -1,5 +1,6 @@
 # coding: utf8
 
+
 import numpy as np
 cimport numpy as np
 
@@ -13,6 +14,7 @@ from FiniteDifference.VecArray cimport SizedArray
 from FiniteDifference.SizedArrayPtr cimport SizedArrayPtr, SizedArrayPtr_i
 from FiniteDifference.SizedArrayPtr cimport from_SizedArray, from_SizedArray_i
 
+
 cdef extern from "backtrace.h":
     pass
 
@@ -22,19 +24,22 @@ cdef extern from "filter.h":
 
 
 cdef class BandedOperator(object):
+
     cdef public:
         attrs
         axis
+        blocks
+        bottom_fold_status
+        cbool is_mixed_derivative
+        deltas
         derivative
         order
-        blocks
-        cbool is_mixed_derivative
         top_fold_status
-        bottom_fold_status
-        deltas
+
 
     cdef _TriBandedOperator *thisptr_tri
     cdef _CSRBandedOperator *thisptr_csr
+
 
     cdef  emigrate_csr(self, other, tag=*)
     cdef  emigrate_tri(self, other, tag=*)
@@ -61,6 +66,7 @@ cdef class BandedOperator(object):
     cpdef undiagonalize(self)
     cpdef vectorized_scale(self, np.ndarray vector)
     cpdef vectorized_scale_(self, SizedArrayPtr vector)
+
 
 cdef inline int sign(int i)
 

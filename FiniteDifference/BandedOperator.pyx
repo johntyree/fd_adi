@@ -7,12 +7,15 @@
 import numpy as np
 cimport numpy as np
 import scipy.sparse
-import utils
 import scipy.linalg as spl
+
+import utils
+
 
 FOLDED = "FOLDED"
 CAN_FOLD = "CAN_FOLD"
 CANNOT_FOLD = "CANNOT_FOLD"
+
 
 cdef class BandedOperator(object):
 
@@ -193,7 +196,6 @@ cdef class BandedOperator(object):
 
 
     cpdef fold_bottom(self, unfold=False):
-        print "Folding bottom"
         d = self.D.data
         m = get_int_index(self.D.offsets, 0)
         for i in [1, 0,-1, -2]:
@@ -757,8 +759,10 @@ cdef class BandedOperator(object):
             R[i] *= vector[i]
         return
 
+
     cpdef clear_residual(self):
         self.R *= 0
+
 
     cpdef scale(self, func):
         """

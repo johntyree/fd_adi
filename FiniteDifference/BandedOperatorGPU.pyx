@@ -6,8 +6,6 @@
 # distutils: sources = FiniteDifference/_BandedOperator_GPU_Code.cu FiniteDifference/backtrace.c FiniteDifference/filter.c
 
 
-from bisect import bisect_left
-
 import numpy as np
 cimport numpy as np
 import scipy.sparse
@@ -20,6 +18,7 @@ import FiniteDifference.utils as utils
 from FiniteDifference.BandedOperator import BandedOperator as BO
 from FiniteDifference.BandedOperator cimport BandedOperator as BO
 from FiniteDifference.VecArray cimport GPUVec
+
 
 FOLDED = "FOLDED"
 CAN_FOLD = "CAN_FOLD"
@@ -231,7 +230,6 @@ cdef class BandedOperator(object):
             print "Immigrate Tri:", tag, to_string(self.thisptr_tri)
         assert self.thisptr_tri != <void *>0
 
-
         bots = from_SizedArray(self.thisptr_tri.bottom_factors)
         tops = from_SizedArray(self.thisptr_tri.top_factors)
 
@@ -301,6 +299,7 @@ cdef class BandedOperator(object):
         return (self.top_fold_status == FOLDED
                 or self.bottom_fold_status == FOLDED)
 
+
     cpdef cbool is_foldable(self):
         return (self.top_fold_status == CAN_FOLD
                 or self.bottom_fold_status == CAN_FOLD)
@@ -308,7 +307,6 @@ cdef class BandedOperator(object):
 
     cpdef apply_(self, SizedArrayPtr sa_V, overwrite):
         cdef SizedArrayPtr sa_U
-
         if overwrite:
             sa_U = sa_V
         else:
@@ -352,6 +350,7 @@ cdef class BandedOperator(object):
         if self.thisptr_tri:
             self.thisptr_tri.has_residual = state
 
+
     cdef inline no_mixed(self):
         if self.is_mixed_derivative:
             raise ValueError("Operation not supported with mixed operator.")
@@ -382,6 +381,7 @@ cdef class BandedOperator(object):
     def __imul__(self, val):
         self.vectorized_scale(np.ones(self.shape[0]) * val)
         return self
+
 
     cpdef add(self, val, inplace=False):
         if inplace:
@@ -445,6 +445,7 @@ cdef class BandedOperator(object):
             raise RuntimeError("add_scalar called but C++ tridiag is NULL. CSR? Mixed(%s)" % self.is_mixed_derivative)
         self.thisptr_tri.add_scalar(other)
         return
+
 
     cpdef vectorized_scale_(self, SizedArrayPtr vector):
         """

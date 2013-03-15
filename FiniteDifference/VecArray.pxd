@@ -1,3 +1,5 @@
+# coding: utf8
+
 
 from libcpp.string cimport string as cpp_string
 from libcpp cimport bool as cbool
@@ -6,6 +8,7 @@ cimport numpy as np
 
 from FiniteDifference.thrust.device_vector cimport device_vector
 from FiniteDifference.thrust.device_ptr cimport device_ptr
+
 
 cdef extern from "VecArray.h":
 

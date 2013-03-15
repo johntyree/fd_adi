@@ -1,10 +1,7 @@
 #!/usr/bin/env python
 # coding: utf8
 
-# import sys
-# import os
 import itertools
-# from bisect import bisect_left
 import unittest
 
 import numpy as np
@@ -15,8 +12,6 @@ import scipy.linalg as spl
 import FiniteDifference.utils as utils
 from FiniteDifference.utils import todia, block_repeat, foldMatFor
 from FiniteDifference.visualize import fp
-# def fp(*x, **y):
-    # pass
 import FiniteDifference.Grid as Grid
 
 import FiniteDifference.FiniteDifferenceEngine as FD
@@ -47,7 +42,7 @@ class BlackScholesOption_test(unittest.TestCase):
                                                      )
         self.F.init()
         self.FG = FDG.FiniteDifferenceEngineADI(self.F)
-        print self.F.operators.items()
+
 
     def test_implicit(self):
         t, dt = self.F.option.tenor, self.dt
@@ -59,6 +54,7 @@ class BlackScholesOption_test(unittest.TestCase):
         # print "Price:", V, ans, V - ans
         npt.assert_allclose(V, ans, rtol=0.001)
 
+
     def test_douglas(self):
         t, dt = self.F.option.tenor, self.dt
         V = self.FG.solve_douglas(t/dt, dt, self.F.grid.domain[-1])[self.F.idx]
@@ -66,6 +62,7 @@ class BlackScholesOption_test(unittest.TestCase):
         # print "Spot:", self.F.option.spot
         # print "Price:", V, ans, V - ans
         npt.assert_allclose(V, ans, rtol=0.001)
+
 
     def test_smooth(self):
         raise unittest.SkipTest
@@ -115,6 +112,7 @@ class HestonOption_test(unittest.TestCase):
         self.F.operators[1].diagonalize()
         self.FG = FDG.FiniteDifferenceEngineADI(self.F)
 
+
     def test_implicit(self):
         t, dt = self.F.option.tenor, self.dt
         dt = 1/600.0
@@ -140,6 +138,7 @@ class HestonOption_test(unittest.TestCase):
         npt.assert_allclose(V, V2)
         npt.assert_allclose(V, ans, rtol=0.001)
 
+
     def test_douglas(self):
         t, dt = self.F.option.tenor, self.dt
         for d, o in self.F.operators.items():
@@ -151,6 +150,7 @@ class HestonOption_test(unittest.TestCase):
         # print "Price:", V, ans, V - ans
         npt.assert_allclose(V, ans, rtol=0.001)
 
+
     def test_hundsdorferverwer(self):
         t, dt = self.F.option.tenor, self.dt
         for d, o in self.F.operators.items():
@@ -160,8 +160,9 @@ class HestonOption_test(unittest.TestCase):
         V2 = self.F.solve_hundsdorferverwer(t/dt, dt, self.F.grid.domain[-1])[self.F.idx]
         ans = self.F.option.analytical
         # print "Spot:", self.F.option.spot
-        print "Price:", V2, V, ans, V - ans
+        # print "Price:", V2, V, ans, V - ans
         npt.assert_allclose(V, ans, rtol=0.001)
+
 
     def test_smooth(self):
         raise unittest.SkipTest
@@ -252,6 +253,7 @@ class FiniteDifferenceEngineADIGPU_test(unittest.TestCase):
         tst = tst.immigrate()
         npt.assert_equal(tst, ref)
 
+
     def test_verify_simple_operators_1(self):
         ref = self.F.simple_operators[(1,)].copy()
         tst = self.FG.simple_operators[(1,)].copy().immigrate()
@@ -262,6 +264,7 @@ class FiniteDifferenceEngineADIGPU_test(unittest.TestCase):
         tst = tst.immigrate()
         npt.assert_equal(tst, ref)
 
+
     def test_verify_simple_operators_00(self):
         ref = self.F.simple_operators[(0,0)].copy()
         tst = self.FG.simple_operators[(0,0)].copy().immigrate()
@@ -271,6 +274,7 @@ class FiniteDifferenceEngineADIGPU_test(unittest.TestCase):
         ref.diagonalize(), tst.diagonalize()
         tst = tst.immigrate()
         npt.assert_equal(tst, ref)
+
 
     def test_verify_simple_operators_11(self):
         ref = self.F.simple_operators[(1,1)].copy()
@@ -283,10 +287,12 @@ class FiniteDifferenceEngineADIGPU_test(unittest.TestCase):
         tst = tst.immigrate()
         npt.assert_equal(tst, ref)
 
+
     def test_verify_simple_operators_01(self):
         ref = self.F.simple_operators[(0,1)]
         tst = self.FG.simple_operators[(0,1)].immigrate()
         npt.assert_equal(tst, ref)
+
 
     def test_combine_operators_0(self):
         ref = self.F.operators[0]
@@ -296,6 +302,7 @@ class FiniteDifferenceEngineADIGPU_test(unittest.TestCase):
         tst = tst.immigrate()
         tst.derivative = ref.derivative
         npt.assert_equal(tst, ref)
+
 
     def test_combine_operators_1(self):
         ref = self.F.operators[1]
@@ -317,6 +324,7 @@ class FiniteDifferenceEngineADIGPU_test(unittest.TestCase):
         tst.D.data *= 0
         ref.D.data *= 0
         npt.assert_equal(tst, ref)
+
 
     def test_cross_derivative(self):
         crossOp = self.F.operators[(0,1)]
@@ -388,9 +396,6 @@ class FiniteDifferenceEngineADIGPU_test(unittest.TestCase):
         # print
         # fp(ref - tst, 'e')
         npt.assert_array_almost_equal(ref, tst)
-
-
-
 
 
 
