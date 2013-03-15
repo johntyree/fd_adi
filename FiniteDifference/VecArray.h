@@ -188,14 +188,19 @@ template<typename T>
 struct SizedArray {
     bool owner;
     thrust::device_ptr<T> data;
+    thrust::device_ptr<T> tempspace;
     Py_ssize_t ndim;
     Py_ssize_t size;
     Py_ssize_t shape[8];
     std::string name;
 
+    // SizedArray() : owner(false), tempspace(), ndim(0), size(0) {}
 
     SizedArray(Py_ssize_t size, std::string name)
-        : owner(true), data(device_malloc<T>(size)), ndim(1), size(size), name(name) {
+        : owner(true),
+          data(device_malloc<T>(size)),
+          tempspace(device_malloc<T>(size)),
+          ndim(1), size(size), name(name) {
         shape[0] = size;
         sanity_check();
     }
@@ -203,6 +208,7 @@ struct SizedArray {
     SizedArray(SizedArray<T> const &S, bool deep)
         : owner(deep),
           data(owner ? device_malloc<T>(S.size) : S.data),
+          tempspace(device_malloc<T>(S.size)),
           ndim(S.ndim), size(S.size), name(S.name) {
         // LOG("Owner("<<owner<<")");
         if (owner) {
@@ -218,6 +224,7 @@ struct SizedArray {
     SizedArray(T *rawptr, Py_ssize_t size, std::string name, bool from_host)
         : owner(from_host),
           data(),
+          tempspace(device_malloc<T>(size)),
           ndim(1),
           size(size),
           name(name) {
@@ -235,6 +242,8 @@ struct SizedArray {
 
     SizedArray(T *rawptr, int ndim, intptr_t *s, std::string name, bool from_host)
         : owner(from_host),
+          data(),
+          tempspace(),
           ndim(ndim),
           size(1),
           name(name) {
@@ -250,6 +259,7 @@ struct SizedArray {
         } else {
             data = thrust::device_pointer_cast(rawptr);
         }
+        tempspace = device_malloc<T>(size);
         sanity_check();
         FULLTRACE;
     }
@@ -260,6 +270,7 @@ struct SizedArray {
         if (owner) {
             device_free(data);
         }
+        device_free(tempspace);
         FULLTRACE;
     }
 
@@ -267,11 +278,11 @@ struct SizedArray {
         // if (!owner) {
             // DIE("Just take ownership for now...");
         // }
-        if (data.get() == NULL) {
+        if (data.get() == NULL || tempspace.get() == NULL) {
             if (owner) {
                 DIE(name << ": Failed to alloc memory of size("<<size<<")");
             } else {
-                DIE(name << ": data doesn't point ot anything");
+                DIE(name << ": data or tempspace doesn't point to anything");
             }
         }
         if (ndim > 8) {
@@ -326,21 +337,21 @@ struct SizedArray {
             // DIE("Can only transpose 2D matrix");
         }
         //XXX
-        thrust::device_ptr<T> out = device_malloc<T>(size);
+        // thrust::device_ptr<T> out = device_malloc<T>(size);
         switch (strategy) {
             case 1:
-                transposeNoBankConflicts(out.get(), data.get(), shape[0], shape[1]);
+                transposeNoBankConflicts(tempspace.get(), data.get(), shape[0], shape[1]);
                 break;
             default:
                 DIE("\nUnknown Transpose Strategy")
         }
         reshape(shape[1], shape[0]);
         if (owner) {
-            std::swap(out, data);
+            std::swap(tempspace, data);
         } else {
-            thrust::copy(out, out+size, data);
+            thrust::copy(tempspace, tempspace+size, data);
         }
-        device_free(out);
+        // device_free(out);
     }
 
     std::string show() {
