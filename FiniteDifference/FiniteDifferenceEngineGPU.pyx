@@ -235,7 +235,7 @@ cdef class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
                if type(d) != tuple]
 
         for L in itertools.chain(Les, Lis):
-            L.clear_residual()
+            L.enable_residual(False)
 
         print_step = max(1, int(n / 10))
         to_percent = 100.0 / n if n != 0 else 0
@@ -298,7 +298,7 @@ cdef class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
                if type(d) != tuple]
 
         for L in itertools.chain(Les, Lis):
-            L.clear_residual()
+            L.enable_residual(False)
 
         print_step = max(1, int(n / 10))
         to_percent = 100.0 / n
@@ -341,7 +341,7 @@ cdef class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
                if type(d) != tuple]
 
         for L in itertools.chain(Les, Lis):
-            L.clear_residual()
+            L.enable_residual(False)
 
         print_step = max(1, int(n / 10))
         to_percent = 100.0 / n

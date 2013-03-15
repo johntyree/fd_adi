@@ -348,9 +348,9 @@ cdef class BandedOperator(object):
         return V
 
 
-    cpdef clear_residual(self):
+    cpdef enable_residual(self, cbool state):
         if self.thisptr_tri:
-            self.thisptr_tri.has_residual = False
+            self.thisptr_tri.has_residual = state
 
     cdef inline no_mixed(self):
         if self.is_mixed_derivative:
