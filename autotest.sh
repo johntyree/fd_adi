@@ -19,18 +19,24 @@ onmodify () {
     done )
 }
 
+ALL=""
+CCC=""
+while getopts ":acf" opt; do
+    case $opt in
+        a)
+            ALL="rm .noseids;"
+            ;;
+        c)
+            CCC="touch FiniteDifference/*Code.cu;"
+            ;;
+        f)
+            failed="--failed"
+            ;;
+    esac
+done
 
-CMD=""
-if [ "$1" == '--force' ]; then
-    shift
-    CMD+="touch FiniteDifference/*Code.cu;"
-fi
-if [ "$1" == '--all' ]; then
-    shift
-    CMD+="rm .noseids;"
-fi
-CMD+="(set -o pipefail; python setup.py build_ext --inplace 2>&1 | grep -Ei --color -e '' -e error) \
-    && nosetests --failed --rednose --verbosity=3 --with-id $@ \
+CMD="$ALL $CCC (set -o pipefail; python setup.py build_ext --inplace 2>&1 | grep -Ei --color -e '' -e error) \
+    && nosetests $failed --rednose --verbosity=3 --with-id $@ \
     || echo -ne '\a'
 "
 
