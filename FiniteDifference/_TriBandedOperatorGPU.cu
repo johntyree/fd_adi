@@ -500,7 +500,15 @@ void _TriBandedOperator::solve(SizedArray<double> &V) {
             sub.get(), mid.get(), sup.get(),
             V.data.get(),
             1, N);
-    cudaDeviceSynchronize();
+
+    /* if (block_len > 256) { */
+        /* DIE("Block_len Too big!"); */
+    /* } */
+    /* if (blocks * block_len > V.size) { */
+        /* DIE("Indexing is wrong. Too large."); */
+    /* } */
+    /* triDiagonalSystemSolve<<<blocks, block_len>>>(V.size, sub.get(), mid.get(), sup.get(), V.data.get()); */
+    /* cudaDeviceSynchronize(); */
     if (status != CUSPARSE_STATUS_SUCCESS) {
         DIE("CUSPARSE tridiag system solve failed.");
     }
