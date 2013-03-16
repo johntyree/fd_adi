@@ -17,6 +17,7 @@ from cython.operator cimport dereference as deref
 
 from FiniteDifference.VecArray cimport to_string
 
+from FiniteDifference.thrust.copy cimport copy_n
 
 cdef class SizedArrayPtr(object):
 
@@ -214,9 +215,8 @@ cdef SizedArray[int]* to_SizedArray_i(np.ndarray v, cpp_string name) except NULL
 
 cdef from_SizedArray_i(SizedArray[int] &v):
     s = np.empty(v.size, dtype=np.int32)
-    cdef int i, j
-    for i in range(v.size):
-        s[i] = v.get(i)
+    cdef int i
+    copy_n(v.data, v.size, <int *>np.PyArray_DATA(s))
     shp = []
     for i in range(v.ndim):
         shp.append(v.shape[i])
@@ -226,9 +226,8 @@ cdef from_SizedArray_i(SizedArray[int] &v):
 
 cdef from_SizedArray(SizedArray[double] &v):
     s = np.empty(v.size, dtype=float)
-    cdef int i, j
-    for i in range(v.size):
-        s[i] = v.get(i)
+    cdef int i
+    copy_n(v.data, v.size, <double *>np.PyArray_DATA(s))
     shp = []
     for i in range(v.ndim):
         shp.append(v.shape[i])
