@@ -12,11 +12,26 @@ import numpy as np
 
 import convergence as cv
 import FiniteDifference as FD
+from FiniteDifference.FiniteDifferenceEngineGPU import FiniteDifferenceEngineADI as FDEGPU
 import FiniteDifference.visualize as vis
-figure_dir = "/home/john/Filing_Cabinet/thesis/thesis_cudafd/tex/figures/archive"
+# figure_dir = "/home/john/Filing_Cabinet/thesis/thesis_cudafd/tex/figures/archive"
+figure_dir = "/scratch/tyree/cudafd/src/fd_pricer/py_adi/data_convergence/figures"
 
 
 fname = "temp"
+
+def engine(*args, **kwargs):
+    F = FDEGPU(FD.heston.HestonFiniteDifferenceEngine(*args, **kwargs))
+    # for o in F.operators.values():
+        # if o.top_fold_status == 'CAN_FOLD':
+            # o.diagonalize()
+        # if o.bottom_fold_status == 'CAN_FOLD':
+            # o.diagonalize()
+    return F
+
+def usage():
+    print sys.argv[0], "<func> <mode> (<nspots> <nvols> | <dt>)"
+    sys.exit(1)
 
 
 try:
@@ -25,11 +40,14 @@ try:
     if mode == 'dt':
         nspots = int(sys.argv[3])
         nvols = int(sys.argv[4])
-    if mode == 'dx':
+    elif mode == 'dx':
         dt = float(sys.argv[3])
+    else:
+        raise RuntimeError
 except IndexError:
-    print sys.argv[0], "<func> <mode> (<nspots> <nvols> | <dt>)"
-    sys.exit(1)
+    usage()
+except RuntimeError:
+    usage()
 
 
 def save(*args, **kwargs):
@@ -44,7 +62,6 @@ def mc_error(price):
     return newf
 
 def rundt():
-    engine = FD.heston.HestonFiniteDifferenceEngine
     ct = cv.ConvergenceTester(option, engine, {'nspots': nspots, 'nvols': nvols},
                                 func=func, max_i=7, error_func=cv.error2d)
     err = ct.dt()
@@ -62,7 +79,6 @@ def rundx():
             return
         return (max(xs) - min(xs)) / 2**i
 
-    engine = FD.heston.HestonFiniteDifferenceEngine
     ct = cv.ConvergenceTester(option, engine,
             {'force_exact': False, 'spotdensity': 10, 'varexp': 4},
             dt=dt, min_i=4, max_i=9, func=func, error_func=mc_error(),

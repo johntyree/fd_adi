@@ -219,6 +219,7 @@ class ConvergenceTester(object):
             self.kwargs['display'](V, F, self.errors, label=self.kwargs["label"])
             # self.domains.append(V)
             self.meshes.append(pylab.array(F.grid.mesh))
+            del F
         return self.errors
 
     def dx(self):
