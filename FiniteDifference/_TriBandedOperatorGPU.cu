@@ -108,37 +108,10 @@ _TriBandedOperator::_TriBandedOperator(
 void _TriBandedOperator::verify_diag_ptrs() {
     FULLTRACE;
 
-    int idx;
-
     if (sup.get() == 0 || mid.get() == 0 || sub.get() == 0) {
         DIE("Diag pointers aren't non-null");
     }
-    if (main_diag == -1) {
-        /* LOG("No main diag means not tridiagonal, hopefully."); */
-        return;
-    }
 
-    /* LOG("main_diag("<<main_diag<<")"); */
-    idx = diags.idx(main_diag-1, 0);
-
-    if (*sup != diags.data[idx]
-            || (sup.get() != (&diags.data[diags.idx(0,0)]).get())) {
-        DIE("sup[0] = " << *sup << " <->  " << diags.get(0,0)
-            << "\n\tsup = " << sup.get() << " <->  "
-                << (&diags.data[diags.idx(0, 0)]).get());
-    }
-    if (*mid != diags.data[diags.idx(main_diag, 0)]
-            || (mid.get() != (&diags.data[diags.idx(main_diag, 0)]).get())) {
-        DIE("mid[0] = " << *mid << " !=  " << diags.get(main_diag,0)
-            << "\n\tmid = " << mid.get() << " <->  "
-                << (&diags.data[diags.idx(main_diag, 0)]).get());
-    }
-    if (*sub != diags.data[diags.idx(main_diag+1, 0)]
-            || (sub.get() != (&diags.data[diags.idx(main_diag+1, 0)]).get())) {
-        DIE("sub[0] = " << *sub << " !=  " << diags.get(main_diag+1,0)
-            << "\n\tsub = " << sub.get() << " <->  "
-                << (&diags.data[diags.idx(main_diag+1, 0)]).get());
-    }
     FULLTRACE;
 }
 
