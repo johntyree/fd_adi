@@ -475,24 +475,6 @@ cdef inline int sign(int i):
         return 1
 
 
-# @cython.boundscheck(False)
-cdef inline unsigned int get_real_index(double[:] haystack, double needle):
-    cdef unsigned int length = haystack.shape[0]
-    for i in range(length):
-        if needle == haystack[i]:
-            return i
-    raise ValueError("Value not in array: %s" % needle)
-
-
-# @cython.boundscheck(False)
-cdef inline unsigned int get_int_index(int[:] haystack, int needle):
-    cdef unsigned int length = haystack.shape[0]
-    for i in range(length):
-        if needle == haystack[i]:
-            return i
-    raise ValueError("Value not in array: %s" % needle)
-
-
 def test_SizedArray_transpose(np.ndarray[ndim=2, dtype=double] v):
     cdef SizedArrayPtr s = SizedArrayPtr(v, "transpose s")
     v[:] = 0
