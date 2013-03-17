@@ -58,14 +58,6 @@ class Cpp_test(unittest.TestCase):
         # print "Setup complete for CPP test"
 
 
-    def test_SizedArray_roundtrip(self):
-        npt.assert_array_equal(self.v1, BOG.test_SizedArray1_roundtrip(self.v1.copy()))
-
-
-    def test_SizedArray_roundtrip2D(self):
-        npt.assert_array_equal(self.v2, BOG.test_SizedArray2_roundtrip(self.v2.copy()))
-
-
     def test_migrate_0(self):
         B = self.F.operators[0]
         ref = B.copy()
@@ -112,14 +104,6 @@ class Cpp_test(unittest.TestCase):
         B = B.immigrate("test 01")
         npt.assert_array_equal(ref.D.todense(), B.D.todense())
         assert ref == B
-
-
-    def test_SizedArray_transpose(self):
-        ntests = 100
-        for i in range(ntests):
-            shape = tuple(np.random.random_integers(1, 100, 2))
-            v2 = np.arange(shape[0]*shape[1], dtype=float).reshape(shape)
-            npt.assert_array_equal(v2.T, BOG.test_SizedArray_transpose(v2.copy()))
 
 
     def test_tri_apply_axis_0(self):

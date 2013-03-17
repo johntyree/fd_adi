@@ -105,6 +105,29 @@ class SizedArray_test(unittest.TestCase):
         npt.assert_array_equal(ref, tst)
 
 
+    def test_transpose(self):
+        s = SizedArrayPtr(self.v.copy(), "transpose s")
+        s.transpose()
+        ref = self.v
+        tst = s.to_numpy()
+        npt.assert_array_equal(ref, tst)
+
+
+    def test_roundtrip(self):
+        s = SizedArrayPtr(self.v.copy(), "Round Trip")
+        ref = self.v
+        tst = s.to_numpy()
+        npt.assert_array_equal(ref, tst)
+
+
+    def test_SizedArray2_roundtrip(self):
+        v2 = np.random.random((10,5))
+        s = SizedArrayPtr(v2, "Round Trip")
+        ref = v2
+        tst = s.to_numpy()
+        npt.assert_array_equal(ref, tst)
+
+
 class SizedArray_i_test(unittest.TestCase):
 
     def setUp(self):
@@ -192,4 +215,19 @@ class SizedArray_i_test(unittest.TestCase):
         tst = self.S.to_numpy()
         # Preservation
         npt.assert_array_equal(self.v2, self.S2.to_numpy())
+        npt.assert_array_equal(ref, tst)
+
+
+    def test_roundtrip(self):
+        s = SizedArrayPtr_i(self.v.copy(), "Round Trip")
+        ref = self.v
+        tst = s.to_numpy()
+        npt.assert_array_equal(ref, tst)
+
+
+    def test_SizedArray2_roundtrip(self):
+        v2 = np.random.random_integers(0, 24, 50).reshape((10,5)).astype(np.int32)
+        s = SizedArrayPtr_i(v2, "Round Trip")
+        ref = v2
+        tst = s.to_numpy()
         npt.assert_array_equal(ref, tst)

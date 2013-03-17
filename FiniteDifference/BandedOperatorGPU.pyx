@@ -475,27 +475,6 @@ cdef inline int sign(int i):
         return 1
 
 
-def test_SizedArray_transpose(np.ndarray[ndim=2, dtype=double] v):
-    cdef SizedArrayPtr s = SizedArrayPtr(v, "transpose s")
-    v[:] = 0
-    s.p.transpose(1)
-    v = s.to_numpy()
-    del s
-    return v
-
-
-def test_SizedArray1_roundtrip(np.ndarray[ndim=1, dtype=double] v):
-    cdef SizedArrayPtr s = SizedArrayPtr(v, "Round Trip")
-    v[:] = 0
-    return s.to_numpy()
-
-
-def test_SizedArray2_roundtrip(np.ndarray[ndim=2, dtype=double] v):
-    cdef SizedArrayPtr s = SizedArrayPtr(v, "Round Trip")
-    v[:,:] = 0
-    return s.to_numpy()
-
-
 cdef cublas_to_scipy(B):
     # Shift because of scipy/cublas row configuration
     for row, o in enumerate(B.D.offsets):

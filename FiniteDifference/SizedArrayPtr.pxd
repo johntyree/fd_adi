@@ -22,6 +22,7 @@ cdef class SizedArrayPtr(object):
     cpdef to_numpy(self)
     cpdef SizedArrayPtr copy(self, cbool deep)
     cpdef copy_from(self, SizedArrayPtr other)
+    cpdef transpose(self)
     cpdef pluseq(self, SizedArrayPtr other)
     cpdef minuseq(self, SizedArrayPtr other)
     cpdef minuseq_over2(self, SizedArrayPtr other)

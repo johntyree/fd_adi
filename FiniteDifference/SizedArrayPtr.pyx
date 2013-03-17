@@ -71,6 +71,10 @@ cdef class SizedArrayPtr(object):
         self.p.copy_from(deref(other.p))
 
 
+    cpdef transpose(self):
+        self.p.transpose(1)
+
+
     cpdef pluseq(self, SizedArrayPtr other):
         self.p.pluseq(deref(other.p))
 
