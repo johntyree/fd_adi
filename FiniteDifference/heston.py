@@ -271,7 +271,7 @@ class HestonFiniteDifferenceEngine(FiniteDifferenceEngineADI):
             spotdensity=7.0,
             varexp=4.0,
             force_exact=True,
-            flip_idx_var=True,
+            flip_idx_var=False,
             flip_idx_spot=False,
             schemes=None,
             coefficients=None,
