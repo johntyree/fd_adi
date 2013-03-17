@@ -27,7 +27,7 @@ CANNOT_FOLD = "CANNOT_FOLD"
 
 cdef class BandedOperator(object):
 
-    def __init__(self, other=None, tag="Constructor"):
+    def __init__(self, other=None, tag=""):
         """
         A linear operator for discrete derivatives.
         Consist of a banded matrix (B.D) and a residual vector (B.R) for things
