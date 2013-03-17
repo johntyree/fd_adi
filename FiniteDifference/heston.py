@@ -4,7 +4,7 @@
 
 from __future__ import division
 
-# import sys
+import sys
 import os
 import itertools as it
 import time
@@ -137,6 +137,7 @@ class HestonOption(Option):
             if verbose:
                 if not i % notify:
                     print int(100*i / nrOfSteps),
+                    sys.stdout.flush()
             V = Vt
 
             #Andersen's paper, equation (17)
