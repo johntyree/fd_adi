@@ -31,7 +31,6 @@ DefaultBS = BlackScholesOption(spot=100
                  , volatility = 0.2
                  , tenor=1.0
                  )
-
 BS = DefaultBS
 
 DefaultHeston = HestonOption(spot=100
