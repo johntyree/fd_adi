@@ -105,10 +105,10 @@ def dsdv_convergence(dt=1.0/1000, nv=500, ns=500, func=None):
             print "No func. No-op"
             return
         funcs = {
-            'hv': lambda dt: F.solve_hundsdorferverwer(H.tenor/dt, dt, theta=0.65),
-            'i' : lambda dt: F.solve_implicit(H.tenor/dt, dt),
-            'd' : lambda dt: F.solve_implicit(H.tenor/dt, dt, theta=0.65),
-            'smooth': lambda dt: F.solve_smooth(H.tenor/dt, dt, smoothing_steps=1, scheme=F.solve_hundsdorferverwer)
+            'hv': lambda dt: F.solve_hundsdorferverwer(H.tenor/dt, dt, F.grid.domain[-1], theta=0.65),
+            'i' : lambda dt: F.solve_implicit(H.tenor/dt, dt, F.grid.domain[-1]),
+            'd' : lambda dt: F.solve_implicit(H.tenor/dt, dt, F.grid.domain[-1], theta=0.65),
+            'smooth': lambda dt: F.smooth(H.tenor/dt, dt, F.grid.domain[-1], smoothing_steps=1)
         }
         labels = {
             'hv': "Hundsdorfer-Verwer",
@@ -164,10 +164,10 @@ def dsdv_convergence(dt=1.0/1000, nv=500, ns=500, func=None):
 
 class ConvergenceTester(object):
     funcs = {
-        'hv': lambda F, dt: F.solve_hundsdorferverwer(F.option.tenor/dt, dt, theta=0.65, numpy=False),
-        'i' : lambda F, dt: F.solve_implicit(F.option.tenor/dt, dt, numpy=False),
-        'd' : lambda F, dt: F.solve_douglas(F.option.tenor/dt, dt, theta=0.65, numpy=False),
-        'smooth': lambda F, dt: F.solve_smooth(F.option.tenor/dt, dt, smoothing_steps=1, scheme=F.solve_hundsdorferverwer)
+        'hv': lambda F, dt: F.solve_hundsdorferverwer(H.tenor/dt, dt, F.grid.domain[-1], theta=0.65),
+        'i' : lambda F, dt: F.solve_implicit(H.tenor/dt, dt, F.grid.domain[-1]),
+        'd' : lambda F, dt: F.solve_implicit(H.tenor/dt, dt, F.grid.domain[-1], theta=0.65),
+        'smooth': lambda F, dt: F.smooth(H.tenor/dt, dt, F.grid.domain[-1], smoothing_steps=1)
     }
     labels = {
         'hv': "Hundsdorfer-Verwer",
@@ -311,10 +311,10 @@ def dt_convergence(nspots=100, nvols=100, func=None):
     # global F, vals, errs
     errors = []
     funcs = {
-        'hv': lambda dt: F.solve_hundsdorferverwer(H.tenor/dt, dt, theta=0.65),
-        'i' : lambda dt: F.solve_implicit(H.tenor/dt, dt),
-        'd' : lambda dt: F.solve_implicit(H.tenor/dt, dt, theta=0.65),
-        'smooth': lambda dt: F.smooth(H.tenor/dt, dt, smoothing_steps=1, scheme=F.solve_hundsdorferverwer)
+        'hv': lambda dt: F.solve_hundsdorferverwer(H.tenor/dt, dt, F.grid.domain[-1], theta=0.65),
+        'i' : lambda dt: F.solve_implicit(H.tenor/dt, dt, F.grid.domain[-1]),
+        'd' : lambda dt: F.solve_implicit(H.tenor/dt, dt, F.grid.domain[-1], theta=0.65),
+        'smooth': lambda dt: F.smooth(H.tenor/dt, dt, F.grid.domain[-1], smoothing_steps=1)
     }
     for i in range(1,11):
         schemes = {}
