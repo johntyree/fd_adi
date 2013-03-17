@@ -31,14 +31,17 @@ cdef class FiniteDifferenceEngine(object):
         coefficients
         default_order
         default_scheme
+        grid
+        grid_analytical
         ndim
         shape
         simple_operators
         operators
+        option
         t
 
 
-    cdef SizedArrayPtr grid
+    cdef SizedArrayPtr gpugrid
 
 
     def __init__(self, other):
@@ -122,9 +125,13 @@ cdef class FiniteDifferenceEngine(object):
 
         Can't do this with C/Cuda of course... maybe cython?
         """
-        self.grid = SizedArrayPtr(other.grid.domain[-1], "FDEGPU.grid")
-        self.shape = other.grid.shape
-        self.ndim = self.grid.p.ndim
+        other.init()
+        self.option = other.option
+        self.grid = other.grid.copy()
+        self.grid_analytical = other.grid_analytical
+        self.gpugrid = SizedArrayPtr(self.grid.domain[-1], "FDEGPU.grid")
+        self.shape = self.grid.shape
+        self.ndim = self.grid.ndim
         self.coefficients = other.coefficients
         self.t = 0
         self.default_scheme = 'center'
