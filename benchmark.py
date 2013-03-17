@@ -8,13 +8,15 @@ from FiniteDifference import utils
 
 from FiniteDifference.Grid import Grid
 from FiniteDifference.FiniteDifferenceEngineGPU import FiniteDifferenceEngineADI as FDE_ADI_GPU
-from FiniteDifference.heston import HestonOption, hs_call_vector, HestonFiniteDifferenceEngine
+from FiniteDifference.heston import HestonOption, HestonBarrierOption, hs_call_vector, HestonFiniteDifferenceEngine
 from FiniteDifference.blackscholes import BlackScholesOption
 
 from FiniteDifference.visualize import fp
 
+Opt = HestonOption
+# Opt = HestonBarrierOption
 
-DefaultHeston = HestonOption( spot=100
+DefaultHeston = Opt( spot=100
                  , strike=100
                  , interest_rate=0.03
                  , volatility = 0.2
@@ -26,6 +28,8 @@ DefaultHeston = HestonOption( spot=100
                  )
 
 H = DefaultHeston
+H.top = (False, 130)
+H.bottom = (False, 85)
 
 # trims = (H.strike * .2 < spots) & (spots < H.strike * 2.0)
 # trimv = (0.0 < vars) & (vars < 1)  # v0*2.0)
@@ -96,10 +100,12 @@ def main():
     F = create(nspots=nspots, nvols=nvols)
     idx = F.idx
     FG = FDE_ADI_GPU(F)
-    # print run(dt, F, func)[idx]
-    # F.grid.reset()
+    # mc = F.option.monte_carlo()
+    print
+    print run(dt, F, func)[idx]
+    F.grid.reset()
+    # print run(dt, FG,func,F.grid.domain[0])[idx], "Estimate:", mc['expected'], "+-", mc['error']
     print run(dt, FG,func,F.grid.domain[0])[idx], F.option.analytical
-
 
 if __name__ == '__main__':
     main()
