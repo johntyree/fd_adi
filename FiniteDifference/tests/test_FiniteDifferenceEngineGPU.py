@@ -347,6 +347,12 @@ class FiniteDifferenceEngineADIGPU_test(unittest.TestCase):
         t = self.FG.dummy()[0]
         for ref, tstG in zip(r, t):
             tst = tstG.immigrate()
+            if not tst.is_mixed_derivative:
+                blen = ref.D.shape[0] // ref.blocks
+                if tst.dirichlet[0] is not None:
+                    tst.D.data[1, ::blen] = 1
+                if tst.dirichlet[1] is not None:
+                    tst.D.data[1, blen-1::blen] = 1
             npt.assert_array_equal(ref.D.data, tst.D.data)
             npt.assert_equal(ref, tst)
 
@@ -356,6 +362,12 @@ class FiniteDifferenceEngineADIGPU_test(unittest.TestCase):
         t = self.FG.dummy()[1]
         for ref, tstG in zip(r, t):
             tst = tstG.immigrate()
+            if not tst.is_mixed_derivative:
+                blen = ref.D.shape[0] // ref.blocks
+                if tst.dirichlet[0] is not None:
+                    tst.D.data[1, ::blen] = 1
+                if tst.dirichlet[1] is not None:
+                    tst.D.data[1, blen-1::blen] = 1
             npt.assert_array_equal(ref.D.data, tst.D.data)
             npt.assert_equal(ref, tst)
 
@@ -365,7 +377,12 @@ class FiniteDifferenceEngineADIGPU_test(unittest.TestCase):
         t = self.FG.dummy()[2]
         for ref, tstG in zip(r, t):
             tst = tstG.immigrate()
-            # fp(ref.D.data - tst.D.data, 'e')
+            if not tst.is_mixed_derivative:
+                blen = ref.D.shape[0] // ref.blocks
+                if tst.dirichlet[0] is not None:
+                    tst.D.data[1, ::blen] = 1
+                if tst.dirichlet[1] is not None:
+                    tst.D.data[1, blen-1::blen] = 1
             npt.assert_array_almost_equal(ref.D.data, tst.D.data, decimal=15)
             ref.D *= 0
             tst.D *= 0

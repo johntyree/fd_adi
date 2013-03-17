@@ -735,6 +735,9 @@ void _TriBandedOperator::vectorized_scale(SizedArray<double> &vector) {
     tiled_range<Iterator> v(vector.data, vector.data + vector.size, block_len);
     typedef tiled_range<Iterator>::iterator TiledIterator;
 
+    strided_range<TiledIterator> u0(v.begin(), v.end(), block_len);
+    strided_range<TiledIterator> u1(v.begin()+block_len-1, v.end(), block_len);
+
     /*
      * LOG("op_rows("<<operator_rows<<") vsize("<<vsize<<") "
      *     "v.d.size("<<vector.size<<") "
@@ -758,18 +761,6 @@ void _TriBandedOperator::vectorized_scale(SizedArray<double> &vector) {
 
     if (vsize == 0) {DIE("vsize == 0")}
 
-    if (has_low_dirichlet) {
-        for (Py_ssize_t b = 0; b < blocks; ++b) {
-            vector.data[vector.idx(b*block_len % vsize)] = 1;
-        }
-    }
-
-    if (has_high_dirichlet) {
-        for (Py_ssize_t b = 0; b < blocks; ++b) {
-            vector.data[vector.idx((b+1)*block_len - 1 % vsize)] = 1;
-        }
-    }
-
     for (Py_ssize_t row = 0; row < 3; ++row) {
         int o = 1 - row;
         if (o >= 0) { // upper diags
@@ -787,10 +778,8 @@ void _TriBandedOperator::vectorized_scale(SizedArray<double> &vector) {
         }
     }
 
-    strided_range<TiledIterator> u0(v.begin(), v.end(), block_len);
-    strided_range<TiledIterator> u1(v.begin()+block_len-1, v.end(), block_len);
-
-    if (top_fold_status == CAN_FOLD) {
+    /* We check dirichlet to avoid multiplying by 1 */
+    if (top_fold_status == CAN_FOLD && !has_low_dirichlet) {
         thrust::transform(
             top_factors.data,
             top_factors.data+top_factors.size,
@@ -798,7 +787,7 @@ void _TriBandedOperator::vectorized_scale(SizedArray<double> &vector) {
             top_factors.data,
             thrust::multiplies<REAL_t>());
     }
-    if (bottom_fold_status == CAN_FOLD) {
+    if (bottom_fold_status == CAN_FOLD && !has_high_dirichlet) {
         thrust::transform(
             bottom_factors.data,
             bottom_factors.data+bottom_factors.size,
