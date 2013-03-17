@@ -91,13 +91,15 @@ errors = {}
 
 strike = 80.0
 price = 25.6137
-# option = FD.heston.HestonOption(tenor=1, strike=strike, volatility=0.2, mean_reversion=1, vol_of_variance=0.2, correlation=-0.7)
-option = FD.heston.HestonBarrierOption(tenor=1, strike=strike, volatility=0.2, mean_reversion=1, vol_of_variance=0.2, correlation=-0.7, top=(False, 120.0))
+option = FD.heston.HestonOption(tenor=1, strike=strike, volatility=0.2, mean_reversion=1, vol_of_variance=0.2, correlation=-0.7)
+# option = FD.heston.HestonBarrierOption(tenor=1, strike=strike, volatility=0.2,
+                                       # mean_reversion=1, vol_of_variance=0.2,
+                                       # correlation=-0.7, top=(False, 120.0))
 print option
-# print option.analytical
+print option.analytical
 
-# fname = "vanilla_strike-%s_%s_%s" % (strike, func, mode)
-fname = "barrier_strike-%s_%s_%s" % (strike, func, mode)
+fname = "vanilla_strike-%s_%s_%s" % (strike, func, mode)
+# fname = "barrier_strike-%s_%s_%s" % (strike, func, mode)
 
 rundt()
 
