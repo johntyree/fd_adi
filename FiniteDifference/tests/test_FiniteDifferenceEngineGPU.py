@@ -342,6 +342,46 @@ class FiniteDifferenceEngineADIGPU_test(unittest.TestCase):
         npt.assert_array_almost_equal(d2gdxdy_scaled, d2gdxdyGPU_scaled)
 
 
+    def test_GPUSolve_0(self):
+       B = self.F.operators[0]
+       blen = B.D.shape[0] / B.blocks
+       B.D.data = np.arange(B.D.data.size, dtype=float).reshape(B.D.data.shape)
+       B.R = np.zeros(B.D.data.shape[1])
+       B.D.data[0,0::blen] = 0
+       B.D.data[-1,blen-1::blen] = 0
+       origdata = B.D.data.copy()
+       ref = B.solve(self.F.grid.domain[-1])
+       B = FDG.BOG.BandedOperator(B)
+       tst = B.solve(self.F.grid.domain[-1])
+       B = B.immigrate()
+       # fp(ref - tst, 3, 'e')
+       npt.assert_array_almost_equal(origdata, B.D.data)
+       npt.assert_allclose(ref, tst, atol=1e-6)
+
+
+    def test_GPUSolve_1(self):
+        B = self.F.operators[1]
+        B.diagonalize()
+        blen = B.D.shape[0] / B.blocks
+
+        B.D.data = np.random.random((B.D.data.shape))
+        B.R = np.random.random(B.D.data.shape[1])
+        B.D.data[0,0::blen] = 0
+        B.D.data[-1,blen-1::blen] = 0
+        ref = B.solve(self.F.grid.domain[-1])
+        B.undiagonalize()
+        origdata = B.D.data.copy()
+
+        BG = FDG.BOG.BandedOperator(B)
+        BG.diagonalize()
+        tst = BG.solve(self.F.grid.domain[-1])
+        BG.undiagonalize()
+        BG = BG.immigrate()
+        # fp(ref - tst, 2, 'e')
+        npt.assert_array_equal(origdata, B.D.data)
+        npt.assert_allclose(ref, tst)
+
+
     def test_firsts(self):
         r = self.F.dummy()[0]
         t = self.FG.dummy()[0]

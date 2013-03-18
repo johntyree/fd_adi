@@ -241,53 +241,19 @@ class Cpp_test(unittest.TestCase):
         npt.assert_equal(tst, ref)
 
 
-    def test_GPUSolve_0(self):
-        v = np.arange(10, dtype=float)
-        B = BO.for_vector(v)
+    def test_derivative_solve_0(self):
+        x = np.linspace(0,1,500)
+        B = BO.for_vector(x)
         B.D.data[1,:] += 1
-        ref = B.solve(v**2)
+        B.D.data[1,0] = B.D.data[1,-1] = 2
         BG = BOG.BandedOperator(B)
-        tst = BG.solve(v**2)
+        ref = np.e**x
+        tst = BG.apply(ref) / 2
+        fp(ref - tst, 'e')
+        npt.assert_allclose(tst, ref, rtol=1e-4, atol=1e-6, err_msg="d/dx (apply) not accurate")
         # fp(B.D.data)
-        npt.assert_allclose(tst, ref)
-
-        B = self.F.operators[0]
-        blen = B.D.shape[0] / B.blocks
-        B.D.data = np.arange(B.D.data.size, dtype=float).reshape(B.D.data.shape)
-        B.R = np.zeros(B.D.data.shape[1])
-        B.D.data[0,0::blen] = 0
-        B.D.data[-1,blen-1::blen] = 0
-        origdata = B.D.data.copy()
-        ref = B.solve(self.v2)
-        B = BOG.BandedOperator(B)
-        tst = B.solve(self.v2.copy())
-        B = B.immigrate()
-        # fp(ref - tst, 3, 'e')
-        npt.assert_array_almost_equal(origdata, B.D.data)
-        npt.assert_allclose(ref, tst)
-
-
-    def test_GPUSolve_1(self):
-        B = self.F.operators[1]
-        B.diagonalize()
-        blen = B.D.shape[0] / B.blocks
-
-        B.D.data = np.random.random((B.D.data.shape))
-        B.R = np.random.random(B.D.data.shape[1])
-        B.D.data[0,0::blen] = 0
-        B.D.data[-1,blen-1::blen] = 0
-        ref = B.solve(self.v2)
-        B.undiagonalize()
-        origdata = B.D.data.copy()
-
-        BG = BOG.BandedOperator(B)
-        BG.diagonalize()
-        tst = BG.solve(self.v2.copy())
-        BG.undiagonalize()
-        BG = BG.immigrate()
-        # fp(ref - tst, 2, 'e')
-        npt.assert_array_equal(origdata, B.D.data)
-        npt.assert_allclose(ref, tst)
+        tst = BG.solve(ref) * 2
+        npt.assert_allclose(ref, tst, rtol=1e-4, atol=1e-6, err_msg="integral (solve) not accurate")
 
 
 
