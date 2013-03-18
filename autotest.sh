@@ -24,10 +24,12 @@ build () {
 }
 
 run () {
-    nosetests $failed --rednose --verbosity=3 --with-id $@ || echo -ne '\a'
+    echo "nosetests $failed --rednose --verbosity=3 --with-id ${ARGS[@]} || echo -ne \'\a\'"
+    nosetests $failed --rednose --verbosity=3 --with-id ${ARGS[@]} || echo -ne '\a'
 }
 
 
+ARGS=()
 while getopts ":acfb" opt; do
     case $opt in
         a)
@@ -42,6 +44,10 @@ while getopts ":acfb" opt; do
         b)
             build
             exit
+            ;;
+        \?)
+            opt=-$OPTARG
+            ARGS+=($opt)
             ;;
     esac
 done
