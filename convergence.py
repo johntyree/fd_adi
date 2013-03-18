@@ -18,6 +18,7 @@ from FiniteDifference.blackscholes import BlackScholesOption, BlackScholesFinite
 
 from FiniteDifference.Grid import Grid
 from FiniteDifference import FiniteDifferenceEngine as FD
+from FiniteDifference import FiniteDifferenceEngineGPU as FDG
 
 # FD.DEBUG = True
 
@@ -80,88 +81,40 @@ def p_price(V, analytical, spots, vars, marker_idx=0, label="", bad=False):
 p = p_absolute_error
 pp = p_price
 
-
-def dsdv_convergence(dt=1.0/1000, nv=500, ns=500, func=None):
-    global F
-    errors = []
-    for i in range(4,10):
-    # for i in range(5,6):
-        nvols = nv
-        nspots = ns
-        if nv is None:
-            nvols = 2**i
-        if ns is None:
-            nspots = 2**i
-        schemes = {}
-        schemes[(1,)] = [{"scheme": "forward"}]
-
-        F = HestonFiniteDifferenceEngine(H, schemes=schemes, nspots=nspots,
-                                         nvols=nvols, spotdensity=10, varexp=4,
-                                         var_max=12, flip_idx_spot=True,
-                                         flip_idx_var=True, verbose=False,
-                                         force_exact=False)
-        if func is None:
-            print "No func. No-op"
-            return
-        funcs = {
-            'hv': lambda dt: F.solve_hundsdorferverwer(H.tenor/dt, dt, F.grid.domain[-1], theta=0.65),
-            'i' : lambda dt: F.solve_implicit(H.tenor/dt, dt, F.grid.domain[-1]),
-            'd' : lambda dt: F.solve_implicit(H.tenor/dt, dt, F.grid.domain[-1], theta=0.65),
-            'smooth': lambda dt: F.smooth(H.tenor/dt, dt, F.grid.domain[-1], smoothing_steps=1)
-        }
-        labels = {
-            'hv': "Hundsdorfer-Verwer",
-            'i' : "Fully Implicit",
-            'd' : "Douglas",
-            'smooth': "Smoothed HV"
-        }
-        Vs = funcs[func](dt)
-        # Vs = F.solve_hundsdorferverwer(H.tenor/dt, dt, theta=0.8)
-
-        xs = F.spots
-        ys = F.vars
-        trimx = (0.0 * H.spot <= xs) & (xs <= 2.0*H.spot)
-        trimy = ys <= 1.0
-        tr = lambda x: x[trimx, :][:, trimy]
-
-        xst = xs[trimx]
-        yst = ys[trimy]
-        res = tr(Vs)
-        a = tr(F.grid_analytical)
-        bad = F.BADANALYTICAL
-        price_err = F.price - H.analytical
-        inf_norm = max(abs(res-a).flat)
-        norm2 = pylab.sqrt(sum(((res-a)**2).flat))
-        err = norm2
-        if nv is None:
-            dx = max(ys) / nvols
-        else:
-            dx = max(xs) / nspots
-        label = "avg $dx = %s$" % dx
-        # err = abs(price_err[0,0])
-        # print dt, price_err, err
-        # pp(Vs, F.grid_analytical, xs, ys, label=label, bad=bad)
-        # p(Vs, F.grid_analytical, xs, ys, label=label, bad=bad)
-        p(res, a, xst, yst, label=label, bad=bad)
-        errors.append((dx, err))
-    print errors
-    vals, errs = zip(*errors)
-    pylab.plot(vals, errs)
-    pylab.plot(vals, errs, 'ro')
-    pylab.xlabel("dx")
-    pylab.ylabel("Error")
-    pylab.show()
-    pylab.loglog(vals, errs)
-    pylab.loglog(vals, errs, 'ro')
-    pylab.xlabel("dx")
-    pylab.ylabel("Error")
-    pylab.show()
+class ConvergenceTest(object):
+    attrs = [
+        'Type'
+        'option',
+        'backend',
+        'reference_solution',
+        'scheme',
+        'mesh',
+        'state',
+        'result'
+    ]
+    def __init__(self, **kwargs):
+        self.Type = 'ConvergenceTest'
+        for a in attrs:
+            assert a in kwargs, "Missing attr %s", (a,)
+        for attr, val in kwargs.items():
+            setattr(self, attr, val)
 
 
-    return errors
+    def write(self, fn=None):
+        if fn is None:
+            fn = self.make_file_name()
+        with open(fn, 'w') as fout:
+            fout.write(repr(self))
 
 
-class ConvergenceTester(object):
+    def __repr__(self):
+        s = "{}(".format(self.type)
+        for attr in self.attrs:
+            s += ", {attr}={val}\n".format(attr=attr, val=repr(getattr(self, attr)))
+        return s
+
+
+class ConvergenceTestRunner(object):
     funcs = {
         'hv': lambda F, dt: F.solve_hundsdorferverwer(H.tenor/dt, dt, F.grid.domain[-1], theta=0.65),
         'i' : lambda F, dt: F.solve_implicit(H.tenor/dt, dt, F.grid.domain[-1]),
@@ -175,20 +128,25 @@ class ConvergenceTester(object):
         'smooth': "Smoothed HV"
     }
 
-    def __init__(self, option, engine, engine_kwargs={}, **kwargs):
-        self.option = option
-        self.engine = engine
+    def __init__(self, ct, engine_kwargs={}, engine=None, **kwargs):
+        self.ct = ct
+        if engine is None:
+            if ct.backend == 'GPU':
+                self.engine = lambda *x, **y: FGD.FiniteDifferenceEngineADI(FG.FiniteDifferenceEngineADI(*x, **y))
+            elif ct.backend == 'CPU':
+                self.engine == FG.FiniteDifferenceEngineADI
+            else:
+                raise ValueError("ct.backend must be one of CPU, GPU. (got %s)" % (ct.backend,))
+        else:
+            self.engine = engine
         self.engine_kwargs = engine_kwargs
         def noop(*x, **y): return None
         kwargs.setdefault('display', noop)
         kwargs.setdefault('error_func', noop)
-        kwargs.setdefault('func', 'hv')
-        kwargs.setdefault('label', '')
-        kwargs.update(self.labels)
         self.kwargs = kwargs
 
     def new(self):
-        return self.engine(self.option, verbose=False, **self.engine_kwargs)
+        return self.engine(self.ct.option, verbose=False, **self.engine_kwargs)
 
     def dt(self):
         if self.kwargs['func'] is None:
