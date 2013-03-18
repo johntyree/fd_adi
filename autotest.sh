@@ -2,10 +2,11 @@
 
 onmodify () {
     TARGET=${1:-.};
+    shift
     remove_ids
     while inotifywait -qq -r -e close_write,moved_to,move_self $TARGET; do
         sleep 0.5;
-        build && run;
+        build && run "${@}";
     done
 }
 
@@ -24,13 +25,19 @@ build () {
 }
 
 run () {
-    echo "nosetests $failed --rednose --verbosity=3 --with-id ${ARGS[@]} || echo -ne \'\a\'"
-    nosetests $failed --rednose --verbosity=3 --with-id ${ARGS[@]} || echo -ne '\a'
+    # echo "nosetests $failed --rednose --verbosity=3 --with-id ${ARGS[@]} || echo -ne \'\a\'"
+    args=(--debug-log=/scratch/noselog $failed --rednose --verbosity=4 --with-id "$@")
+    if [[ $USE_GDB ]]; then
+        echo "gdb --args python $(which nosetests) ${args[@]} <<< run"
+        gdb --args python $(which nosetests) ${args[@]} <<< run
+    else
+        echo "nosetests ${args[@]}"
+        nosetests ${args[@]} || echo -ne '\a'
+    fi
 }
 
-
 ARGS=()
-while getopts ":acfb" opt; do
+while getopts ":acfgb" opt; do
     case $opt in
         a)
             ALL="remove_ids"
@@ -45,12 +52,14 @@ while getopts ":acfb" opt; do
             build
             exit
             ;;
+        g)
+            USE_GDB=1
+            ;;
         \?)
-            opt=-$OPTARG
-            ARGS+=($opt)
+            ARGS+=(-$OPTARG)
             ;;
     esac
 done
 shift $(($OPTIND-1))
 
-onmodify .
+onmodify . "$@"
