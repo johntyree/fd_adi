@@ -59,7 +59,7 @@ class HestonOption(Option):
                 , volatility=volatility
                 , tenor=tenor
                 )
-        self.OptionType = "HestonOption"
+        self.Type = "HestonOption"
         self.attrs += ['correlation']
         self.variance.reversion = mean_reversion
         if mean_variance is not None:
@@ -84,12 +84,12 @@ class HestonOption(Option):
     def __repr__(self):
         args = {}
         for attr in self.attrs:
-            if attr == 'OptionType':
+            if attr == 'Type':
                 args[attr] = getattr(self, attr)
             else:
                 args[attr] = repr(getattr(self, attr))
 
-        return """{OptionType}(spot={spot}
+        return """{Type}(spot={spot}
               , strike={strike}
               , interest_rate={interest_rate}
               , volatility=None
@@ -262,18 +262,18 @@ class HestonBarrierOption(HestonOption, BarrierOption):
                 , vol_of_variance=vol_of_variance
                 , correlation=correlation
                 )
-        self.OptionType = 'HestonBarrierOption'
+        self.Type = 'HestonBarrierOption'
 
 
     def __repr__(self):
         args = {}
         for attr in self.attrs:
-            if attr == 'OptionType':
+            if attr == 'Type':
                 args[attr] = getattr(self, attr)
             else:
                 args[attr] = repr(getattr(self, attr))
 
-        return """{OptionType}(spot={spot}
+        return """{Type}(spot={spot}
               , strike={strike}
               , interest_rate={interest_rate}
               , volatility=None
