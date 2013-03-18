@@ -17,6 +17,8 @@ import scipy.stats
 class Option(object):
     """Base class for vanilla option contracts."""
 
+    attrs = ['OptionType', 'spot', 'strike', 'interest_rate', 'variance', 'tenor']
+
     def __init__( self
                 , spot=100
                 , strike=99
@@ -24,17 +26,24 @@ class Option(object):
                 , volatility=0.2
                 , variance=None
                 , tenor=1.0):
+        self.OptionType = "Option"
         self.spot = float(spot)
         self.strike = float(strike)
         # Constant rate
-        self.interest_rate = MeanRevertingProcess(mean=interest_rate, volatility=0)
-
-        if variance is not None:
-            volatility = np.sqrt(variance)
-        else:
-            variance = volatility**2.0
+        if np.isscalar(interest_rate):
             # Constant rate
-        self._variance = MeanRevertingProcess(mean=variance, volatility=0)
+            self.interest_rate = MeanRevertingProcess(mean=interest_rate, volatility=0)
+        else:
+            self.interest_rate =  interest_rate
+
+        if np.isscalar(variance):
+            # Constant rate
+            self._variance = MeanRevertingProcess(mean=variance, volatility=0)
+        elif variance is not None:
+            self._variance = variance
+        else:
+            # Constant rate
+            self._variance = MeanRevertingProcess(mean=volatility**2.0, volatility=0)
 
         self.tenor = float(tenor)
         self._analytical = None
@@ -75,6 +84,21 @@ class Option(object):
             , "Tenor: %s" % self.tenor
             ]
 
+    def __repr__(self):
+        args = {}
+        for attr in self.attrs:
+            if attr == 'OptionType':
+                args[attr] = getattr(self, attr)
+            else:
+                args[attr] = repr(getattr(self, attr))
+
+        return """{OptionType}(spot={spot}
+              , strike={strike}
+              , interest_rate={interest_rate}
+              , volatility=None
+              , variance={variance}
+              , tenor={tenor})""".format(**args)
+
     def __str__(self):
         return "\n".join(self.features())
 
@@ -99,6 +123,13 @@ class Option(object):
             ret['payoff'] = payoff
         return ret
 
+    def __eq__(self, other):
+        for attr in self.attrs:
+            if not getattr(self, attr) == getattr(other, attr):
+                # print self.OptionType, attr
+                return False
+        return True
+
 
     def monte_carlo_paths(self, dt=None, npaths=None, callback=lambda *x: None):
         raise NotImplementedError
@@ -106,6 +137,9 @@ class Option(object):
 
 
 class MeanRevertingProcess(object):
+
+    attrs = ['mean', 'volatility', 'value', 'reversion']
+
     def __init__(  self
             , mean=0
             , volatility=1
@@ -122,6 +156,21 @@ class MeanRevertingProcess(object):
 
     def __str__(self):
         return "%s (mean: %s, vol: %s)" % (self.value, self.mean, self.volatility)
+
+    def __eq__(self, other):
+        for attr in self.attrs:
+            if not getattr(self, attr) == getattr(other, attr):
+                # print 'MRP', attr
+                return False
+        return True
+
+    def __repr__(self):
+        args = {'mean': self.mean,
+        'volatility': self.volatility,
+        'value': self.value,
+        'reversion': self.reversion}
+        return ("MeanRevertingProcess(mean={mean}, volatility={volatility}, "
+            "value={value}, reversion={reversion})").format(**args)
 
     # def __add__(self, val):
         # self.add(val, inplace=False)
@@ -141,6 +190,11 @@ class MeanRevertingProcess(object):
 class BarrierOption(Option):
     """Base class for barrier option contracts."""
 
+    attrs = Option.attrs + ['top', 'bottom']
+    # @property
+    # def attrs():
+        # return Option.attrs + ['top', 'bottom']
+
     def __init__( self
                 , spot=100
                 , strike=99
@@ -151,6 +205,7 @@ class BarrierOption(Option):
                 , top=None
                 , bottom=None
                 ):
+        self.OptionType = 'BarrierOption'
         Option.__init__(self, spot=spot, strike=strike,
                         interest_rate=interest_rate,
                         volatility=volatility,
@@ -230,19 +285,18 @@ class BarrierOption(Option):
 
 def main():
     """Run main."""
-    import time
-    H = HestonOption( spot=100
-                    , strike=99
-                    , interest_rate=0.06
-                    , volatility = 0.2
-                    , tenor=1.0
-                    , mean_reversion=1
-                    , mean_variance=None # default to current var
-                    , vol_of_variance = 0.4
-                    , correlation = 0.0
-               )
-    print H
-    print time.time()
+    o = Option()
+    p = eval(repr(o))
+    print o == p
+    q = eval(repr(p))
+    print p == q
+
+    b = BarrierOption()
+    p = eval(repr(b))
+    print b == p
+    q = eval(repr(p))
+    print p == q
+
     return 0
 
 if __name__ == '__main__':
