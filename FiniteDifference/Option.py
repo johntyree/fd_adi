@@ -190,7 +190,6 @@ class MeanRevertingProcess(object):
 class BarrierOption(Option):
     """Base class for barrier option contracts."""
 
-    attrs = Option.attrs + ['top', 'bottom']
     # @property
     # def attrs():
         # return Option.attrs + ['top', 'bottom']
@@ -205,12 +204,13 @@ class BarrierOption(Option):
                 , top=None
                 , bottom=None
                 ):
-        self.OptionType = 'BarrierOption'
         Option.__init__(self, spot=spot, strike=strike,
                         interest_rate=interest_rate,
                         volatility=volatility,
                         variance=variance,
                         tenor=tenor)
+        self.OptionType = 'BarrierOption'
+        self.attrs += ['top', 'bottom']
         self._top = top
         self._bottom = bottom
         self.monte_carlo_callback = self._callback_from_boundary((self.bottom, self.top))
@@ -242,6 +242,24 @@ class BarrierOption(Option):
         d.extend([ "Upper Barrier: %s" % (self.top,)
                  , "Lower Barrier: %s" % (self.bottom,)])
         return d
+
+    def __repr__(self):
+        args = {}
+        for attr in self.attrs:
+            if attr == 'OptionType':
+                args[attr] = getattr(self, attr)
+            else:
+                args[attr] = repr(getattr(self, attr))
+
+        return """{OptionType}(spot={spot}
+              , strike={strike}
+              , interest_rate={interest_rate}
+              , volatility=None
+              , variance={variance}
+              , tenor={tenor}
+              , top={top}
+              , bottom={bottom})""".format(**args)
+
 
 
 
@@ -296,7 +314,7 @@ def main():
     print b == p
     q = eval(repr(p))
     print p == q
-
+    print repr(q)
     return 0
 
 if __name__ == '__main__':

@@ -16,7 +16,7 @@ import numpy as np
 import numexpr as ne
 import pylab
 
-from Option import Option, BarrierOption
+from Option import Option, BarrierOption, MeanRevertingProcess
 
 from Grid import Grid
 import utils
@@ -49,24 +49,25 @@ class HestonOption(Option):
                 , tenor=1.0
                 , mean_reversion=1
                 , mean_variance=None
-                , vol_of_variance=0.4
+                , vol_of_variance=None
                 , correlation=0):
         Option.__init__(self
                 , spot=spot
                 , strike=strike
                 , interest_rate=interest_rate
+                , variance=variance
                 , volatility=volatility
                 , tenor=tenor
                 )
+        self.OptionType = "HestonOption"
+        self.attrs += ['correlation']
         self.variance.reversion = mean_reversion
-        if variance is not None:
-            self.variance.value = variance
-        else:
-            self.variance.value = volatility**2
         if mean_variance is not None:
             self.variance.mean = mean_variance
         else:
             self.variance.mean = self.variance.value
+        if vol_of_variance is None:
+            vol_of_variance = 0.4
         self.variance.volatility = vol_of_variance
         self.correlation = correlation
 
@@ -79,6 +80,24 @@ class HestonOption(Option):
                 , "Correlation %s" % self.correlation
                 ])
         return s
+
+    def __repr__(self):
+        args = {}
+        for attr in self.attrs:
+            if attr == 'OptionType':
+                args[attr] = getattr(self, attr)
+            else:
+                args[attr] = repr(getattr(self, attr))
+
+        return """{OptionType}(spot={spot}
+              , strike={strike}
+              , interest_rate={interest_rate}
+              , volatility=None
+              , variance={variance}
+              , tenor={tenor}
+              , correlation={correlation})
+              """.format(**args)
+
 
     def compute_analytical(self):
         return HestonCos(
@@ -243,6 +262,27 @@ class HestonBarrierOption(HestonOption, BarrierOption):
                 , vol_of_variance=vol_of_variance
                 , correlation=correlation
                 )
+        self.OptionType = 'HestonBarrierOption'
+
+
+    def __repr__(self):
+        args = {}
+        for attr in self.attrs:
+            if attr == 'OptionType':
+                args[attr] = getattr(self, attr)
+            else:
+                args[attr] = repr(getattr(self, attr))
+
+        return """{OptionType}(spot={spot}
+              , strike={strike}
+              , interest_rate={interest_rate}
+              , volatility=None
+              , variance={variance}
+              , tenor={tenor}
+              , correlation={correlation}
+              , top={top}
+              , bottom={bottom})
+              """.format(**args)
 
 
     def compute_analytical(self):
