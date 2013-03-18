@@ -121,7 +121,7 @@ class MeanRevertingProcess(object):
         return self.value
 
     def __str__(self):
-        return "%s (%s, %s)" % (self.value, self.mean, self.volatility)
+        return "%s (mean: %s, vol: %s)" % (self.value, self.mean, self.volatility)
 
     # def __add__(self, val):
         # self.add(val, inplace=False)
