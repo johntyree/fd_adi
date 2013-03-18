@@ -274,6 +274,12 @@ cdef class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
         if (0,1) in self.operators:
             self.operators[(0,1)] *= dt
 
+        for o in Lis:
+            if o.top_fold_status == 'CAN_FOLD':
+                o.diagonalize()
+            if o.bottom_fold_status == 'CAN_FOLD':
+                o.diagonalize()
+
         print_step = max(1, int(n / 10))
         to_percent = 100.0 / n
         utils.tic("solve_implicit:\t")
