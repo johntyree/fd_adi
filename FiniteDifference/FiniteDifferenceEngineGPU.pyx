@@ -126,9 +126,12 @@ cdef class FiniteDifferenceEngine(object):
         Can't do this with C/Cuda of course... maybe cython?
         """
         other.init()
-        self.option = other.option
+        for attr in ['option', 'grid_analytical']:
+            if hasattr(other, attr):
+                setattr(self, attr, getattr(other, attr))
+            else:
+                setattr(self, attr, None)
         self.grid = other.grid.copy()
-        self.grid_analytical = other.grid_analytical
         self.gpugrid = SizedArrayPtr(self.grid.domain[-1], "FDEGPU.grid")
         self.shape = self.grid.shape
         self.ndim = self.grid.ndim
