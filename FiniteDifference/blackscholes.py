@@ -50,6 +50,7 @@ class BlackScholesOption(Option):
         if self.tenor == 0:
             d1 = np.infty
         else:
+            s += np.finfo(np.atleast_1d(s).dtype).tiny
             d1 = ((np.log(s/float(k)) + (r + 0.5*vol**2) * t)
                 / (vol * np.sqrt(t)))
 
