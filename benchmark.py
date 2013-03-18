@@ -23,9 +23,16 @@ DefaultHeston = Opt( spot=100
                  , tenor=1.0
                  , mean_reversion = 1
                  , mean_variance = 0.12
-                 , vol_of_variance = 0.041
+                 , vol_of_variance = 0.3
                  , correlation = 0.4
                  )
+DefaultHeston = HestonOption(spot=100 , strike=100 , interest_rate=0.03 , volatility = 0.2
+                , tenor=1.0
+                , mean_reversion = 1
+                , mean_variance = 0.12
+                , vol_of_variance = 0.3
+                , correlation = 0.4
+                )
 
 H = DefaultHeston
 H.top = (False, 130)
