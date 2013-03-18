@@ -17,7 +17,6 @@ import scipy.stats
 class Option(object):
     """Base class for vanilla option contracts."""
 
-    attrs = ['OptionType', 'spot', 'strike', 'interest_rate', 'variance', 'tenor']
 
     def __init__( self
                 , spot=100
@@ -26,7 +25,8 @@ class Option(object):
                 , volatility=0.2
                 , variance=None
                 , tenor=1.0):
-        self.OptionType = "Option"
+        self.attrs = ['spot', 'strike', 'interest_rate', 'variance', 'tenor']
+        self.Type = "Option"
         self.spot = float(spot)
         self.strike = float(strike)
         # Constant rate
@@ -84,23 +84,16 @@ class Option(object):
             , "Tenor: %s" % self.tenor
             ]
 
-    def __repr__(self):
-        args = {}
-        for attr in self.attrs:
-            if attr == 'OptionType':
-                args[attr] = getattr(self, attr)
-            else:
-                args[attr] = repr(getattr(self, attr))
 
-        return """{OptionType}(spot={spot}
-              , strike={strike}
-              , interest_rate={interest_rate}
-              , volatility=None
-              , variance={variance}
-              , tenor={tenor})""".format(**args)
+    def __repr__(self):
+        l = ["{attr}={val}".format(attr=attr, val=repr(getattr(self, attr))) for attr in self.attrs]
+        s = self.Type + "(" + "\n, ".join(l) + ')'
+        return s
+
 
     def __str__(self):
         return "\n".join(self.features())
+
 
     def monte_carlo(self, dt=0.001, npaths=10000, with_payoff=False,
                     callback=None):
@@ -123,10 +116,11 @@ class Option(object):
             ret['payoff'] = payoff
         return ret
 
+
     def __eq__(self, other):
         for attr in self.attrs:
             if not getattr(self, attr) == getattr(other, attr):
-                # print self.OptionType, attr
+                # print self.Type, attr
                 return False
         return True
 
@@ -146,6 +140,7 @@ class MeanRevertingProcess(object):
             , value=None
             , reversion=0
              ):
+        self.Type = 'MeanRevertingProcess'
         self.value = value if value is not None else mean
         self.reversion = reversion
         self.mean = mean
@@ -165,12 +160,9 @@ class MeanRevertingProcess(object):
         return True
 
     def __repr__(self):
-        args = {'mean': self.mean,
-        'volatility': self.volatility,
-        'value': self.value,
-        'reversion': self.reversion}
-        return ("MeanRevertingProcess(mean={mean}, volatility={volatility}, "
-            "value={value}, reversion={reversion})").format(**args)
+        l = ["{attr}={val}".format(attr=attr, val=repr(getattr(self, attr))) for attr in self.attrs]
+        s = self.Type + "(" + ", ".join(l) + ')'
+        return s
 
     # def __add__(self, val):
         # self.add(val, inplace=False)
@@ -190,10 +182,6 @@ class MeanRevertingProcess(object):
 class BarrierOption(Option):
     """Base class for barrier option contracts."""
 
-    # @property
-    # def attrs():
-        # return Option.attrs + ['top', 'bottom']
-
     def __init__( self
                 , spot=100
                 , strike=99
@@ -209,7 +197,7 @@ class BarrierOption(Option):
                         volatility=volatility,
                         variance=variance,
                         tenor=tenor)
-        self.OptionType = 'BarrierOption'
+        self.Type = 'BarrierOption'
         self.attrs += ['top', 'bottom']
         self._top = top
         self._bottom = bottom
@@ -243,24 +231,11 @@ class BarrierOption(Option):
                  , "Lower Barrier: %s" % (self.bottom,)])
         return d
 
+
     def __repr__(self):
-        args = {}
-        for attr in self.attrs:
-            if attr == 'OptionType':
-                args[attr] = getattr(self, attr)
-            else:
-                args[attr] = repr(getattr(self, attr))
-
-        return """{OptionType}(spot={spot}
-              , strike={strike}
-              , interest_rate={interest_rate}
-              , volatility=None
-              , variance={variance}
-              , tenor={tenor}
-              , top={top}
-              , bottom={bottom})""".format(**args)
-
-
+        l = ["{attr}={val}".format(attr=attr, val=repr(getattr(self, attr))) for attr in self.attrs]
+        s = self.Type + "(" + "\n, ".join(l) + ')'
+        return s
 
 
     def _callback_from_boundary(self, b):
@@ -310,10 +285,16 @@ def main():
     print p == q
 
     b = BarrierOption()
+    print repr(b)
+    print
     p = eval(repr(b))
     print b == p
+    print
+    print repr(p)
+    print
     q = eval(repr(p))
     print p == q
+    print
     print repr(q)
     return 0
 
