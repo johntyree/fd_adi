@@ -303,7 +303,7 @@ cdef class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
             raise NotImplementedError("Callbacks and Numpy not available for GPU solver.")
         n = int(n)
         cdef SizedArrayPtr V = SizedArrayPtr(initial)
-        self.solve_douglas_(n, dt, V)
+        self.solve_douglas_(n, dt, V, theta)
         ret = V.to_numpy()
         del V
         return ret
@@ -360,7 +360,7 @@ cdef class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
             raise NotImplementedError("Callbacks and Numpy not available for GPU solver.")
         n = int(n)
         cdef SizedArrayPtr V = SizedArrayPtr(initial)
-        self.solve_hundsdorferverwer_(n, dt, V)
+        self.solve_hundsdorferverwer_(n, dt, V, theta)
         ret = V.to_numpy()
         del V
         return ret

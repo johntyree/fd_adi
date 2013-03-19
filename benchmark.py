@@ -89,7 +89,7 @@ def run(dt, F=None, func=None, initial=None):
         initial = F.grid.domain[0].copy()
 
     funcs = {
-        'hv': lambda dt: F.solve_hundsdorferverwer(H.tenor/dt, dt, initial, 0.85),
+        'hv': lambda dt: F.solve_hundsdorferverwer(H.tenor/dt, dt, initial, 0.65),
         'i' : lambda dt: F.solve_implicit(H.tenor/dt, dt, initial),
         'd' : lambda dt: F.solve_douglas(H.tenor/dt, dt, initial, 0.65),
         # 'smooth': lambda dt: F.smooth(H.tenor/dt, dt, smoothing_steps=1, scheme=F.solve_hundsdorferverwer)
