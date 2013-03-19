@@ -30,14 +30,14 @@ class BlackScholesOption(Option):
                 variance, tenor)
 
 
-
-
     def compute_analytical(self):
         return self._call_delta()[0]
+
 
     @property
     def delta(self):
         return self._call_delta()[1]
+
 
     def _call_delta(self):
         N = scipy.stats.distributions.norm.cdf
