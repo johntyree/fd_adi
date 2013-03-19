@@ -161,7 +161,7 @@ class ConvergenceTest(object):
         tr = lambda x: x[trimx, :][:, trimy]
         a = tr(self.reference_solution)
         errs = []
-        for res in self.result[self.mode]['domain']:
+        for res in self.result[self.mode]['error']:
             res = tr(res)
             errs.append(err_func(res, a))
         return errs
@@ -213,29 +213,23 @@ class ConvergenceTester(object):
         # self.domains = []
         self.meshes = []
         min_i, max_i = d.get('min_i', 1), d.get('max_i', 8)
-        null = np.empty([max_i - min_i] + list(F.grid.shape))
+        null = np.empty(max_i - min_i)
         ct = ConvergenceTest(
             option=self.option,
             backend='GPU',
             reference_solution=None,
             scheme=d['scheme'],
-            mesh=F.grid.mesh,
+            mesh=F.grid.mesh.copy(),
             state='INIT',
-            result={'dt':{'sequence':null.copy(), 'domain':null.copy()}})
+            result={'dt':{'sequence':null.copy(), 'error':null.copy()}})
         for i in range(min_i, max_i):
             F.grid.reset()
             dt = self.kwargs['update_kwargs'](self, i)
             V = self.schemes[self.kwargs['scheme']](F, dt)
             ct.result['dt']['sequence'][i - min_i] = dt
-            ct.result['dt']['domain'][i - min_i] = V
-            # err = self.kwargs["error_func"](V, F)
-            # print err
-            # self.errors.append((dt, err))
-            # self.kwargs['display'](V, F, self.errors, label=self.kwargs["label"])
-            # self.domains.append(V)
-            # self.meshes.append(pylab.array(F.grid.mesh))
-
-            # del F
+            err = self.kwargs["error_func"](V, F)
+            print "dt:", dt, "err:", err
+            ct.result['dt']['error'][i - min_i] = err
         return ct
 
     def dx(self):
@@ -246,27 +240,39 @@ class ConvergenceTester(object):
             raise ValueError("No definition for update_kwargs given. We don't"
                              " know how to advance the simulation.")
         self.mode = 'dx'
-        self.errors = []
         d = dict(self.kwargs)
         d['scheme_label'] = self.labels[d['scheme']]
         self.title = ("Convergence test in dx using %(scheme_label)s scheme. "
                "dt = %(dt).2e." % d)
         print self.title
-        self.domains = []
-        self.dxs = []
         min_i, max_i = d.get('min_i', 5), d.get('max_i', 10)
+        null = np.empty(max_i - min_i)
+        dx = self.kwargs['update_kwargs'](self, min_i)
+        F = self.new()
+        ct = ConvergenceTest(
+            option=self.option,
+            backend='GPU',
+            reference_solution=None,
+            scheme=d['scheme'],
+            mesh=F.grid.mesh,
+            state='INIT',
+            mode='dx',
+            result={'dx':{'sequence':null.copy(), 'error':null.copy()}})
         for i in range(min_i, max_i):
             dx = self.kwargs['update_kwargs'](self, i)
-            F = self.new()
-            self.F = F
+            self.F = self.new()
+            F = self.F
             dx = self.kwargs['update_kwargs'](self, i)
             V = self.schemes[self.kwargs['scheme']](F, self.kwargs["dt"])
-            self.errors.append((dx, self.kwargs["error_func"](V, F)))
-            print "dx:", dx, "err:", self.errors[-1][-1]
-            self.kwargs['display'](V, F, self.errors, label=self.kwargs["label"])
+            ct.result['dx']['sequence'][i - min_i] = dx
+            err = self.kwargs["error_func"](V, F)
+            print "dx:", dx, "err:", err
+            ct.result['dx']['error'][i - min_i] = err
+            # self.kwargs['display'](V, F, self.errors, label=self.kwargs["label"])
             # self.domains.append(V)
-            self.dxs.append(dx)
-        return self.errors
+            # self.dxs.append(dx)
+            del F, self.F
+        return ct
 
     def show_convergence(self):
         vals, errs = zip(*self.errors)

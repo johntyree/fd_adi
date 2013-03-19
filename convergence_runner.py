@@ -44,7 +44,7 @@ def mc_error(price):
     # key = ('heston', mode, option.strike)
     # errors[key] = err
 
-def rundx(option, egine, dt, min_i, max_i, scheme):
+def rundx(option, engine, dt, min_i, max_i, scheme):
     def update_kwargs(self, i):
         self.engine_kwargs['nspots'] = 2**(i-1)
         self.engine_kwargs['nvols'] = 2**(i-1)
@@ -57,7 +57,7 @@ def rundx(option, egine, dt, min_i, max_i, scheme):
 
     ct = cv.ConvergenceTester(option, engine,
             {'force_exact': False, 'spotdensity': 10, 'varexp': 4},
-            dt=dt, min_i=4, max_i=9, scheme=scheme, error_func=mc_error(),
+            dt=dt, min_i=4, max_i=9, scheme=scheme, error_func=cv.error2d,
             update_kwargs=update_kwargs)
     return ct.dx()
 
@@ -68,6 +68,8 @@ def read_args():
     backend_group = parser.add_mutually_exclusive_group(required=True)
     parser.add_argument('-s', '--scheme', metavar='scheme', choices="i,d,hv,s".split(','))
     parser.add_argument('-k', '--strike', metavar='strike', type=float)
+    parser.add_argument('--min_i', default=2, metavar='int', type=int, help="Min iteration value (2**i)")
+    parser.add_argument('--max_i', default=8, metavar='int', type=int, help="Max iteration value (2**i)")
     mode_group.add_argument('-dx', metavar='nspots/vols', nargs=2, type=int)
     mode_group.add_argument('-dt', metavar='timesteps', type=int)
     backend_group.add_argument('--gpu', action='store_const', dest='engine', const=engineGPU)
@@ -87,13 +89,13 @@ def main():
     ctest = None
     if opt.dx is not None:
         ctester = cv.ConvergenceTester(option, opt.engine, {'nspots': opt.dx[0], 'nvols': opt.dx[1]},
-                                    scheme=opt.scheme, max_i=7, error_func=cv.error2d)
+                                    scheme=opt.scheme, max_i=10, error_func=cv.error2d)
         ctest = ctester.dt()
     else:
-        ctest = rundx(option, engine, opt.dt, min_i, max_i, opt.scheme)
+        ctest = rundx(option, opt.engine, 1./opt.dt, opt.min_i, opt.max_i, opt.scheme)
 
-    ctest.reference_solution = ctest.result[ctest.mode]['domain'][-1]
-    print ctest.error2d_direct()
+    ctest.reference_solution = ctest.result[ctest.mode]['error'][-1]
+    # print ctest.error2d_direct()
     ctest.write()
 
 
