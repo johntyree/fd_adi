@@ -2,33 +2,18 @@
 # cython: annotate=True
 # cython: infer_types=True
 # distutils: language = c++
-"""<+Module Description.+>"""
 
-# import sys
-# import os
-# import itertools as it
-
-# TODO: This needs a partial redesign on how to handle boundary conditions.
-# This just isn't flexible enough.
-
-from types import MethodType
-
-from bisect import bisect_left
 
 import sys
+import itertools
 
 import numpy as np
 cimport numpy as np
 import scipy.sparse
-import itertools
 import scipy.linalg as spl
 
-import itertools as it
 
 import FiniteDifference.utils as utils
-
-import FiniteDifference.BandedOperatorGPU as BOG
-cimport FiniteDifference.BandedOperatorGPU as BOG
 
 import FiniteDifference.BandedOperator as BO
 cimport FiniteDifference.BandedOperator as BO
@@ -36,27 +21,46 @@ BandedOperator = BO.BandedOperator
 
 from FiniteDifference.visualize import fp
 
-DEBUG = False
-
 from FiniteDifference.Option import Option
+
+
+DEBUG = False
 
 REAL = np.float64
 ctypedef np.float64_t REAL_t
 
-cdef class FiniteDifferenceEngine(object):
-    cdef public shape
-    cdef public ndim
-    cdef public coefficients
-    cdef public boundaries
-    cdef public schemes
-    cdef public t
-    cdef public default_scheme
-    cdef public default_order
-    cdef public grid
 
-    # Setup
-    cdef public operators
-    cdef public simple_operators
+def initialized(f):
+    """Create compound operators and initialize the underlying FiniteDifferenceEngine.
+    Under normal circumstances, this is called automatically. If you want to
+    access the operators before they are used, you must call this yourself to
+    create them."""
+    def newf(self, *args, **kwargs):
+        if not self._initialized:
+            FiniteDifferenceEngine.__init__(self, self.grid, coefficients=self.coefficients,
+                    boundaries=self.boundaries, schemes=self.schemes)
+            self.make_discrete_operators()
+            self._initialized = True
+        return f(self, *args, **kwargs)
+    newf.__name__ = f.__name__
+    return newf
+
+
+cdef class FiniteDifferenceEngine(object):
+
+    cdef public:
+        boundaries
+        coefficients
+        default_order
+        default_scheme
+        grid
+        ndim
+        operators
+        schemes
+        shape
+        simple_operators
+        t
+
 
     def __init__(self, grid, coefficients={}, boundaries={}, schemes={}):
         """
@@ -152,6 +156,7 @@ cdef class FiniteDifferenceEngine(object):
         # Setup
         self.operators = {}
         self.simple_operators = {}
+
 
     def solve(self):
         """Run all the way to the terminal condition."""
@@ -250,25 +255,13 @@ class FiniteDifferenceEngineADE(FiniteDifferenceEngine):
             self.grid.domain.append(v)
         return self.grid.domain[-1]
 
-def initialized(f):
-    """Create compound operators and initialize the underlying FiniteDifferenceEngine.
-    Under normal circumstances, this is called automatically. If you want to
-    access the operators before they are used, you must call this yourself to
-    create them."""
-    def newf(self, *args, **kwargs):
-        if not self._initialized:
-            FiniteDifferenceEngine.__init__(self, self.grid, coefficients=self.coefficients,
-                    boundaries=self.boundaries, schemes=self.schemes)
-            self.make_discrete_operators()
-            self._initialized = True
-        return f(self, *args, **kwargs)
-    newf.__name__ = f.__name__
-    return newf
 
 cdef class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
 
-    cdef public force_bandwidth
-    cdef public _initialized
+    cdef public:
+        force_bandwidth
+        _initialized
+
 
     def __init__(self, grid, coefficients={}, boundaries={}, schemes={},
             force_bandwidth=None):
@@ -283,6 +276,7 @@ cdef class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
     @initialized
     def init(self):
         return
+
 
     def make_operator_template(self, d, dim, force_bandwidth=None):
         # Make an operator template for this dimension
@@ -309,6 +303,7 @@ cdef class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
                 Binit = B
         # print "done."
         return Binit
+
 
     def min_possible_bandwidth(self, derivative_tuple):
         explain = False
@@ -389,6 +384,7 @@ cdef class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
         newf.__name__ = f.__name__
         return newf
 
+
     # Here we do the same except we go ahead and evalutate the function for
     # the entire vector. This is just for numpy's speed and is otherwise
     # redundant.
@@ -424,7 +420,8 @@ cdef class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
         m = mesh.pop(dim)
         mesh.append(m)
         # This can be rewritten with repeat and tile, not sure if faster
-        args = np.fromiter(it.chain(*it.izip(*it.product(*mesh))), float)
+        args = np.fromiter(
+            itertools.chain(*itertools.izip(*itertools.product(*mesh))), float)
         args = np.split(args, self.grid.ndim)
         m = args.pop()
         args.insert(dim, m)
@@ -434,6 +431,7 @@ cdef class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
         return ret
 
 
+    # TODO: This guy is *WAY* too big
     def make_discrete_operators(self):
         templates = {}
         mixed_derivs = {}
@@ -616,6 +614,7 @@ cdef class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
             ret = 0
         return ret
 
+
     @initialized
     def solve_implicit(self, n, dt, initial=None, callback=None, numpy=False):
         n = int(n)
@@ -631,6 +630,9 @@ cdef class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
 
         Lis = np.roll(Lis, -1)
 
+        if (0,1) in self.operators:
+            self.operators[(0,1)] *= dt
+
         print_step = max(1, int(n / 10))
         to_percent = 100.0 / n
         utils.tic("solve_implicit:\t")
@@ -643,7 +645,8 @@ cdef class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
                 sys.stdout.flush()
             if callback is not None:
                 callback(V, ((n - k) * dt))
-            V += self.cross_term(V, numpy=numpy) * dt
+            if (0,1) in self.operators:
+                V += self.operators[(0,1)].apply(V)
             for L in Lis:
                 V = L.solve(V)
         utils.toc(':  \t')
@@ -722,29 +725,27 @@ cdef class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
                 callback(V, ((n - k) * dt))
 
             Y = V.copy()
+
             for L in Firsts:
-                Y += L.apply(V)
-            Y0 = Y.copy()
+                V += L.apply(Y)
+
+            Z = V.copy()
 
             for Le, Li in zip(Les, Lis):
-                Y -= Le.apply(V)
-                Y = Li.solve(Y)
-            Y2 = Y.copy()
+                Z -= Le.apply(Y)
+                Z = Li.solve(Z)
 
-            Y = Y0
+            Y -= Z
+
             for L in Firsts:
                 no_residual = L.R
                 L.R = None
-                Y += 0.5 * L.apply(Y2-V)
+                V -= 0.5 * L.apply(Y)
                 L.R = no_residual
 
-            V = Y2
-
             for Le, Li in zip(Les, Lis):
-                Y -= Le.apply(V)
-                Y = Li.solve(Y)
-
-            V = Y
+                V -= Le.apply(Z)
+                V = Li.solve(V)
 
         utils.toc(':  \t')
         self.grid.domain.append(V.copy())
@@ -866,6 +867,48 @@ cdef class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
         utils.toc(':  \t')
         self.grid.domain.append(V.copy())
         return V
+
+
+    @initialized
+    def dummy(self):
+        n = 1
+        dt = 0.01
+        theta = 0.5
+        initial = np.arange(self.shape[0] * self.shape[1], dtype=float)
+        initial = initial.reshape(self.shape[0], self.shape[1])
+
+        Firsts = [(o * dt) for d, o in self.operators.items()]
+
+        Les = [(o * theta * dt)
+               for d, o in sorted(self.operators.iteritems())
+               if type(d) != tuple]
+        Lis = [(o * (theta * -dt)).add(1, inplace=True)
+               for d, o in sorted(self.operators.iteritems())
+               if type(d) != tuple]
+
+        for L in itertools.chain(Les, Lis):
+            L.clear_residual()
+
+        print_step = max(1, int(n / 10))
+        to_percent = 100.0 / n if n != 0 else 0
+        utils.tic("Dummy CPU:\t")
+        V = initial
+        Orig = V.copy()
+        Y = V.copy()
+        for k in range(n):
+            if not k % print_step:
+                print int(k * to_percent),
+                sys.stdout.flush()
+
+            Y = V.copy()
+            for L in Firsts:
+                Y += L.apply(V)
+
+            for Le, Li in zip(Les, Lis):
+                Y -= Le.apply(V)
+                Y = Li.solve(Y)
+
+        return Firsts, Les, Lis, Orig, V, Y
 
 
     @initialized

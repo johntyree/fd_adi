@@ -2,32 +2,64 @@
 
 onmodify () {
     TARGET=${1:-.};
-    shift;
-    CMD="$@";
-    echo "$TARGET" "$CMD";
-    ( if [ -f onmodify.sh ]; then
-        . onmodify.sh;
-    fi;
+    shift
+    remove_ids
     while inotifywait -qq -r -e close_write,moved_to,move_self $TARGET; do
         sleep 0.5;
-        if [ "$CMD" ]; then
-            bash -c "$CMD";
-        else
-            build && run;
-        fi;
-        echo;
-    done )
+        build && run "${@}";
+    done
 }
 
+remove_ids () {
+    [[ $ALL ]] && rm -f .noseids
+}
 
-CMD=""
-if [ "$1" == '--force' ]; then
-    shift
-    CMD+="touch FiniteDifference/_GPU_Code.cu;"
-fi
-CMD+="(set -o pipefail; python setup.py build_ext --inplace 2>&1 | grep -Ei --color -e '' -e error) \
-    && nosetests --failed --rednose --verbosity=3 --with-id $@ \
-    || echo -ne '\a'
-"
+force_rebuild () {
+    (for i in FiniteDifference/*.pyx; do rm ${i%%.pyx}.cpp; done)
+}
 
-onmodify . $CMD
+build () {
+    [[ $CCC ]] && force_rebuild
+    set -o pipefail
+    python setup.py build_ext --inplace 2>&1 | grep -Ei --color -e '' -e error
+}
+
+run () {
+    # echo "nosetests $failed --rednose --verbosity=3 --with-id ${ARGS[@]} || echo -ne \'\a\'"
+    args=(--debug-log=/scratch/noselog $failed --rednose --verbosity=4 --with-id "$@")
+    if [[ $USE_GDB ]]; then
+        echo "gdb --args python $(which nosetests) ${args[@]} <<< run"
+        gdb --args python $(which nosetests) ${args[@]} <<< run
+    else
+        echo "nosetests ${args[@]}"
+        nosetests ${args[@]} || echo -ne '\a'
+    fi
+}
+
+ARGS=()
+while getopts ":acfgb" opt; do
+    case $opt in
+        a)
+            ALL="remove_ids"
+            ;;
+        c)
+            CCC="force_rebuild"
+            ;;
+        f)
+            failed="--failed"
+            ;;
+        b)
+            build
+            exit
+            ;;
+        g)
+            USE_GDB=1
+            ;;
+        \?)
+            ARGS+=(-$OPTARG)
+            ;;
+    esac
+done
+shift $(($OPTIND-1))
+
+onmodify . "$@"

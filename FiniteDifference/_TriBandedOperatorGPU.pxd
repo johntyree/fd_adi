@@ -1,7 +1,10 @@
 
+
 from libcpp cimport bool as cbool
 from libcpp.string cimport string as cpp_string
+
 from VecArray cimport SizedArray, to_string
+
 
 cdef extern from "_TriBandedOperatorGPU.cuh":
 
@@ -32,6 +35,7 @@ cdef extern from "_TriBandedOperatorGPU.cuh":
         SizedArray[double] R
         cbool has_high_dirichlet,
         cbool has_low_dirichlet,
+
 
         _TriBandedOperator(
             SizedArray[double] data,

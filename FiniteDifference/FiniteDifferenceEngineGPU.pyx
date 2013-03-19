@@ -4,14 +4,13 @@
 # distutils: language = c++
 
 
-from bisect import bisect_left
-
 import sys
+import itertools
+
 
 import numpy as np
 cimport numpy as np
 
-import itertools
 
 import FiniteDifference.utils as utils
 
@@ -27,19 +26,23 @@ from FiniteDifference.SizedArrayPtr cimport SizedArrayPtr
 
 
 cdef class FiniteDifferenceEngine(object):
+
     cdef public:
-        shape
-        ndim
         coefficients
-        t
-        default_scheme
         default_order
+        default_scheme
+        grid
+        grid_analytical
+        ndim
+        shape
+        simple_operators
+        operators
+        option
+        t
 
-    cdef SizedArrayPtr grid
 
-    # Setup
-    cdef public operators
-    cdef public simple_operators
+    cdef SizedArrayPtr gpugrid
+
 
     def __init__(self, other):
         """
@@ -122,9 +125,16 @@ cdef class FiniteDifferenceEngine(object):
 
         Can't do this with C/Cuda of course... maybe cython?
         """
-        self.grid = SizedArrayPtr(other.grid.domain[-1], "FDEGPU.grid")
-        self.shape = other.grid.shape
-        self.ndim = self.grid.p.ndim
+        other.init()
+        for attr in ['option', 'grid_analytical']:
+            if hasattr(other, attr):
+                setattr(self, attr, getattr(other, attr))
+            else:
+                setattr(self, attr, None)
+        self.grid = other.grid.copy()
+        self.gpugrid = SizedArrayPtr(self.grid.domain[-1], "FDEGPU.grid")
+        self.shape = self.grid.shape
+        self.ndim = self.grid.ndim
         self.coefficients = other.coefficients
         self.t = 0
         self.default_scheme = 'center'
@@ -134,10 +144,10 @@ cdef class FiniteDifferenceEngine(object):
         self.operators = {k:BOG.BandedOperator(v) for k,v in other.operators.items()}
         self.simple_operators = {k:BOG.BandedOperator(v) for k,v in other.simple_operators.items()}
 
+
     def solve(self):
         """Run all the way to the terminal condition."""
         raise NotImplementedError
-
 
 
 cdef class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
@@ -184,29 +194,63 @@ cdef class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
         return ret
 
 
-    def solve_implicit_(self, n, dt, SizedArrayPtr V):
-        Lis = [(o * -dt).add(1, inplace=True)
+    def dummy(self):
+        n = 1
+        dt = 0.01
+        theta = 0.5
+        initial = np.arange(self.shape[0] * self.shape[1], dtype=float)
+        initial = initial.reshape(self.shape[0], self.shape[1])
+
+        Firsts = [(o * dt) for d, o in self.operators.items()]
+
+        Les = [(o * theta * dt)
+               for d, o in sorted(self.operators.iteritems())
+               if type(d) != tuple]
+        Lis = [(o * (theta * -dt)).add(1, inplace=True)
                for d, o in sorted(self.operators.iteritems())
                if type(d) != tuple]
 
-        Lis = np.roll(Lis, -1)
+        for L in itertools.chain(Les, Lis):
+            L.enable_residual(False)
 
         print_step = max(1, int(n / 10))
-        to_percent = 100.0 / n
-        utils.tic("solve_implicit:\t")
+        to_percent = 100.0 / n if n != 0 else 0
+        utils.tic("Dummy GPU:\t")
+        cdef SizedArrayPtr V = SizedArrayPtr(initial)
+        Orig = V.copy(True)
+        Y = V.copy(True)
+        X = V.copy(True)
+
+        tags = dict()
+        for L in itertools.chain(Les, Lis, Firsts):
+            if L.is_foldable():
+                L.diagonalize()
+                tags[id(L)] = 1
+
         for k in range(n):
             if not k % print_step:
                 print int(k * to_percent),
                 sys.stdout.flush()
-            if (0,1) in self.operators:
-                U = V.copy(True)
-                self.operators[(0,1)].apply_(U)
-                U.timeseq_scalar(dt)
-                V.pluseq(U)
-                del U
-            for L in Lis:
-                L.solve_(V, overwrite=True)
-        utils.toc(':  \t')
+
+            Y.copy_from(V)
+            for L in Firsts:
+                X.copy_from(Y)
+                L.apply_(X, overwrite=True)
+                V.pluseq(X)
+
+            for Le, Li in zip(Les, Lis):
+                X.copy_from(Y)
+                Le.apply_(X, overwrite=True)
+                V.minuseq(X)
+                Li.solve_(V, overwrite=True)
+
+        for i in tags:
+            for L in itertools.chain(Les, Lis, Firsts):
+                if id(L) == i:
+                    L.undiagonalize()
+                    break
+
+        return Firsts, Les, Lis, Orig.to_numpy(), Y.to_numpy(), V.to_numpy()
 
 
     def solve_implicit(self, n, dt, np.ndarray initial):
@@ -218,7 +262,45 @@ cdef class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
         return ret
 
 
-    def solve_douglas(self, n, dt, np.ndarray initial, theta=0.5):
+    cpdef solve_implicit_(self, n, dt, SizedArrayPtr V, callback=None, numpy=False):
+        if callback or numpy:
+            raise NotImplementedError("Callbacks and Numpy not available for GPU solver.")
+        Lis = [(o * -dt).add(1, inplace=True)
+               for d, o in sorted(self.operators.iteritems())
+               if type(d) != tuple]
+
+        Lis = np.roll(Lis, -1)
+
+        if (0,1) in self.operators:
+            self.operators[(0,1)] *= dt
+
+        for o in Lis:
+            if o.top_fold_status == 'CAN_FOLD':
+                o.diagonalize()
+            if o.bottom_fold_status == 'CAN_FOLD':
+                o.diagonalize()
+
+        print_step = max(1, int(n / 10))
+        to_percent = 100.0 / n
+        utils.tic("solve_implicit:\t")
+
+        for k in range(n):
+            if not k % print_step:
+                print int(k * to_percent),
+                sys.stdout.flush()
+            if (0,1) in self.operators:
+                U = V.copy(True)
+                self.operators[(0,1)].apply_(U, overwrite=True)
+                V.pluseq(U)
+                del U
+            for L in Lis:
+                L.solve_(V, overwrite=True)
+        utils.toc(':  \t')
+
+
+    def solve_douglas(self, n, dt, np.ndarray initial, theta=0.5, callback=None, numpy=False):
+        if callback or numpy:
+            raise NotImplementedError("Callbacks and Numpy not available for GPU solver.")
         n = int(n)
         cdef SizedArrayPtr V = SizedArrayPtr(initial)
         self.solve_douglas_(n, dt, V)
@@ -238,12 +320,13 @@ cdef class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
                if type(d) != tuple]
 
         for L in itertools.chain(Les, Lis):
-            L.clear_residual()
+            L.enable_residual(False)
 
         print_step = max(1, int(n / 10))
         to_percent = 100.0 / n
         utils.tic("Douglas:\t")
         Y = V.copy(True)
+        X = SizedArrayPtr().alloc(V.size)
         for k in range(n):
             if not k % print_step:
                 # if np.isnan(V).any():
@@ -252,130 +335,32 @@ cdef class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
                 print int(k * to_percent),
                 sys.stdout.flush()
             for L in Firsts:
-                X = Y.copy(True)
+                X.copy_from(Y)
                 L.apply_(X, overwrite=True)
                 V.pluseq(X)
-                del X
 
             for Le, Li in zip(Les, Lis):
-                X = Y.copy(True)
+                X.copy_from(Y)
                 Le.apply_(X, overwrite=True)
                 V.minuseq(X)
-                del X
                 Li.solve_(V, overwrite=True)
-            Y = V.copy(True)
+            Y.copy_from(V)
 
         utils.toc(':  \t')
-        return V
 
 
-    # def solve_craigsneyd(self, n, dt, initial=None, theta=0.5, callback=None,
-            # numpy=False):
-
-        # n = int(n)
-        # cdef SizedArray[double] V = initial.copy()
-
-        # Firsts = [(o * dt) for o in self.operators.values()]
-
-        # Les = [(o * theta * dt)
-               # for d, o in sorted(self.operators.iteritems())
-               # if type(d) != tuple]
-        # Lis = [(o * (theta * -dt)).add(1, inplace=True)
-               # for d, o in sorted(self.operators.iteritems())
-               # if type(d) != tuple]
-
-        # for L in itertools.chain(Les, Lis):
-            # L.R = None
-
-        # print_step = max(1, int(n / 10))
-        # to_percent = 100.0 / n
-        # utils.tic("Craig-Sneyd:\t")
-        # for k in range(n):
-            # if not k % print_step:
-                # if np.isnan(V).any():
-                    # print "Craig-Sneyd fail @ t = %f (%i steps)" % (dt * k, k)
-                    # return V
-                # print int(k * to_percent),
-                # sys.stdout.flush()
-            # if callback is not None:
-                # callback(V, ((n - k) * dt))
-
-            # Y = V.copy()
-            # for L in Firsts:
-                # Y += L.apply(V)
-            # Y0 = Y.copy()
-
-            # for Le, Li in zip(Les, Lis):
-                # Y -= Le.apply(V)
-                # Y = Li.solve(Y)
-
-            # Y = Y0 + (0.5*dt) * self.cross_term(Y - V, numpy=False)
-            # for Le, Li in zip(Les, Lis):
-                # Y -= Le.apply(V)
-                # Y = Li.solve(Y)
-            # V = Y
-
-        # utils.toc(':  \t')
-        # return V
+    def solve_hundsdorferverwer(self, n, dt, initial=None, theta=0.5, callback=None, numpy=False):
+        if callback or numpy:
+            raise NotImplementedError("Callbacks and Numpy not available for GPU solver.")
+        n = int(n)
+        cdef SizedArrayPtr V = SizedArrayPtr(initial)
+        self.solve_hundsdorferverwer_(n, dt, V)
+        ret = V.to_numpy()
+        del V
+        return ret
 
 
-    # def solve_craigsneyd2(self, n, dt, initial=None, theta=0.5, callback=None,
-            # numpy=False):
-
-        # cdef SizedArray[double] V = initial.copy()
-        # n = int(n)
-
-        # Firsts = [(o * dt) for o in self.operators.values()]
-
-        # Les = [(o * theta * dt)
-               # for d, o in sorted(self.operators.iteritems())
-               # if type(d) != tuple]
-        # Lis = [(o * (theta * -dt)).add(1, inplace=True)
-               # for d, o in sorted(self.operators.iteritems())
-               # if type(d) != tuple]
-
-        # for L in itertools.chain(Les, Lis):
-            # L.R = None
-
-
-        # print_step = max(1, int(n / 10))
-        # to_percent = 100.0 / n
-        # utils.tic("Craig-Sneyd 2:\t")
-        # for k in range(n):
-            # if not k % print_step:
-                # if np.isnan(V).any():
-                    # print "Craig-Sneyd 2 fail @ t = %f (%i steps)" % (dt * k, k)
-                    # return V
-                # print int(k * to_percent),
-                # sys.stdout.flush()
-            # if callback is not None:
-                # callback(V, ((n - k) * dt))
-
-            # Y = V.copy()
-            # for L in Firsts:
-                # Y += L.apply(V)
-            # Y0 = Y.copy()
-
-            # for Le, Li in zip(Les, Lis):
-                # Y -= Le.apply(V)
-                # Y = Li.solve(Y)
-            # Y2 = Y.copy()
-
-            # Y = Y0 + theta * dt * self.cross_term(Y2 - V, numpy=False)
-            # for L in Firsts:
-                # Y += (0.5 - theta) * L.apply(Y2-V)
-
-            # for Le, Li in zip(Les, Lis):
-                # Y -= Le.apply(V)
-                # Y = Li.solve(Y)
-            # V = Y
-
-        # utils.toc(':  \t')
-        # return V
-
-
-    def solve_hundsdorferverwer(self, n, dt, initial=None, theta=0.5, callback=None,
-            numpy=False):
+    cpdef solve_hundsdorferverwer_(self, n, dt, SizedArrayPtr V, theta=0.5):
         Firsts = [(o * dt) for o in self.operators.values()]
 
         Les = [(o * theta * dt)
@@ -386,11 +371,21 @@ cdef class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
                if type(d) != tuple]
 
         for L in itertools.chain(Les, Lis):
-            L.clear_residual()
+            L.enable_residual(False)
+
+        tags = dict()
+        for L in itertools.chain(Les, Lis, Firsts):
+            if L.is_foldable():
+                L.diagonalize()
+                tags[id(L)] = 1
 
         print_step = max(1, int(n / 10))
         to_percent = 100.0 / n
         utils.tic("Hundsdorfer-Verwer:\t")
+        # Pre allocate
+        X = SizedArrayPtr().alloc(V.p.size)
+        Y = SizedArrayPtr().alloc(V.p.size)
+        Z = SizedArrayPtr().alloc(V.p.size)
         for k in range(n):
             if not k % print_step:
                 # if np.isnan(V).any():
@@ -399,45 +394,56 @@ cdef class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
                 print int(k * to_percent),
                 sys.stdout.flush()
 
-            Y = V.copy()
+            Y.copy_from(V)
             for L in Firsts:
-                X = Y.copy(True)
+                X.copy_from(Y)
                 L.apply_(X, overwrite=True)
                 V.pluseq(X)
-                del X
-            Y0 = V.copy()
+
+            Z.copy_from(V)
 
             for Le, Li in zip(Les, Lis):
-                X = Y.copy(True)
+                X.copy_from(Y)
+                Le.apply_(X, overwrite=True)
+                Z.minuseq(X)
+                Li.solve_(Z, overwrite=True)
+
+            Y.minuseq_over2(Z)
+
+            for L in Firsts:
+                L.enable_residual(False)
+                X.copy_from(Y)
+                L.apply_(X, overwrite=True)
+                V.minuseq(X)
+                L.enable_residual(True)
+
+            for Le, Li in zip(Les, Lis):
+                X.copy_from(Z)
                 Le.apply_(X, overwrite=True)
                 V.minuseq(X)
-                del X
-                Li.solve(V)
-            Y2 = Y.copy()
-
-            Y = Y0
-            for L in Firsts:
-                no_residual = L.R
-                L.R = None
-                Y += 0.5 * L.apply(Y2-V)
-                L.R = no_residual
-
-            V = Y2
-
-            for Le, Li in zip(Les, Lis):
-                Y -= Le.apply(V)
-                Y = Li.solve(Y)
-
-            V = Y
+                Li.solve_(V, overwrite=True)
 
         utils.toc(':  \t')
-        return V
+
+        for i in tags:
+            for L in itertools.chain(Les, Lis, Firsts):
+                if id(L) == i:
+                    L.undiagonalize()
+                    break
 
 
-    # def solve_smooth(self, n, dt, initial=None, callback=None, smoothing_steps=2,
-            # scheme=None):
-        # if scheme is None:
-            # scheme = self.solve_hundsdorferverwer
-        # V = self.solve_implicit(smoothing_steps*2, dt*0.5, initial=initial)
-        # # V = self.solve_douglas(smoothing_steps*2, dt*0.5, theta=1, initial=initial)
-        # return scheme(n-smoothing_steps, dt, initial=V, theta=0.60)
+    def solve_smooth(self, n, dt, initial=None, callback=None, smoothing_steps=2,
+            scheme=None):
+        if scheme:
+            raise NotImplementedError("Changing smoothing schemes not supported on GPU.")
+        n = int(n)
+        cdef SizedArrayPtr V = SizedArrayPtr(initial)
+        self.solve_smooth_(n, dt, V, smoothing_steps)
+        ret = V.to_numpy()
+        del V
+        return ret
+
+
+    cpdef solve_smooth_(self, n, dt, SizedArrayPtr V, smoothing_steps=2):
+        self.solve_implicit_(smoothing_steps*2, dt*0.5, V)
+        self.solve_hundsdorferverwer_(n-smoothing_steps, dt, V, theta=0.60)

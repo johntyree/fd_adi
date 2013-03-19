@@ -4,7 +4,7 @@
 
 from __future__ import division
 
-# import sys
+import sys
 import os
 import itertools as it
 import time
@@ -16,7 +16,7 @@ import numpy as np
 import numexpr as ne
 import pylab
 
-from Option import Option, BarrierOption
+from Option import Option, BarrierOption, MeanRevertingProcess
 
 from Grid import Grid
 import utils
@@ -49,24 +49,25 @@ class HestonOption(Option):
                 , tenor=1.0
                 , mean_reversion=1
                 , mean_variance=None
-                , vol_of_variance=0.4
+                , vol_of_variance=None
                 , correlation=0):
         Option.__init__(self
                 , spot=spot
                 , strike=strike
                 , interest_rate=interest_rate
+                , variance=variance
                 , volatility=volatility
                 , tenor=tenor
                 )
+        self.Type = "HestonOption"
+        self.attrs += ['correlation']
         self.variance.reversion = mean_reversion
-        if variance is not None:
-            self.variance.value = variance
-        else:
-            self.variance.value = volatility**2
         if mean_variance is not None:
             self.variance.mean = mean_variance
         else:
             self.variance.mean = self.variance.value
+        if vol_of_variance is None:
+            vol_of_variance = 0.4
         self.variance.volatility = vol_of_variance
         self.correlation = correlation
 
@@ -79,6 +80,13 @@ class HestonOption(Option):
                 , "Correlation %s" % self.correlation
                 ])
         return s
+
+
+    def __repr__(self):
+        l = ["{attr}={val}".format(attr=attr, val=repr(getattr(self, attr))) for attr in self.attrs]
+        s = self.Type + "(" + ", ".join(l) + ')'
+        return s
+
 
     def compute_analytical(self):
         return HestonCos(
@@ -137,6 +145,7 @@ class HestonOption(Option):
             if verbose:
                 if not i % notify:
                     print int(100*i / nrOfSteps),
+                    sys.stdout.flush()
             V = Vt
 
             #Andersen's paper, equation (17)
@@ -242,6 +251,13 @@ class HestonBarrierOption(HestonOption, BarrierOption):
                 , vol_of_variance=vol_of_variance
                 , correlation=correlation
                 )
+        self.Type = 'HestonBarrierOption'
+
+
+    def __repr__(self):
+        l = ["{attr}={val}".format(attr=attr, val=repr(getattr(self, attr))) for attr in self.attrs]
+        s = self.Type + "(" + ", ".join(l) + ')'
+        return s
 
 
     def compute_analytical(self):
@@ -270,14 +286,14 @@ class HestonFiniteDifferenceEngine(FiniteDifferenceEngineADI):
             spotdensity=7.0,
             varexp=4.0,
             force_exact=True,
-            flip_idx_var=True,
+            flip_idx_var=False,
             flip_idx_spot=False,
             schemes=None,
             coefficients=None,
             boundaries=None,
             cache=True,
             verbose=True,
-            force_bandwidth=(-2,2)
+            force_bandwidth=None
             ):
         """@option@ is a HestonOption"""
         self.cache = cache

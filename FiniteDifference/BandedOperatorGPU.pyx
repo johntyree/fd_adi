@@ -3,10 +3,8 @@
 # cython: infer_types = True
 # cython: embedsignature = True
 # distutils: language = c++
-# distutils: sources = FiniteDifference/_GPU_Code.cu FiniteDifference/backtrace.c FiniteDifference/filter.c
+# distutils: sources = FiniteDifference/_BandedOperator_GPU_Code.cu FiniteDifference/backtrace.c FiniteDifference/filter.c
 
-
-from bisect import bisect_left
 
 import numpy as np
 cimport numpy as np
@@ -21,6 +19,7 @@ from FiniteDifference.BandedOperator import BandedOperator as BO
 from FiniteDifference.BandedOperator cimport BandedOperator as BO
 from FiniteDifference.VecArray cimport GPUVec
 
+
 FOLDED = "FOLDED"
 CAN_FOLD = "CAN_FOLD"
 CANNOT_FOLD = "CANNOT_FOLD"
@@ -28,7 +27,7 @@ CANNOT_FOLD = "CANNOT_FOLD"
 
 cdef class BandedOperator(object):
 
-    def __init__(self, other=None, tag="Constructor"):
+    def __init__(self, other=None, tag=""):
         """
         A linear operator for discrete derivatives.
         Consist of a banded matrix (B.D) and a residual vector (B.R) for things
@@ -184,6 +183,7 @@ cdef class BandedOperator(object):
         if other.top_fold_status == CAN_FOLD or other.bottom_fold_status == CAN_FOLD:
             diad = True
             other.diagonalize()
+            # This is normally set by copy(), above. We changed it with diagonalize
             self.top_fold_status = other.top_fold_status
             self.bottom_fold_status = other.bottom_fold_status
 
@@ -220,6 +220,7 @@ cdef class BandedOperator(object):
 
         if diad:
             self.undiagonalize()
+            other.undiagonalize()
 
 
     cdef immigrate_tri(self, tag=""):
@@ -228,7 +229,6 @@ cdef class BandedOperator(object):
         if tag:
             print "Immigrate Tri:", tag, to_string(self.thisptr_tri)
         assert self.thisptr_tri != <void *>0
-
 
         bots = from_SizedArray(self.thisptr_tri.bottom_factors)
         tops = from_SizedArray(self.thisptr_tri.top_factors)
@@ -252,7 +252,10 @@ cdef class BandedOperator(object):
         if self.bottom_fold_status == CAN_FOLD:
             data[-1,block_len-1::block_len] = bots
 
-        R = from_SizedArray(self.thisptr_tri.R) if self.thisptr_tri.has_residual else None
+        if self.thisptr_tri.has_residual:
+            R = from_SizedArray(self.thisptr_tri.R)
+        else:
+            R = np.zeros(self.thisptr_tri.operator_rows)
 
         B = BO((data, offsets), residual=R, inplace=False,
             deltas=self.deltas,
@@ -277,12 +280,16 @@ cdef class BandedOperator(object):
 
 
     cpdef diagonalize(self):
+        if self.thisptr_tri == NULL:
+            raise RuntimeError("Diagonalize called but C++ tridiag is NULL. CSR? Mixed(%s)" % self.is_mixed_derivative)
         self.top_fold_status = FOLDED if self.top_fold_status == CAN_FOLD else CANNOT_FOLD
         self.bottom_fold_status = FOLDED if self.bottom_fold_status == CAN_FOLD else CANNOT_FOLD
         self.thisptr_tri.diagonalize()
 
 
     cpdef undiagonalize(self):
+        if self.thisptr_tri == NULL:
+            raise RuntimeError("Undiagonalize called but C++ tridiag is NULL. CSR? Mixed(%s)" % self.is_mixed_derivative)
         self.top_fold_status = CAN_FOLD if self.top_fold_status == FOLDED else CANNOT_FOLD
         self.bottom_fold_status = CAN_FOLD if self.bottom_fold_status == FOLDED else CANNOT_FOLD
         self.thisptr_tri.undiagonalize()
@@ -293,9 +300,13 @@ cdef class BandedOperator(object):
                 or self.bottom_fold_status == FOLDED)
 
 
-    cpdef apply_(self, SizedArrayPtr sa_V, overwrite=False):
-        cdef SizedArrayPtr sa_U
+    cpdef cbool is_foldable(self):
+        return (self.top_fold_status == CAN_FOLD
+                or self.bottom_fold_status == CAN_FOLD)
 
+
+    cpdef apply_(self, SizedArrayPtr sa_V, overwrite):
+        cdef SizedArrayPtr sa_U
         if overwrite:
             sa_U = sa_V
         else:
@@ -316,7 +327,7 @@ cdef class BandedOperator(object):
         return V
 
 
-    cpdef solve_(self, SizedArrayPtr sa_V, overwrite=False):
+    cpdef solve_(self, SizedArrayPtr sa_V, overwrite):
         assert not self.is_mixed_derivative
         cdef SizedArrayPtr sa_U
         if overwrite:
@@ -335,9 +346,10 @@ cdef class BandedOperator(object):
         return V
 
 
-    cpdef clear_residual(self):
+    cpdef enable_residual(self, cbool state):
         if self.thisptr_tri:
-            self.thisptr_tri.has_residual = False
+            self.thisptr_tri.has_residual = state
+
 
     cdef inline no_mixed(self):
         if self.is_mixed_derivative:
@@ -369,6 +381,7 @@ cdef class BandedOperator(object):
     def __imul__(self, val):
         self.vectorized_scale(np.ones(self.shape[0]) * val)
         return self
+
 
     cpdef add(self, val, inplace=False):
         if inplace:
@@ -428,8 +441,11 @@ cdef class BandedOperator(object):
         Add a scalar to the main diagonal
         Does not alter self.R, the residual vector.
         """
+        if self.thisptr_tri == NULL:
+            raise RuntimeError("add_scalar called but C++ tridiag is NULL. CSR? Mixed(%s)" % self.is_mixed_derivative)
         self.thisptr_tri.add_scalar(other)
         return
+
 
     cpdef vectorized_scale_(self, SizedArrayPtr vector):
         """
@@ -457,45 +473,6 @@ cdef inline int sign(int i):
         return -1
     else:
         return 1
-
-
-# @cython.boundscheck(False)
-cdef inline unsigned int get_real_index(double[:] haystack, double needle):
-    cdef unsigned int length = haystack.shape[0]
-    for i in range(length):
-        if needle == haystack[i]:
-            return i
-    raise ValueError("Value not in array: %s" % needle)
-
-
-# @cython.boundscheck(False)
-cdef inline unsigned int get_int_index(int[:] haystack, int needle):
-    cdef unsigned int length = haystack.shape[0]
-    for i in range(length):
-        if needle == haystack[i]:
-            return i
-    raise ValueError("Value not in array: %s" % needle)
-
-
-def test_SizedArray_transpose(np.ndarray[ndim=2, dtype=double] v):
-    cdef SizedArrayPtr s = SizedArrayPtr(v, "transpose s")
-    v[:] = 0
-    s.p.transpose(1)
-    v = s.to_numpy()
-    del s
-    return v
-
-
-def test_SizedArray1_roundtrip(np.ndarray[ndim=1, dtype=double] v):
-    cdef SizedArrayPtr s = SizedArrayPtr(v, "Round Trip")
-    v[:] = 0
-    return s.to_numpy()
-
-
-def test_SizedArray2_roundtrip(np.ndarray[ndim=2, dtype=double] v):
-    cdef SizedArrayPtr s = SizedArrayPtr(v, "Round Trip")
-    v[:,:] = 0
-    return s.to_numpy()
 
 
 cdef cublas_to_scipy(B):

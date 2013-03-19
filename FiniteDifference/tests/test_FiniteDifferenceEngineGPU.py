@@ -1,10 +1,7 @@
 #!/usr/bin/env python
 # coding: utf8
 
-# import sys
-# import os
 import itertools
-# from bisect import bisect_left
 import unittest
 
 import numpy as np
@@ -15,15 +12,13 @@ import scipy.linalg as spl
 import FiniteDifference.utils as utils
 from FiniteDifference.utils import todia, block_repeat, foldMatFor
 from FiniteDifference.visualize import fp
-# def fp(*x, **y):
-    # pass
 import FiniteDifference.Grid as Grid
 
 import FiniteDifference.FiniteDifferenceEngine as FD
 import FiniteDifference.FiniteDifferenceEngineGPU as FDG
 
 from FiniteDifference.blackscholes import BlackScholesFiniteDifferenceEngine, BlackScholesOption
-from FiniteDifference.heston import HestonBarrierOption
+from FiniteDifference.heston import HestonOption, HestonBarrierOption, HestonFiniteDifferenceEngine
 
 
 
@@ -47,7 +42,7 @@ class BlackScholesOption_test(unittest.TestCase):
                                                      )
         self.F.init()
         self.FG = FDG.FiniteDifferenceEngineADI(self.F)
-        print self.F.operators.items()
+
 
     def test_implicit(self):
         t, dt = self.F.option.tenor, self.dt
@@ -59,6 +54,7 @@ class BlackScholesOption_test(unittest.TestCase):
         # print "Price:", V, ans, V - ans
         npt.assert_allclose(V, ans, rtol=0.001)
 
+
     def test_douglas(self):
         t, dt = self.F.option.tenor, self.dt
         V = self.FG.solve_douglas(t/dt, dt, self.F.grid.domain[-1])[self.F.idx]
@@ -67,8 +63,8 @@ class BlackScholesOption_test(unittest.TestCase):
         # print "Price:", V, ans, V - ans
         npt.assert_allclose(V, ans, rtol=0.001)
 
+
     def test_smooth(self):
-        raise unittest.SkipTest
         t, dt = self.F.option.tenor, self.dt
         for o in self.F.operators.values():
             assert o.is_tridiagonal()
@@ -79,7 +75,109 @@ class BlackScholesOption_test(unittest.TestCase):
         npt.assert_allclose(V, ans, rtol=0.001)
 
 
-class FiniteDifferenceEngineADI_test(unittest.TestCase):
+class HestonOption_test(unittest.TestCase):
+
+    def setUp(self):
+        DefaultHeston = HestonOption(spot=100
+                        , strike=100
+                        , interest_rate=0.03
+                        , volatility = 0.2
+                        , tenor=1.0
+                        , mean_reversion = 1
+                        , mean_variance = 0.12
+                        , vol_of_variance = 0.3
+                        , correlation = 0.4
+                        )
+        option = DefaultHeston
+        # option = HestonOption(tenor=1, strike=99.0, volatility=0.2,
+                                        # mean_reversion=3, mean_variance=0.04,
+                                        # vol_of_variance=0.6, correlation=-0.7)
+
+
+        self.dt = 1.0/150.0
+        self.F = HestonFiniteDifferenceEngine(option, nspots=150,
+                                                   nvols=80,
+                                                   force_bandwidth=None,
+                                                   flip_idx_var=False)
+
+
+        # self.F = HestonFiniteDifferenceEngine(H, nspots=100,
+                                         # nvols=100, spotdensity=10, varexp=4,
+                                         # var_max=12, flip_idx_spot=False,
+                                         # flip_idx_var=False, verbose=False,
+                                         # force_bandwidth=None,
+                                         # force_exact=False)
+        self.F.init()
+        self.F.operators[1].diagonalize()
+        self.FG = FDG.FiniteDifferenceEngineADI(self.F)
+
+
+    def test_implicit(self):
+        t, dt = self.F.option.tenor, self.dt
+        dt = 1/600.0
+        for d, o in self.F.operators.items():
+            if type(d) != tuple:
+                assert o.is_tridiagonal(), "%s, %s" % (d, o.D.offsets)
+        V = self.FG.solve_implicit(t/dt, dt, self.F.grid.domain[-1])[self.F.idx]
+        V2 = self.F.solve_implicit(t/dt, dt, self.F.grid.domain[-1])[self.F.idx]
+
+        op = self.F.operators[(0,1)]
+        opG = self.FG.operators[(0,1)].immigrate()
+
+        dom = np.arange(self.F.grid.size, dtype=float)
+        dom = dom.reshape(self.F.grid.shape)
+        ref = op.apply(dom)
+        tst = self.FG.operators[(0,1)].apply(dom)
+        npt.assert_array_almost_equal(tst, ref, decimal=10)
+
+        ans = self.F.option.analytical
+        npt.assert_array_almost_equal(op.D.data, opG.D.data)
+        # print "Spot:", self.F.option.spot
+        # print "Price:", V2, V, ans, V - ans
+        npt.assert_allclose(V, V2)
+        npt.assert_allclose(V, ans, rtol=0.001)
+
+
+    def test_douglas(self):
+        t, dt = self.F.option.tenor, self.dt
+        for d, o in self.F.operators.items():
+            if type(d) != tuple:
+                assert o.is_tridiagonal(), "%s, %s" % (d, o.D.offsets)
+        V = self.FG.solve_douglas(t/dt, dt, self.F.grid.domain[-1])[self.F.idx]
+        ans = self.F.option.analytical
+        # print "Spot:", self.F.option.spot
+        # print "Price:", V, ans, V - ans
+        npt.assert_allclose(V, ans, rtol=0.001)
+
+
+    def test_hundsdorferverwer(self):
+        t, dt = self.F.option.tenor, self.dt
+        for d, o in self.F.operators.items():
+            if type(d) != tuple:
+                assert o.is_tridiagonal(), "%s, %s" % (d, o.D.offsets)
+        V = self.FG.solve_hundsdorferverwer(t/dt, dt, self.F.grid.domain[-1])[self.F.idx]
+        V2 = self.F.solve_hundsdorferverwer(t/dt, dt, self.F.grid.domain[-1])[self.F.idx]
+        ans = self.F.option.analytical
+        # print "Spot:", self.F.option.spot
+        # print "Price:", V2, V, ans, V - ans
+        npt.assert_allclose(V, ans, rtol=0.001)
+
+
+    def test_smooth(self):
+        t, dt = self.F.option.tenor, self.dt
+        for d, o in self.F.operators.items():
+            if type(d) != tuple:
+                assert o.is_tridiagonal(), "%s, %s" % (d, o.D.offsets)
+        V = self.FG.solve_smooth(t/dt, dt, self.F.grid.domain[-1])[self.F.idx]
+        ans = self.F.option.analytical
+        # print "Spot:", self.F.option.spot
+        # print "Price:", V, ans, V - ans
+        npt.assert_allclose(V, ans, rtol=0.001)
+
+
+
+
+class FiniteDifferenceEngineADIGPU_test(unittest.TestCase):
 
     def setUp(self):
         s1_enable = 1
@@ -139,37 +237,60 @@ class FiniteDifferenceEngineADI_test(unittest.TestCase):
         self.F = FD.FiniteDifferenceEngineADI(self.G, coefficients=coeffs,
                 boundaries=bounds, schemes=schemes, force_bandwidth=None)
         self.F.init()
-        self.F.operators[1]
+        # self.F.operators[1].diagonalize()
         self.FG = FDG.FiniteDifferenceEngineADI(self.F)
 
 
     def test_verify_simple_operators_0(self):
-        ref = self.F.simple_operators[(0,)]
-        tst = self.FG.simple_operators[(0,)].immigrate()
+        ref = self.F.simple_operators[(0,)].copy()
+        tst = self.FG.simple_operators[(0,)].copy().immigrate()
         npt.assert_equal(tst, ref)
-
-    def test_verify_simple_operators_1(self):
-        ref = self.F.simple_operators[(1,)]
-        tst = self.FG.simple_operators[(1,)].immigrate()
-        npt.assert_equal(tst, ref)
-
-    def test_verify_simple_operators_00(self):
-        ref = self.F.simple_operators[(0,0)]
-        tst = self.FG.simple_operators[(0,0)].immigrate()
-        npt.assert_equal(tst, ref)
-
-    def test_verify_simple_operators_11(self):
-        ref = self.F.simple_operators[(1,1)]
-        ref.diagonalize()
-        tst = self.FG.simple_operators[(1,1)]
-        tst.diagonalize()
+        ref = self.F.simple_operators[(0,)].copy()
+        tst = self.FG.simple_operators[(0,)].copy()
+        ref.diagonalize(), tst.diagonalize()
         tst = tst.immigrate()
         npt.assert_equal(tst, ref)
+
+
+    def test_verify_simple_operators_1(self):
+        ref = self.F.simple_operators[(1,)].copy()
+        tst = self.FG.simple_operators[(1,)].copy().immigrate()
+        npt.assert_equal(tst, ref)
+        ref = self.F.simple_operators[(1,)].copy()
+        tst = self.FG.simple_operators[(1,)].copy()
+        ref.diagonalize(), tst.diagonalize()
+        tst = tst.immigrate()
+        npt.assert_equal(tst, ref)
+
+
+    def test_verify_simple_operators_00(self):
+        ref = self.F.simple_operators[(0,0)].copy()
+        tst = self.FG.simple_operators[(0,0)].copy().immigrate()
+        npt.assert_equal(tst, ref)
+        ref = self.F.simple_operators[(0,0)].copy()
+        tst = self.FG.simple_operators[(0,0)].copy()
+        ref.diagonalize(), tst.diagonalize()
+        tst = tst.immigrate()
+        npt.assert_equal(tst, ref)
+
+
+    def test_verify_simple_operators_11(self):
+        ref = self.F.simple_operators[(1,1)].copy()
+        tst = self.FG.simple_operators[(1,1)].copy()
+        tst = tst.immigrate()
+        npt.assert_equal(tst, ref)
+        ref = self.F.simple_operators[(1,1)].copy()
+        tst = self.FG.simple_operators[(1,1)].copy()
+        ref.diagonalize(), tst.diagonalize()
+        tst = tst.immigrate()
+        npt.assert_equal(tst, ref)
+
 
     def test_verify_simple_operators_01(self):
         ref = self.F.simple_operators[(0,1)]
         tst = self.FG.simple_operators[(0,1)].immigrate()
         npt.assert_equal(tst, ref)
+
 
     def test_combine_operators_0(self):
         ref = self.F.operators[0]
@@ -179,6 +300,7 @@ class FiniteDifferenceEngineADI_test(unittest.TestCase):
         tst = tst.immigrate()
         tst.derivative = ref.derivative
         npt.assert_equal(tst, ref)
+
 
     def test_combine_operators_1(self):
         ref = self.F.operators[1]
@@ -201,12 +323,11 @@ class FiniteDifferenceEngineADI_test(unittest.TestCase):
         ref.D.data *= 0
         npt.assert_equal(tst, ref)
 
+
     def test_cross_derivative(self):
         crossOp = self.F.operators[(0,1)]
         crossOpGPU = self.FG.simple_operators[(0,1)]
         g = self.F.grid.domain[-1]
-        x = self.F.grid.mesh[0]
-        y = self.F.grid.mesh[1]
 
         d2gdxdy = crossOp.apply(g)
         d2gdxdyGPU = crossOpGPU.apply(g)
@@ -219,6 +340,118 @@ class FiniteDifferenceEngineADI_test(unittest.TestCase):
         d2gdxdy_scaled = crossOp.apply(g)
         d2gdxdyGPU_scaled = crossOp.apply(g)
         npt.assert_array_almost_equal(d2gdxdy_scaled, d2gdxdyGPU_scaled)
+
+
+    def test_GPUSolve_0(self):
+       B = self.F.operators[0]
+       blen = B.D.shape[0] / B.blocks
+       B.D.data = np.arange(B.D.data.size, dtype=float).reshape(B.D.data.shape)
+       B.R = np.zeros(B.D.data.shape[1])
+       B.D.data[0,0::blen] = 0
+       B.D.data[-1,blen-1::blen] = 0
+       origdata = B.D.data.copy()
+       ref = B.solve(self.F.grid.domain[-1])
+       B = FDG.BOG.BandedOperator(B)
+       tst = B.solve(self.F.grid.domain[-1])
+       B = B.immigrate()
+       # fp(ref - tst, 3, 'e')
+       npt.assert_array_almost_equal(origdata, B.D.data)
+       npt.assert_allclose(ref, tst, atol=1e-6)
+
+
+    def test_GPUSolve_1(self):
+        B = self.F.operators[1]
+        B.diagonalize()
+        blen = B.D.shape[0] / B.blocks
+
+        B.D.data = np.random.random((B.D.data.shape))
+        B.R = np.random.random(B.D.data.shape[1])
+        B.D.data[0,0::blen] = 0
+        B.D.data[-1,blen-1::blen] = 0
+        ref = B.solve(self.F.grid.domain[-1])
+        B.undiagonalize()
+        origdata = B.D.data.copy()
+
+        BG = FDG.BOG.BandedOperator(B)
+        BG.diagonalize()
+        tst = BG.solve(self.F.grid.domain[-1])
+        BG.undiagonalize()
+        BG = BG.immigrate()
+        # fp(ref - tst, 2, 'e')
+        npt.assert_array_equal(origdata, B.D.data)
+        npt.assert_allclose(ref, tst)
+
+
+    def test_firsts(self):
+        r = self.F.dummy()[0]
+        t = self.FG.dummy()[0]
+        for ref, tstG in zip(r, t):
+            tst = tstG.immigrate()
+            if not tst.is_mixed_derivative:
+                blen = ref.D.shape[0] // ref.blocks
+                if tst.dirichlet[0] is not None:
+                    tst.D.data[1, ::blen] = 1
+                if tst.dirichlet[1] is not None:
+                    tst.D.data[1, blen-1::blen] = 1
+            npt.assert_array_equal(ref.D.data, tst.D.data)
+            npt.assert_equal(ref, tst)
+
+
+    def test_Les(self):
+        r = self.F.dummy()[1]
+        t = self.FG.dummy()[1]
+        for ref, tstG in zip(r, t):
+            tst = tstG.immigrate()
+            if not tst.is_mixed_derivative:
+                blen = ref.D.shape[0] // ref.blocks
+                if tst.dirichlet[0] is not None:
+                    tst.D.data[1, ::blen] = 1
+                if tst.dirichlet[1] is not None:
+                    tst.D.data[1, blen-1::blen] = 1
+            npt.assert_array_equal(ref.D.data, tst.D.data)
+            npt.assert_equal(ref, tst)
+
+
+    def test_Lis(self):
+        r = self.F.dummy()[2]
+        t = self.FG.dummy()[2]
+        for ref, tstG in zip(r, t):
+            tst = tstG.immigrate()
+            if not tst.is_mixed_derivative:
+                blen = ref.D.shape[0] // ref.blocks
+                if tst.dirichlet[0] is not None:
+                    tst.D.data[1, ::blen] = 1
+                if tst.dirichlet[1] is not None:
+                    tst.D.data[1, blen-1::blen] = 1
+            npt.assert_array_almost_equal(ref.D.data, tst.D.data, decimal=15)
+            ref.D *= 0
+            tst.D *= 0
+            npt.assert_equal(ref, tst)
+
+
+    def test_Orig(self):
+        ref = self.F.dummy()[3]
+        tst = self.FG.dummy()[3]
+        # print
+        # fp(ref - tst, 'e')
+        npt.assert_array_equal(ref, tst)
+
+
+    def test_Y(self):
+        ref = self.F.dummy()[4]
+        tst = self.FG.dummy()[4]
+        # print
+        # fp(ref - tst, 'e')
+        npt.assert_array_almost_equal(ref, tst)
+
+
+    def test_V(self):
+        ref = self.F.dummy()[5]
+        tst = self.FG.dummy()[5]
+        # print
+        # fp(ref - tst, 'e')
+        npt.assert_array_almost_equal(ref, tst)
+
 
 
 def main():

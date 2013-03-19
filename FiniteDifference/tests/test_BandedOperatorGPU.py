@@ -1,10 +1,7 @@
 #!/usr/bin/env python
 # coding: utf8
 
-# import sys
-# import os
 import itertools
-# from bisect import bisect_left
 import unittest
 
 import FiniteDifference.utils as utils
@@ -17,8 +14,6 @@ import scipy.linalg as spl
 from FiniteDifference.utils import todia, block_repeat, foldMatFor
 from FiniteDifference.utils import todia
 from FiniteDifference.visualize import fp
-# def fp(*x, **y):
-    # pass
 import FiniteDifference.Grid as Grid
 
 import FiniteDifference.FiniteDifferenceEngine as FD
@@ -28,11 +23,12 @@ import FiniteDifference.BandedOperator as BO
 from FiniteDifference.blackscholes import BlackScholesFiniteDifferenceEngine, BlackScholesOption
 from FiniteDifference.heston import HestonBarrierOption
 
+
 class Cpp_test(unittest.TestCase):
 
     def setUp(self):
         # print "Setting up Params for CPP tests"
-        shape = (4,4)
+        shape = (25,25)
         self.v1 = np.arange(shape[0]*shape[1], dtype=float)**2
         self.v2 = self.v1.copy()
         self.v2.resize(shape)
@@ -53,23 +49,13 @@ class Cpp_test(unittest.TestCase):
         schemes = {}
 
         self.G = Grid.Grid([np.arange(shape[0]), np.arange(shape[1])], lambda x, y: (x*shape[1]+y)**2)
-        # print self.G
         self.F = FD.FiniteDifferenceEngineADI(self.G, coefficients=coeffs,
                 boundaries=bounds, schemes=schemes, force_bandwidth=None)
         # print "Setting up FDE for CPP tests"
         self.F.init()
         self.F.operators[0].R = np.arange(self.G.size, dtype=float)
         self.F.operators[1].R = np.arange(self.G.size, dtype=float)
-        self.F.operators[1]
         # print "Setup complete for CPP test"
-
-
-    def test_SizedArray_roundtrip(self):
-        npt.assert_array_equal(self.v1, FD.BOG.test_SizedArray1_roundtrip(self.v1.copy()))
-
-
-    def test_SizedArray_roundtrip2D(self):
-        npt.assert_array_equal(self.v2, FD.BOG.test_SizedArray2_roundtrip(self.v2.copy()))
 
 
     def test_migrate_0(self):
@@ -105,8 +91,8 @@ class Cpp_test(unittest.TestCase):
         B = B.immigrate("test 1")
         npt.assert_array_equal([1, 0, -1], B.D.offsets)
         npt.assert_equal(B.bottom_fold_status, "FOLDED")
-        fp(ref.D)
-        fp(B.D)
+        # fp(ref.D)
+        # fp(B.D)
         assert ref == B
 
 
@@ -118,14 +104,6 @@ class Cpp_test(unittest.TestCase):
         B = B.immigrate("test 01")
         npt.assert_array_equal(ref.D.todense(), B.D.todense())
         assert ref == B
-
-
-    def test_SizedArray_transpose(self):
-        ntests = 100
-        for i in range(ntests):
-            shape = tuple(np.random.random_integers(1, 100, 2))
-            v2 = np.arange(shape[0]*shape[1], dtype=float).reshape(shape)
-            npt.assert_array_equal(v2.T, FD.BOG.test_SizedArray_transpose(v2.copy()))
 
 
     def test_tri_apply_axis_0(self):
@@ -166,10 +144,13 @@ class Cpp_test(unittest.TestCase):
 
     def test_csr_apply_01(self):
         B01  = self.F.operators[(0,1)]
+        B01G = BOG.BandedOperator(B01)
+        B01 *= 0.023934
+        B01G *= 0.023934
         ref = B01.apply(self.v2)
-        B01 = BOG.BandedOperator(B01)
-        tst = B01.apply(self.v2.copy())
-        npt.assert_array_equal(ref, tst)
+        tst = B01G.apply(self.v2.copy())
+        # fp(ref - tst, 'e')
+        npt.assert_array_almost_equal(ref, tst, decimal=15)
 
 
     def test_csr_apply_random(self):
@@ -198,6 +179,26 @@ class Cpp_test(unittest.TestCase):
         ref.resize(B.D.shape)
         B = BOG.BandedOperator(B)
         B.vectorized_scale(np.arange(B.operator_rows, dtype=float))
+        B = B.immigrate()
+        # fp(ref)
+        # print
+        # fp(B.D)
+        # print
+        # fp(B.D - ref)
+        npt.assert_array_equal(ref, B.D.todense())
+
+
+    def test_csr_scalar(self):
+        scalar = 0.235
+        B = self.F.operators[0]
+        B.D = scipy.sparse.csr_matrix(np.ones((5,5)))
+        B.R = None
+        B.dirichlet = (None, None)
+        B.is_mixed_derivative = True
+        ref = np.ones(B.D.shape[0], dtype=float).repeat(B.D.shape[1]) * scalar
+        ref.resize(B.D.shape)
+        B = BOG.BandedOperator(B)
+        B *= scalar
         B = B.immigrate()
         # fp(ref)
         # print
@@ -240,39 +241,19 @@ class Cpp_test(unittest.TestCase):
         npt.assert_equal(tst, ref)
 
 
-    def test_GPUSolve_0(self):
-        B = self.F.operators[0]
-        B.D.data = np.random.random((B.D.data.shape))
-        B.R = np.random.random(B.D.data.shape[1])
-        B.D.data[0,0] = 0
-        B.D.data[-1,-1] = 0
-        origdata = B.D.data.copy()
-        ref = B.solve(self.v2)
-        B = BOG.BandedOperator(B)
-        tst = B.solve(self.v2.copy())
-        B = B.immigrate()
-        # fp(ref - tst, 3, 'e')
-        npt.assert_array_almost_equal(ref, tst, decimal=8)
-        npt.assert_array_equal(origdata, B.D.data)
-
-
-    def test_GPUSolve_1(self):
-        B = self.F.operators[1]
-        B.diagonalize()
-        B.D.data = np.random.random((B.D.data.shape))
-        B.R = np.random.random(B.D.data.shape[1])
-        B.D.data[0,0] = 0
-        B.D.data[-1,-1] = 0
-        B.undiagonalize()
-        origdata = B.D.data.copy()
-        ref = B.solve(self.v2)
-        B = BOG.BandedOperator(B)
-        B.diagonalize()
-        tst = B.solve(self.v2.copy())
-        B.undiagonalize()
-        B = B.immigrate()
-        npt.assert_array_equal(origdata, B.D.data)
-        npt.assert_array_almost_equal(ref, tst, decimal=8)
+    def test_derivative_solve_0(self):
+        x = np.linspace(0,1,500)
+        B = BO.for_vector(x)
+        B.D.data[1,:] += 1
+        B.D.data[1,0] = B.D.data[1,-1] = 2
+        BG = BOG.BandedOperator(B)
+        ref = np.e**x
+        tst = BG.apply(ref) / 2
+        fp(ref - tst, 'e')
+        npt.assert_allclose(tst, ref, rtol=1e-4, atol=1e-6, err_msg="d/dx (apply) not accurate")
+        # fp(B.D.data)
+        tst = BG.solve(ref) * 2
+        npt.assert_allclose(ref, tst, rtol=1e-4, atol=1e-6, err_msg="integral (solve) not accurate")
 
 
 
@@ -381,11 +362,6 @@ class Operator_Folding_test(unittest.TestCase):
         # fp(B.bottom_factors or np.array([np.nan]))
         npt.assert_array_equal(self.B.D.data, B.D.data, err_msg="Undiagonalize roundtrip doesn't preserve operator matrix.")
         npt.assert_(B == self.B, msg="Undiagonalize roundtrip doesn't preserve operator.")
-
-
-
-
-
 
 
 def main():

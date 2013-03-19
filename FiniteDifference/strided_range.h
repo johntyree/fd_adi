@@ -3,10 +3,6 @@
 #include <thrust/iterator/permutation_iterator.h>
 #include <thrust/functional.h>
 
-#include <thrust/fill.h>
-#include <thrust/device_vector.h>
-
-
 // this example illustrates how to make strided access to a range of values
 // examples:
 //   strided_range([0, 1, 2, 3, 4, 5, 6], 1) -> [0, 1, 2, 3, 4, 5, 6]
@@ -61,3 +57,8 @@ class strided_range
     Iterator last;
     difference_type stride;
 };
+
+template <typename T, typename U>
+strided_range<T> & make_strided_iterator(T start, T end, U stride) {
+    return strided_range<T>(start, end, stride).begin();
+}

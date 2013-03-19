@@ -1,28 +1,28 @@
-
 #include "GNUC_47_compat.h"
 
+#include <algorithm>
+#include <cassert>
+#include <cstdlib>
+#include <iostream>
+
+#include <thrust/copy.h>
 #include <thrust/device_ptr.h>
-#include <thrust/host_vector.h>
 #include <thrust/device_vector.h>
 #include <thrust/generate.h>
-#include <thrust/version.h>
-#include <thrust/sort.h>
-#include <thrust/copy.h>
+#include <thrust/host_vector.h>
 #include <thrust/iterator/constant_iterator.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/zip_iterator.h>
+#include <thrust/sort.h>
+#include <thrust/version.h>
+
 #include "repeated_range.h"
-
-#include <algorithm>
-#include <cstdlib>
-
-#include <iostream>
-#include <cassert>
 
 #include "_CSRBandedOperatorGPU.cuh"
 
 __device__ static const REAL_t one = 1;
 __device__ static const REAL_t zero = 0;
+
 
 std::ostream & operator<<(std::ostream & os, _CSRBandedOperator const &B) {
     return os << B.name << ": addr("<<&B<<")\n\t"
@@ -35,6 +35,7 @@ std::ostream & operator<<(std::ostream & os, _CSRBandedOperator const &B) {
         << "col_ind(" << B.col_ind << ")\n"
         ;
 }
+
 
 _CSRBandedOperator::_CSRBandedOperator(
         SizedArray<double> &data,
@@ -60,20 +61,25 @@ _CSRBandedOperator::_CSRBandedOperator(
             std::cerr << "CUSPARSE Library initialization failed." << std::endl;
             assert(false);
         }
-        /* LOG("CSRBandedOperator constructed: " << *this); */
     }
+
 
 void _CSRBandedOperator::apply(SizedArray<double> &V) {
     FULLTRACE;
+
     if (V.size != operator_rows) {
         DIE(V.name << ": Dimension mismatch. V(" <<V.size<<") vs "<<operator_rows);
     }
+
     cusparseMatDescr_t mat_description;
     status = cusparseCreateMatDescr(&mat_description);
+
     if (status != CUSPARSE_STATUS_SUCCESS) {
         DIE("CUSPARSE matrix description init failed.");
     }
-    GPUVec<double> U(V.data, V.data + V.size);
+
+    thrust::copy(V.data, V.data + V.size, V.tempspace);
+
     double zero = 0, one = 1;
     status = cusparseDcsrmv(handle,
             CUSPARSE_OPERATION_NON_TRANSPOSE,
@@ -85,16 +91,19 @@ void _CSRBandedOperator::apply(SizedArray<double> &V) {
             data.data.get(),
             row_ptr.data.get(),
             col_ind.data.get(),
-            U.raw(),
+            V.tempspace.get(),
             &zero,
             V.data.get()
             );
+
     if (status != CUSPARSE_STATUS_SUCCESS) {
         DIE("CUSPARSE CSR MV product failed.");
     }
+
     FULLTRACE;
     return;
 }
+
 
 template<typename Tuple>
 struct compute_index : public thrust::unary_function<Tuple, int> {
@@ -111,6 +120,7 @@ struct compute_index : public thrust::unary_function<Tuple, int> {
 
 void _CSRBandedOperator::vectorized_scale(SizedArray<double> &vector) {
     FULLTRACE;
+
     Py_ssize_t vsize = vector.size;
 
     if (operator_rows % vsize != 0) {
@@ -129,7 +139,9 @@ void _CSRBandedOperator::vectorized_scale(SizedArray<double> &vector) {
     typedef thrust::device_vector<REAL_t>::iterator Iterator;
 
     repeated_range<Iterator> v(vector.data, vector.data + vector.size, operator_rows / vsize);
-    /* This can be optimized by noting that we only use the row_ind and can make do with project_1st(). */
+
+    /* TODO: This can be optimized by noting that we only use the row_ind and can make
+     * do with project_1st(). */
     thrust::transform(data.data, data.data + data.size,
         thrust::make_permutation_iterator(v.begin(),
             thrust::make_transform_iterator(
@@ -139,8 +151,9 @@ void _CSRBandedOperator::vectorized_scale(SizedArray<double> &vector) {
                 compute_index<IntTuple>(block_len, block_len)
                 )
             ),
-            data.data,
-            thrust::multiplies<double>());
+        data.data,
+        thrust::multiplies<double>());
+
     FULLTRACE;
     return;
 }

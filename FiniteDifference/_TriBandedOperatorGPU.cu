@@ -1,39 +1,40 @@
 #include "GNUC_47_compat.h"
 
-#include <thrust/device_ptr.h>
-#include <thrust/host_vector.h>
-#include <thrust/device_vector.h>
-#include <thrust/generate.h>
-#include <thrust/version.h>
-#include <thrust/sort.h>
-#include <thrust/copy.h>
-#include <thrust/functional.h>
-#include <thrust/iterator/constant_iterator.h>
-#include <thrust/iterator/counting_iterator.h>
-#include <thrust/iterator/discard_iterator.h>
-#include <thrust/iterator/zip_iterator.h>
-#include "tiled_range.h"
-#include "strided_range.h"
-
 #include <algorithm>
-#include <cstdlib>
-
-#include <iostream>
-#include <vector>
-#include <iterator>
 #include <cassert>
+#include <cstdlib>
+#include <iostream>
+#include <iterator>
 #include <stdexcept>
+#include <vector>
 
 #include <sys/select.h>
 
 #include <cusparse_v2.h>
 
+#include <thrust/copy.h>
+#include <thrust/device_ptr.h>
+#include <thrust/device_vector.h>
+#include <thrust/for_each.h>
+#include <thrust/functional.h>
+#include <thrust/generate.h>
+#include <thrust/host_vector.h>
+#include <thrust/iterator/constant_iterator.h>
+#include <thrust/iterator/counting_iterator.h>
+#include <thrust/iterator/discard_iterator.h>
+#include <thrust/iterator/zip_iterator.h>
+#include <thrust/sort.h>
+#include <thrust/version.h>
+
+#include "tiled_range.h"
+#include "strided_range.h"
+
 #include "_TriBandedOperatorGPU.cuh"
 
 using thrust::make_constant_iterator;
 using thrust::make_counting_iterator;
-using thrust::make_zip_iterator;
 using thrust::make_tuple;
+using thrust::make_zip_iterator;
 
 
 template <typename T, typename U>
@@ -56,6 +57,7 @@ int find_index(T haystack, U needle, int max) {
     FULLTRACE;
     return idx;
 }
+
 
 _TriBandedOperator::_TriBandedOperator(
         SizedArray<double> &data,
@@ -102,40 +104,19 @@ _TriBandedOperator::_TriBandedOperator(
         /* LOG("TriBandedOperator initialize END."); */
     }
 
+
 void _TriBandedOperator::verify_diag_ptrs() {
     FULLTRACE;
+
     if (sup.get() == 0 || mid.get() == 0 || sub.get() == 0) {
         DIE("Diag pointers aren't non-null");
     }
-    if (main_diag == -1) {
-        /* LOG("No main diag means not tridiagonal, hopefully."); */
-        return;
-    }
-    int idx;
-    /* LOG("main_diag("<<main_diag<<")"); */
-    idx = diags.idx(main_diag-1, 0);
-    if (*sup != diags.data[idx]
-            || (sup.get() != (&diags.data[diags.idx(0,0)]).get())) {
-        DIE("sup[0] = " << *sup << " <->  " << diags.get(0,0)
-            << "\n\tsup = " << sup.get() << " <->  "
-                << (&diags.data[diags.idx(0, 0)]).get());
-    }
-    if (*mid != diags.data[diags.idx(main_diag, 0)]
-            || (mid.get() != (&diags.data[diags.idx(main_diag, 0)]).get())) {
-        DIE("mid[0] = " << *mid << " !=  " << diags.get(main_diag,0)
-            << "\n\tmid = " << mid.get() << " <->  "
-                << (&diags.data[diags.idx(main_diag, 0)]).get());
-    }
-    if (*sub != diags.data[diags.idx(main_diag+1, 0)]
-            || (sub.get() != (&diags.data[diags.idx(main_diag+1, 0)]).get())) {
-        DIE("sub[0] = " << *sub << " !=  " << diags.get(main_diag+1,0)
-            << "\n\tsub = " << sub.get() << " <->  "
-                << (&diags.data[diags.idx(main_diag+1, 0)]).get());
-    }
+
     FULLTRACE;
 }
 
 
+#if 0
 struct DMVPY_f : thrust::unary_function<const Septuple &, REAL_t> {
 
     int op;
@@ -158,7 +139,6 @@ struct DMVPY_f : thrust::unary_function<const Septuple &, REAL_t> {
 void _TriBandedOperator::DMVPY(SizedArray<double> &V, char operation, SizedArray<double> &Y,
         SizedArray<double> &out) {
     FULLTRACE;
-    verify_diag_ptrs();
     const unsigned N = V.size;
 
     if (has_low_dirichlet) {
@@ -202,11 +182,13 @@ void _TriBandedOperator::DMVPY(SizedArray<double> &V, char operation, SizedArray
     }
     return;
 }
+#endif
 
 
-struct zipdot3 : thrust::binary_function<const Triple &, const Triple &, REAL_t> {
+struct zipdot3 {
+    template <typename T>
     __host__ __device__
-    REAL_t operator()(const Triple &diags, const Triple &x) {
+    REAL_t operator()(const T &diags, const T &x) {
         using thrust::get;
         const REAL_t a = get<0>(diags);
         const REAL_t b = get<1>(diags);
@@ -217,59 +199,120 @@ struct zipdot3 : thrust::binary_function<const Triple &, const Triple &, REAL_t>
         return a*x0 + b*x1 + c*x2;
     }
 };
+struct zipdotTopAndBottom {
+    template <typename T>
+    __host__ __device__
+    void operator()(T t) {
+        using thrust::get;
+
+        REAL_t &ret = get<0>(t);
+        const REAL_t &a  = get<1>(t);
+        const REAL_t &x0 = get<2>(t);
+        const REAL_t &b  = get<3>(t);
+        const REAL_t &x1 = get<4>(t);
+
+        ret = a*x0 + b*x1;
+
+        REAL_t &retN = get<5>(t);
+        const REAL_t &b1  = get<6>(t);
+        const REAL_t &xN1 = get<7>(t);
+        const REAL_t &c1  = get<8>(t);
+        const REAL_t &xN  = get<9>(t);
+
+        retN = b1*xN1 + c1*xN;
+    }
+};
+
 
 void _TriBandedOperator::apply(SizedArray<double> &V) {
     FULLTRACE;
-    verify_diag_ptrs();
+    if (top_fold_status == CAN_FOLD || bottom_fold_status == CAN_FOLD) {
+        DIE("Must be tridiagonal to apply operator on GPU.");
+    }
     const unsigned N = V.size;
-    SizedArray<double> *U = new SizedArray<double>(N, "U from V apply");
-    U->ndim = V.ndim;
-    U->shape[0] = V.shape[0];
-    U->shape[1] = V.shape[1];
-    U->sanity_check();
 
-    if (has_low_dirichlet) {
-        thrust::copy(low_dirichlet.data,
+    // TODO: This Iterator works, but is it right?
+    typedef GPUVec<REAL_t>::iterator Iterator;
+    strided_range<Iterator> u0(V.data, V.data+V.size, block_len);
+    strided_range<Iterator> u1(V.data+block_len-1, V.data+V.size, block_len);
+
+    if (axis == 1) {
+        if (has_low_dirichlet) {
+            thrust::copy(
+                low_dirichlet.data,
                 low_dirichlet.data + low_dirichlet.size,
-                V.data);
-    }
-    if (has_high_dirichlet) {
-        thrust::copy(high_dirichlet.data,
+                u1.begin()
+                );
+        }
+        if (has_high_dirichlet) {
+            thrust::copy(
+                high_dirichlet.data,
                 high_dirichlet.data + high_dirichlet.size,
-                V.data + V.size - V.shape[1]);
-    }
-
-    if (axis == 0) {
+                u0.begin()
+                );
+        }
+    } else {
+        if (has_low_dirichlet) {
+            thrust::copy(low_dirichlet.data,
+                    low_dirichlet.data + low_dirichlet.size,
+                    V.data);
+        }
+        if (has_high_dirichlet) {
+            thrust::copy(high_dirichlet.data,
+                    high_dirichlet.data + high_dirichlet.size,
+                    V.data + V.size - V.shape[1]);
+        }
         V.transpose(1);
     }
 
-    U->data[0] = mid[0]*V.data[0] + sup[0]*V.data[1];
+
+    // Upper and lower edge cases simultaneously
+    thrust::for_each(
+        make_zip_iterator(make_tuple(V.tempspace, mid, V.data, sup, V.data+1,
+                V.tempspace+N-1, sub+N-1, V.data+N-2, mid+N-1, V.data+N-1)
+            ),
+        make_zip_iterator(make_tuple(V.tempspace+1, mid+1, V.data+1, sup+1,
+                V.data+2, V.tempspace+N, sub+N, V.data+N-1, mid+N, V.data+N)
+            ),
+        zipdotTopAndBottom()
+    );
+
+    // Regular dot product
     thrust::transform(
         make_zip_iterator(make_tuple(sub+1, mid+1, sup+1)),
         make_zip_iterator(make_tuple(sub+N-1, mid+N-1, sup+N-1)),
         make_zip_iterator(make_tuple(V.data, V.data+1, V.data+2)),
-        U->data+1,
+        V.tempspace+1,
         zipdot3()
     );
-    U->data[N-1] = sub[N-1]*V.data[N-2] + mid[N-1]*V.data[N-1];
+
 
     if (is_folded()) {
-        fold_vector(*U, true);
+        std::swap(V.tempspace, V.data);
+        fold_vector(V, true);
+        std::swap(V.tempspace, V.data);
     }
 
+
     if (has_residual) {
-        thrust::transform(U->data, U->data + U->size,
+        thrust::transform(
+                V.tempspace,
+                V.tempspace + V.size,
                 R.data,
                 V.data,
                 thrust::plus<double>());
     } else {
-        thrust::copy(U->data, U->data + U->size, V.data);
+        if (V.owner) {
+            std::swap(V.tempspace, V.data);
+        } else {
+            thrust::copy(V.tempspace, V.tempspace + V.size, V.data);
+        }
     }
+
 
     if (axis == 0) {
         V.transpose(1);
     }
-    delete U;
     FULLTRACE;
     return;
 }
@@ -281,8 +324,7 @@ struct periodic_from_to_mask : thrust::unary_function<int, bool> {
     int period;
 
     periodic_from_to_mask(int begin, int end, int period)
-        : begin(begin-1), end(end+1), period(period) {
-        }
+        : begin(begin-1), end(end+1), period(period) {}
 
     __host__ __device__
     bool operator()(int idx) {
@@ -290,12 +332,11 @@ struct periodic_from_to_mask : thrust::unary_function<int, bool> {
     }
 };
 
+/*
+* Add a second BandedOperator to this one.
+* Does not alter self.R, the residual vector.
+*/
 void _TriBandedOperator::add_operator(_TriBandedOperator &other) {
-    /* LOG("Adding operator @ " << &other << " to this one @ " << this); */
-    /*
-    * Add a second BandedOperator to this one.
-    * Does not alter self.R, the residual vector.
-    */
     FULLTRACE;
     if (is_folded() || other.is_folded()) {
         DIE("Cannot add folded (diagonalized) operators");
@@ -338,6 +379,7 @@ void _TriBandedOperator::add_operator(_TriBandedOperator &other) {
             top_factors.data,
             thrust::plus<double>());
     }
+
     if (other.bottom_fold_status == "CAN_FOLD") {
         int them = other.bottom_factors.size;
         int us = bottom_factors.size;
@@ -352,7 +394,6 @@ void _TriBandedOperator::add_operator(_TriBandedOperator &other) {
             thrust::plus<double>());
     }
 
-    /* LOG("Adding R."); */
     thrust::transform(
             R.data,
             R.data + R.size,
@@ -363,20 +404,14 @@ void _TriBandedOperator::add_operator(_TriBandedOperator &other) {
 }
 
 
-
+/* Add a scalar to the main diagonal.
+* Does not alter the residual vector.
+*/
 void _TriBandedOperator::add_scalar(double val) {
     FULLTRACE;
-    /* Add a scalar to the main diagonal.
-     * Does not alter the residual vector.
-     */
-    // We add it to the main diagonal.
 
     int begin = has_low_dirichlet;
     int end = block_len-1 - has_high_dirichlet;
-
-    /* LOG("has_low("<<has_low_dirichlet<<") " */
-        /* "has_high("<<has_high_dirichlet<<") " */
-        /* "blocklen("<<block_len<<") "); */
 
     thrust::transform_if(
             &diags.data[diags.idx(main_diag, 0)],
@@ -389,21 +424,18 @@ void _TriBandedOperator::add_scalar(double val) {
     FULLTRACE;
 }
 
+
 bool _TriBandedOperator::is_folded() {
     return (top_fold_status == FOLDED || bottom_fold_status == FOLDED);
 }
 
 
-
 void _TriBandedOperator::solve(SizedArray<double> &V) {
     FULLTRACE;
-    verify_diag_ptrs();
+    if (top_fold_status == CAN_FOLD || bottom_fold_status == CAN_FOLD) {
+        DIE("Must be tridiagonal to apply inverse operator on GPU.");
+    }
     const unsigned N = V.size;
-    /* SizedArray<double> *U = new SizedArray<double>(N, "U from V solve"); */
-    /* U->ndim = V.ndim; */
-    /* U->shape[0] = V.shape[0]; */
-    /* U->shape[1] = V.shape[1]; */
-    /* U->sanity_check(); */
 
     if (has_low_dirichlet) {
         thrust::copy(low_dirichlet.data,
@@ -415,6 +447,7 @@ void _TriBandedOperator::solve(SizedArray<double> &V) {
                 high_dirichlet.data + high_dirichlet.size,
                 V.data + V.size - V.shape[1]);
     }
+
     if (axis == 0) {
         V.transpose(1);
     }
@@ -426,17 +459,26 @@ void _TriBandedOperator::solve(SizedArray<double> &V) {
                 thrust::minus<double>());
     }
 
-
     if (is_folded()) {
         fold_vector(V);
     }
 
-    /* thrust::copy(V.data, V.data + V.size, U->data); */
     status = cusparseDgtsvStridedBatch(handle, N,
-            sub.get(), mid.get(), sup.get(),
-            V.data.get(),
-            1, N);
-    cudaDeviceSynchronize();
+                sub.get(), mid.get(), sup.get(),
+                V.data.get(),
+                1, N);
+
+    /*
+     * if (block_len > 256) {
+     *     DIE("Block_len Too big!");
+     * }
+     * if (blocks * block_len > V.size) {
+     *     DIE("Indexing is wrong. Too large.");
+     * }
+     * triDiagonalSystemSolve<<<blocks, block_len>>>(V.size, sub.get(), mid.get(), sup.get(), V.data.get());
+     * cudaDeviceSynchronize();
+     */
+
     if (status != CUSPARSE_STATUS_SUCCESS) {
         DIE("CUSPARSE tridiag system solve failed.");
     }
@@ -448,8 +490,10 @@ void _TriBandedOperator::solve(SizedArray<double> &V) {
     return;
 }
 
+
 template <typename Tuple, typename OP>
-struct curry : public thrust::unary_function<Tuple, typename OP::result_type> {
+struct curry :
+    public thrust::unary_function<Tuple, typename OP::result_type> {
 
     OP f;
 
@@ -484,7 +528,6 @@ void _TriBandedOperator::fold_vector(SizedArray<double> &vector, bool unfold) {
     strided_range<Iterator> un(vector.data+block_len-1, vector.data + vector.size, block_len);
     strided_range<Iterator> un1(vector.data+block_len-2, vector.data + vector.size, block_len);
 
-    /* LOG("top_is_folded("<<top_is_folded<<") bottom_is_folded("<<bottom_is_folded<<")"); */
     // Top fold
     if (top_fold_status == FOLDED) {
         /* LOG("Folding top. direction("<<unfold<<") top_factors("<<top_factors<<")"); */
@@ -525,6 +568,7 @@ void _TriBandedOperator::diagonalize() {
     FULLTRACE;
 }
 
+
 void _TriBandedOperator::undiagonalize() {
     FULLTRACE;
     if (bottom_fold_status == FOLDED) {
@@ -541,30 +585,27 @@ void _TriBandedOperator::undiagonalize() {
 }
 
 
+/* These fold the third element of first row and third from last element of last
+ * row into the neighboring row, resulting in a tridiagonal system.
+ */
 template <typename Tuple>
 struct fold_operator : public thrust::unary_function<Tuple, void> {
-    bool unfold;
-    fold_operator(bool x) : unfold(x) {}
     __host__ __device__
     void operator()(Tuple t) {
         using thrust::get;
-        int const c0   = 0;
-        int const c1   = 1;
-        int const b0   = 2;
-        int const b1   = 3;
-        int const a1   = 4;
-        int const fact = 5;
-        int nothing = c0 + c1 + b0 + b1 + a1 + fact;
-        nothing = nothing;
-        if (unfold) {
-            get<c0>(t) -= get<b1>(t) * get<fact>(t);
-            get<b0>(t) -= get<a1>(t) * get<fact>(t);
-            get<fact>(t) *= -get<c1>(t);
-        } else {
-            get<fact>(t) = get<c1>(t) == 0 ? 0 : -get<fact>(t) / get<c1>(t);
-            get<c0>(t) += get<b1>(t) * get<fact>(t);
-            get<b0>(t) += get<a1>(t) * get<fact>(t);
-        }
+        get<5>(t) = get<1>(t) == 0 ? 0 : -get<5>(t) / get<1>(t);
+        get<0>(t) += get<3>(t) * get<5>(t);
+        get<2>(t) += get<4>(t) * get<5>(t);
+    }
+};
+template <typename Tuple>
+struct unfold_operator : public thrust::unary_function<Tuple, void> {
+    __host__ __device__
+    void operator()(Tuple t) {
+        using thrust::get;
+        get<0>(t) -= get<3>(t) * get<5>(t);
+        get<2>(t) -= get<4>(t) * get<5>(t);
+        get<5>(t) *= -get<1>(t);
     }
 };
 
@@ -579,26 +620,47 @@ void _TriBandedOperator::fold_top(bool unfold) {
     strided_range<Ptr> b1 (mid+1, mid+operator_rows, block_len);
     strided_range<Ptr> a1 (sub+1, sub+operator_rows, block_len);
 
-    thrust::for_each(
-        make_zip_iterator(
-            make_tuple(
-                c0.begin(), c1.begin(),
-                b0.begin(), b1.begin(),
-                            a1.begin(),
-                top_factors.data
-            )
-        ),
-        make_zip_iterator(
-            make_tuple(
-                c0.end(), c1.end(),
-                b0.end(), b1.end(),
-                          a1.end(),
-                top_factors.data + top_factors.size
-            )
-        ),
-        fold_operator<REALTuple>(unfold)
-    );
-
+    if (unfold) {
+        thrust::for_each(
+            make_zip_iterator(
+                make_tuple(
+                    c0.begin(), c1.begin(),
+                    b0.begin(), b1.begin(),
+                                a1.begin(),
+                    top_factors.data
+                )
+            ),
+            make_zip_iterator(
+                make_tuple(
+                    c0.end(), c1.end(),
+                    b0.end(), b1.end(),
+                            a1.end(),
+                    top_factors.data + top_factors.size
+                )
+            ),
+            unfold_operator <REALTuple>()
+        );
+    } else {
+        thrust::for_each(
+            make_zip_iterator(
+                make_tuple(
+                    c0.begin(), c1.begin(),
+                    b0.begin(), b1.begin(),
+                                a1.begin(),
+                    top_factors.data
+                )
+            ),
+            make_zip_iterator(
+                make_tuple(
+                    c0.end(), c1.end(),
+                    b0.end(), b1.end(),
+                            a1.end(),
+                    top_factors.data + top_factors.size
+                )
+            ),
+            fold_operator<REALTuple>()
+        );
+    }
     if (unfold) top_fold_status = CAN_FOLD;
     else top_fold_status = FOLDED;
     FULLTRACE;
@@ -616,25 +678,47 @@ void _TriBandedOperator::fold_bottom(bool unfold) {
     strided_range<Ptr> an (sub+(block_len-1), sub+operator_rows, block_len);
     strided_range<Ptr> an1(sub+(block_len-1)-1, sub+operator_rows, block_len);
 
-    thrust::for_each(
-        make_zip_iterator(
-            make_tuple(
-                an.begin(), an1.begin(),
-                bn.begin(), bn1.begin(),
-                            cn1.begin(),
-                bottom_factors.data
-            )
-        ),
-        make_zip_iterator(
-            make_tuple(
-                an.end(), an1.end(),
-                bn.end(), bn1.end(),
-                          cn1.end(),
-                bottom_factors.data + bottom_factors.size
-            )
-        ),
-        fold_operator<REALTuple>(unfold)
-    );
+    if (unfold) {
+        thrust::for_each(
+            make_zip_iterator(
+                make_tuple(
+                    an.begin(), an1.begin(),
+                    bn.begin(), bn1.begin(),
+                                cn1.begin(),
+                    bottom_factors.data
+                )
+            ),
+            make_zip_iterator(
+                make_tuple(
+                    an.end(), an1.end(),
+                    bn.end(), bn1.end(),
+                            cn1.end(),
+                    bottom_factors.data + bottom_factors.size
+                )
+            ),
+            unfold_operator<REALTuple>()
+        );
+    } else {
+        thrust::for_each(
+            make_zip_iterator(
+                make_tuple(
+                    an.begin(), an1.begin(),
+                    bn.begin(), bn1.begin(),
+                                cn1.begin(),
+                    bottom_factors.data
+                )
+            ),
+            make_zip_iterator(
+                make_tuple(
+                    an.end(), an1.end(),
+                    bn.end(), bn1.end(),
+                            cn1.end(),
+                    bottom_factors.data + bottom_factors.size
+                )
+            ),
+            fold_operator<REALTuple>()
+        );
+    }
 
     if (unfold) bottom_fold_status = CAN_FOLD;
     else bottom_fold_status = FOLDED;
@@ -648,7 +732,12 @@ void _TriBandedOperator::vectorized_scale(SizedArray<double> &vector) {
     Py_ssize_t block_len = operator_rows / blocks;
 
     typedef thrust::device_vector<REAL_t>::iterator Iterator;
-    tiled_range<Iterator> v(vector.data, vector.data + vector.size, operator_rows / vsize);
+    tiled_range<Iterator> v(vector.data, vector.data + vector.size, block_len);
+    typedef tiled_range<Iterator>::iterator TiledIterator;
+
+    strided_range<TiledIterator> u0(v.begin(), v.end(), block_len);
+    strided_range<TiledIterator> u1(v.begin()+block_len-1, v.end(), block_len);
+
     /*
      * LOG("op_rows("<<operator_rows<<") vsize("<<vsize<<") "
      *     "v.d.size("<<vector.size<<") "
@@ -669,19 +758,8 @@ void _TriBandedOperator::vectorized_scale(SizedArray<double> &vector) {
             "evenly into operator size. Cannot scale."
             << "\n vsize("<<vsize<<") operator_rows("<<operator_rows<<")");
     }
+
     if (vsize == 0) {DIE("vsize == 0")}
-
-    if (has_low_dirichlet) {
-        for (Py_ssize_t b = 0; b < blocks; ++b) {
-            vector.data[vector.idx(b*block_len % vsize)] = 1;
-        }
-    }
-
-    if (has_high_dirichlet) {
-        for (Py_ssize_t b = 0; b < blocks; ++b) {
-            vector.data[vector.idx((b+1)*block_len - 1 % vsize)] = 1;
-        }
-    }
 
     for (Py_ssize_t row = 0; row < 3; ++row) {
         int o = 1 - row;
@@ -699,6 +777,25 @@ void _TriBandedOperator::vectorized_scale(SizedArray<double> &vector) {
                     thrust::multiplies<REAL_t>());
         }
     }
+
+    /* We check dirichlet to avoid multiplying by 1 */
+    if (top_fold_status == CAN_FOLD && !has_low_dirichlet) {
+        thrust::transform(
+            top_factors.data,
+            top_factors.data+top_factors.size,
+            u0.begin(),
+            top_factors.data,
+            thrust::multiplies<REAL_t>());
+    }
+    if (bottom_fold_status == CAN_FOLD && !has_high_dirichlet) {
+        thrust::transform(
+            bottom_factors.data,
+            bottom_factors.data+bottom_factors.size,
+            u1.begin(),
+            bottom_factors.data,
+            thrust::multiplies<REAL_t>());
+    }
+
     /* LOG("Scaled data."); */
     thrust::transform(R.data, R.data + R.size,
             v.begin(),
@@ -707,25 +804,4 @@ void _TriBandedOperator::vectorized_scale(SizedArray<double> &vector) {
     /* LOG("Scaled R."); */
     FULLTRACE;
     return;
-}
-
-int main () {
-
-    thrust::host_vector<double> a(10);
-    int block_len = 5;
-    int begin = 1;
-    int end = block_len-1 - 1;
-
-    thrust::transform_if(
-            a.begin(),
-            a.end(),
-            make_constant_iterator(2),
-            make_counting_iterator(0),
-            a.begin(),
-            thrust::plus<double>(),
-            periodic_from_to_mask(begin, end, block_len));
-
-    printf("\n");
-    print_array(a.data(), a.size());
-    return 0;
 }

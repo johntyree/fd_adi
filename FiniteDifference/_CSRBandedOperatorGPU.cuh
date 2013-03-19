@@ -1,15 +1,15 @@
-
 #ifndef _CSRBandedOperatorGPU_cuh
 #define _CSRBandedOperatorGPU_cuh
 
 #include <cusparse_v2.h>
 
-#include "common.h"
 #include "backtrace.h"
+#include "common.h"
 #include "VecArray.h"
 
 
 class _CSRBandedOperator {
+
     public:
         SizedArray<double> data;
         SizedArray<int> row_ptr;
@@ -43,5 +43,7 @@ class _CSRBandedOperator {
                 const _CSRBandedOperator&);
 };
 
+
 std::ostream & operator<<(std::ostream & os, _CSRBandedOperator const &B);
+
 #endif

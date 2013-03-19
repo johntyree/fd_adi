@@ -40,12 +40,14 @@ class Grid_test(unittest.TestCase):
         self.Grid = Grid.Grid((self.spots, self.vars),
                 initializer=lambda x0,x1: np.maximum(x0-self.strike,0))
 
+
     def test_mesh(self):
         G = self.Grid
         npt.assert_array_equal(G.mesh[0], self.spots)
         npt.assert_array_equal(G.mesh[1], self.vars)
         npt.assert_(G.ndim == len(G.mesh))
         npt.assert_(G.shape == tuple(map(len, G.mesh)))
+
 
     def test_domain(self):
         U = np.tile(np.maximum(0, self.spots - self.strike), (len(self.vars), 1)).T

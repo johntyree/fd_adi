@@ -7,12 +7,15 @@
 import numpy as np
 cimport numpy as np
 import scipy.sparse
-import utils
 import scipy.linalg as spl
+
+import utils
+
 
 FOLDED = "FOLDED"
 CAN_FOLD = "CAN_FOLD"
 CANNOT_FOLD = "CANNOT_FOLD"
+
 
 cdef class BandedOperator(object):
 
@@ -193,7 +196,6 @@ cdef class BandedOperator(object):
 
 
     cpdef fold_bottom(self, unfold=False):
-        print "Folding bottom"
         d = self.D.data
         m = get_int_index(self.D.offsets, 0)
         for i in [1, 0,-1, -2]:
@@ -286,10 +288,16 @@ cdef class BandedOperator(object):
                 or self.bottom_fold_status == FOLDED)
 
 
+    cpdef cbool is_foldable(self):
+        return (self.top_fold_status == CAN_FOLD
+                or self.bottom_fold_status == CAN_FOLD)
+
+
     cpdef cbool is_tridiagonal(self):
         return (    self.D.offsets[0] == 1
                 and self.D.offsets[1] == 0
-                and self.D.offsets[2] == -1)
+                and self.D.offsets[2] == -1
+                and len(self.D.offsets) == 3)
 
 
     cpdef apply(self, V, overwrite=False):
@@ -750,6 +758,10 @@ cdef class BandedOperator(object):
         for i in range(operator_rows):
             R[i] *= vector[i]
         return
+
+
+    cpdef clear_residual(self):
+        self.R *= 0
 
 
     cpdef scale(self, func):

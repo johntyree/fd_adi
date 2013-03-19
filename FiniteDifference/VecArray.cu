@@ -1,15 +1,15 @@
-#include <thrust/host_vector.h>
-#include <thrust/device_vector.h>
-#include <thrust/device_free.h>
-#include <thrust/device_malloc.h>
-#include <thrust/iterator/constant_iterator.h>
-#include <thrust/functional.h>
-#include <thrust/transform.h>
-
 #include <iostream>
 #include <sstream>
 #include <algorithm>
 #include <cassert>
+
+#include <thrust/device_free.h>
+#include <thrust/device_malloc.h>
+#include <thrust/device_vector.h>
+#include <thrust/functional.h>
+#include <thrust/host_vector.h>
+#include <thrust/iterator/constant_iterator.h>
+#include <thrust/transform.h>
 
 #include "common.h"
 #include "_kernels.h"
@@ -18,75 +18,115 @@
 using thrust::device_malloc;
 using thrust::device_free;
 using thrust::make_constant_iterator;
+using thrust::placeholders::_1;
+using thrust::placeholders::_2;
+
 
 namespace impl {
+
     /* Vector Vector double */
     void pluseq(
-        thrust::device_ptr<double> &out,
-        thrust::device_ptr<double> &in,
+        thrust::device_ptr<double> &us,
+        thrust::device_ptr<double> &them,
         Py_ssize_t size) {
         thrust::transform(
-                in, in+size,
-                out,
-                out,
-                thrust::plus<double>());
+                us, us+size,
+                them,
+                us,
+                _1 + _2);
     }
+
+
     void minuseq(
-        thrust::device_ptr<double> &out,
-        thrust::device_ptr<double> &in,
+        thrust::device_ptr<double> &us,
+        thrust::device_ptr<double> &them,
         Py_ssize_t size) {
         thrust::transform(
-                in, in+size,
-                out,
-                out,
-                thrust::minus<double>());
+                us, us+size,
+                them,
+                us,
+                _1 - _2);
     }
+
+
+    void minuseq_over2(
+        thrust::device_ptr<double> &us,
+        thrust::device_ptr<double> &them,
+        Py_ssize_t size) {
+        thrust::transform(
+                us, us+size,
+                them,
+                us,
+                (_1 - _2)*0.5);
+    }
+
+
     void timeseq(
-        thrust::device_ptr<double> &out,
-        thrust::device_ptr<double> &in,
+        thrust::device_ptr<double> &us,
+        thrust::device_ptr<double> &them,
         Py_ssize_t size) {
         thrust::transform(
-                in, in+size,
-                out,
-                out,
-                thrust::multiplies<double>());
+                us, us+size,
+                them,
+                us,
+                _1 * _2);
     }
+
 
 
     /* Vector Vector int */
+
     void pluseq(
-        thrust::device_ptr<int> &out,
-        thrust::device_ptr<int> &in,
+        thrust::device_ptr<int> &us,
+        thrust::device_ptr<int> &them,
         Py_ssize_t size) {
         thrust::transform(
-                in, in+size,
-                out,
-                out,
-                thrust::plus<int>());
+                us, us+size,
+                them,
+                us,
+                _1 + _2);
     }
+
+
     void minuseq(
-        thrust::device_ptr<int> &out,
-        thrust::device_ptr<int> &in,
+        thrust::device_ptr<int> &us,
+        thrust::device_ptr<int> &them,
         Py_ssize_t size) {
         thrust::transform(
-                in, in+size,
-                out,
-                out,
-                thrust::minus<int>());
+                us, us+size,
+                them,
+                us,
+                _1 - _2);
     }
+
+
     void timeseq(
-        thrust::device_ptr<int> &out,
-        thrust::device_ptr<int> &in,
+        thrust::device_ptr<int> &us,
+        thrust::device_ptr<int> &them,
         Py_ssize_t size) {
         thrust::transform(
-                in, in+size,
-                out,
-                out,
-                thrust::multiplies<int>());
+                us, us+size,
+                them,
+                us,
+                _1 * _2);
     }
+
 
 
     /* Vector Scalar double */
+
+    void pluseq(
+        thrust::device_ptr<double> &data,
+        Py_ssize_t size,
+        double x) {
+        thrust::transform(
+                data, data+size,
+                thrust::make_constant_iterator(x),
+                data,
+                _1 + _2);
+    }
+
+
     void minuseq(
         thrust::device_ptr<double> &data,
         Py_ssize_t size,
@@ -97,6 +137,8 @@ namespace impl {
                 data,
                 thrust::minus<double>());
     }
+
+
     void timeseq(
         thrust::device_ptr<double> &data,
         Py_ssize_t size,
@@ -105,21 +147,25 @@ namespace impl {
                 data, data+size,
                 thrust::make_constant_iterator(x),
                 data,
-                thrust::multiplies<int>());
+                _1 * _2);
     }
+
+
+
+    /* Vector Scalar int */
+
     void pluseq(
-        thrust::device_ptr<double> &data,
+        thrust::device_ptr<int> &data,
         Py_ssize_t size,
-        double x) {
+        int x) {
         thrust::transform(
                 data, data+size,
                 thrust::make_constant_iterator(x),
                 data,
-                thrust::plus<double>());
+                _1 + _2);
     }
 
 
-    /* Vector Scalar int */
     void minuseq(
         thrust::device_ptr<int> &data,
         Py_ssize_t size,
@@ -128,8 +174,10 @@ namespace impl {
                 data, data+size,
                 thrust::make_constant_iterator(x),
                 data,
-                thrust::minus<int>());
+                _1 - _2);
     }
+
+
     void timeseq(
         thrust::device_ptr<int> &data,
         Py_ssize_t size,
@@ -138,16 +186,7 @@ namespace impl {
                 data, data+size,
                 thrust::make_constant_iterator(x),
                 data,
-                thrust::multiplies<int>());
+                _1 * _2);
     }
-    void pluseq(
-        thrust::device_ptr<int> &data,
-        Py_ssize_t size,
-        int x) {
-        thrust::transform(
-                data, data+size,
-                thrust::make_constant_iterator(x),
-                data,
-                thrust::plus<int>());
-    }
+
 } // namespace impl

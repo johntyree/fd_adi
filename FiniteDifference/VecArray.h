@@ -1,18 +1,18 @@
 #ifndef VECARRAY_H
 #define VECARRAY_H
 
-#include <thrust/host_vector.h>
-#include <thrust/device_vector.h>
-#include <thrust/device_free.h>
-#include <thrust/device_malloc.h>
-#include <thrust/iterator/constant_iterator.h>
-#include <thrust/functional.h>
-#include <thrust/transform.h>
-
 #include <iostream>
 #include <sstream>
 #include <algorithm>
 #include <cassert>
+
+#include <thrust/device_free.h>
+#include <thrust/device_malloc.h>
+#include <thrust/device_vector.h>
+#include <thrust/functional.h>
+#include <thrust/host_vector.h>
+#include <thrust/iterator/constant_iterator.h>
+#include <thrust/transform.h>
 
 #include "common.h"
 #include "_kernels.h"
@@ -21,67 +21,98 @@ using thrust::device_malloc;
 using thrust::device_free;
 using thrust::make_constant_iterator;
 
+
 namespace impl {
+
     /* Vector Vector double */
     void pluseq(
         thrust::device_ptr<double> &out,
         thrust::device_ptr<double> &in,
         Py_ssize_t size);
+
+
     void minuseq(
         thrust::device_ptr<double> &out,
         thrust::device_ptr<double> &in,
         Py_ssize_t size);
+
+
     void timeseq(
         thrust::device_ptr<double> &out,
         thrust::device_ptr<double> &in,
         Py_ssize_t size);
+
+
+    void minuseq_over2(
+        thrust::device_ptr<double> &out,
+        thrust::device_ptr<double> &in,
+        Py_ssize_t size);
+
 
 
     /* Vector Vector int */
+
     void pluseq(
         thrust::device_ptr<int> &out,
         thrust::device_ptr<int> &in,
         Py_ssize_t size);
+
+
     void minuseq(
         thrust::device_ptr<int> &out,
         thrust::device_ptr<int> &in,
         Py_ssize_t size);
+
+
     void timeseq(
         thrust::device_ptr<int> &out,
         thrust::device_ptr<int> &in,
         Py_ssize_t size);
+
 
 
     /* Vector Scalar double */
+
     void minuseq(
         thrust::device_ptr<double> &data,
         Py_ssize_t size,
         double x);
+
+
     void timeseq(
         thrust::device_ptr<double> &data,
         Py_ssize_t size,
         double x);
+
+
     void pluseq(
         thrust::device_ptr<double> &data,
         Py_ssize_t size,
         double x);
+
 
 
     /* Vector Scalar int */
+
     void minuseq(
         thrust::device_ptr<int> &data,
         Py_ssize_t size,
         int x);
+
+
     void timeseq(
         thrust::device_ptr<int> &data,
         Py_ssize_t size,
         int x);
+
+
     void pluseq(
         thrust::device_ptr<int> &data,
         Py_ssize_t size,
         int x);
-} // namespace impl
 
+
+} // namespace impl
 
 
 template <typename T>
@@ -89,17 +120,21 @@ struct GPUVec : thrust::device_vector<T> {
 
     GPUVec() : thrust::device_vector<T>() {}
 
+
     template<typename X>
     GPUVec(const X &x)
         : thrust::device_vector<T>(x) {}
+
 
     template<typename X, typename Y>
     GPUVec(const X &x, const Y &y)
         : thrust::device_vector<T>(x, y) {}
 
+
     template<typename X, typename Y, typename Z>
     GPUVec(const X &x, const Y &y, const Z &z)
         : thrust::device_vector<T>(x, y, z) {}
+
 
     GPUVec<T> &operator+=(T x) {
         thrust::transform(
@@ -111,6 +146,7 @@ struct GPUVec : thrust::device_vector<T> {
         return *this;
     }
 
+
     GPUVec<T> &operator*=(T x) {
         thrust::transform(
                 this->begin(),
@@ -121,35 +157,43 @@ struct GPUVec : thrust::device_vector<T> {
         return *this;
     }
 
+
     inline thrust::device_reference<T> ref() {
         return thrust::device_reference<T>(ptr());
     }
 
+
     inline thrust::device_ptr<T> ptr() {
         return thrust::device_ptr<T>(raw());
     }
+
 
     inline T *raw() {
         return thrust::raw_pointer_cast(this->data());
     }
 };
 
+
 template <typename T>
 struct HostVec : thrust::host_vector<T> {
 
     HostVec() : thrust::host_vector<T>() {}
 
+
     template<typename X>
     HostVec(const X &x)
         : thrust::host_vector<T>(x) {}
+
 
     template<typename X, typename Y>
     HostVec(const X &x, const Y &y)
         : thrust::host_vector<T>(x, y) {}
 
+
     template<typename X, typename Y, typename Z>
     HostVec(const X &x, const Y &y, const Z &z)
         : thrust::host_vector<T>(x, y, z) {}
+
 
     T *raw() {
         return thrust::raw_pointer_cast(this->data());
@@ -163,6 +207,7 @@ void print_array(T *a, Py_ssize_t len) {
     std::copy(a, a+len, out);
 }
 
+
 template <typename T>
 std::ostream & operator<<(std::ostream &os, thrust::host_vector<T> const &v) {
     os << "HOST addr(" << &v << ") size(" << v.size() << ")  [ ";
@@ -170,6 +215,7 @@ std::ostream & operator<<(std::ostream &os, thrust::host_vector<T> const &v) {
     std::copy(v.begin(), v.end(), out);
     return os << "]";
 }
+
 
 template <typename T>
 std::ostream & operator<<(std::ostream &os, thrust::device_vector<T> const &v) {
@@ -179,10 +225,13 @@ std::ostream & operator<<(std::ostream &os, thrust::device_vector<T> const &v) {
     return os << "]";
 }
 
+
 template<typename T>
 struct SizedArray {
+
     bool owner;
     thrust::device_ptr<T> data;
+    thrust::device_ptr<T> tempspace;
     Py_ssize_t ndim;
     Py_ssize_t size;
     Py_ssize_t shape[8];
@@ -190,16 +239,24 @@ struct SizedArray {
 
 
     SizedArray(Py_ssize_t size, std::string name)
-        : owner(true), data(device_malloc<T>(size)), ndim(1), size(size), name(name) {
+        : owner(true),
+          data(device_malloc<T>(size)),
+          tempspace(device_malloc<T>(size)),
+          ndim(1),
+          size(size),
+          name(name) {
         shape[0] = size;
         sanity_check();
     }
 
+
     SizedArray(SizedArray<T> const &S, bool deep)
         : owner(deep),
           data(owner ? device_malloc<T>(S.size) : S.data),
-          ndim(S.ndim), size(S.size), name(S.name) {
-        // LOG("Owner("<<owner<<")");
+          tempspace(device_malloc<T>(S.size)),
+          ndim(S.ndim),
+          size(S.size),
+          name(S.name) {
         if (owner) {
             thrust::copy(S.data, S.data + S.size, data);
         }
@@ -210,13 +267,14 @@ struct SizedArray {
         FULLTRACE;
     }
 
+
     SizedArray(T *rawptr, Py_ssize_t size, std::string name, bool from_host)
         : owner(from_host),
           data(),
+          tempspace(device_malloc<T>(size)),
           ndim(1),
           size(size),
           name(name) {
-        // LOG("Owner("<<owner<<")");
         if (owner) {
             data = device_malloc<T>(size);
             thrust::copy(rawptr, rawptr + size, data);
@@ -228,12 +286,14 @@ struct SizedArray {
         FULLTRACE;
     }
 
+
     SizedArray(T *rawptr, int ndim, intptr_t *s, std::string name, bool from_host)
         : owner(from_host),
+          data(),
+          tempspace(),
           ndim(ndim),
           size(1),
           name(name) {
-        // LOG("Owner("<<owner<<")");
         FULLTRACE;
         for (Py_ssize_t i = 0; i < ndim; ++i) {
             shape[i] = s[i];
@@ -245,28 +305,28 @@ struct SizedArray {
         } else {
             data = thrust::device_pointer_cast(rawptr);
         }
+        tempspace = device_malloc<T>(size);
         sanity_check();
         FULLTRACE;
     }
 
+
     ~SizedArray() {
-        // LOG("Owner("<<owner<<") ptr("<<data.get()<<")");
         FULLTRACE;
         if (owner) {
             device_free(data);
         }
+        device_free(tempspace);
         FULLTRACE;
     }
 
+
     void sanity_check() {
-        // if (!owner) {
-            // DIE("Just take ownership for now...");
-        // }
-        if (data.get() == NULL) {
+        if (data.get() == NULL || tempspace.get() == NULL) {
             if (owner) {
                 DIE(name << ": Failed to alloc memory of size("<<size<<")");
             } else {
-                DIE(name << ": data doesn't point ot anything");
+                DIE(name << ": data or tempspace doesn't point to anything");
             }
         }
         if (ndim > 8) {
@@ -279,6 +339,27 @@ struct SizedArray {
         }
     }
 
+
+    void copy_from(SizedArray<T> &other) {
+        if (other.data.get() == NULL) {
+            DIE(name << "Copying from uninitialized memory");
+        }
+        if (other.size != size) {
+            DIE(name << "Dimension mismatch. ("<<size<<") <- ("<<other.size<<")");
+        }
+        thrust::copy(other.data, other.data + other.size, data);
+        copy_meta_data(other);
+    }
+
+
+    void copy_meta_data(SizedArray<T> &other) {
+        ndim = other.ndim;
+        for (Py_ssize_t i = 0; i < ndim; ++i) {
+            shape[i] = other.shape[i];
+        }
+    }
+
+
     void reshape(Py_ssize_t h, Py_ssize_t w) {
         if (h*w != size) {
             DIE("Height("<<h<<") x Width("<<w<<") != Size("<<size<<")");
@@ -288,11 +369,13 @@ struct SizedArray {
         ndim = 2;
     }
 
+
     void flatten() {
         shape[0] = size;
         shape[1] = 0;
         ndim = 1;
     }
+
 
     void transpose(int strategy) {
         if (ndim != 2) {
@@ -300,23 +383,24 @@ struct SizedArray {
             return;
             // DIE("Can only transpose 2D matrix");
         }
-        //XXX
-        thrust::device_ptr<T> out = device_malloc<T>(size);
+
         switch (strategy) {
             case 1:
-                transposeNoBankConflicts(out.get(), data.get(), shape[0], shape[1]);
+                transposeNoBankConflicts(tempspace.get(), data.get(), shape[0], shape[1]);
                 break;
             default:
                 DIE("\nUnknown Transpose Strategy")
         }
+
         reshape(shape[1], shape[0]);
+
         if (owner) {
-            std::swap(out, data);
+            std::swap(tempspace, data);
         } else {
-            thrust::copy(out, out+size, data);
+            thrust::copy(tempspace, tempspace+size, data);
         }
-        device_free(out);
     }
+
 
     std::string show() {
         std::string s0 = to_string(*this);
@@ -331,6 +415,7 @@ struct SizedArray {
         }
         return idx;
     }
+
 
     int idx(int i, int j) {
         if (ndim != 2) {
@@ -355,21 +440,6 @@ struct SizedArray {
         return idx;
     }
 
-    void timeseq(SizedArray<double> &x) {
-        if (x.size != size) {
-            DIE("Dimention mismatch.");
-        }
-        impl::timeseq(data, x.data, size);
-        return;
-    }
-    void timeseq(SizedArray<int> &x) {
-        if (x.size != size) {
-            DIE("Dimention mismatch.");
-        }
-        impl::timeseq(data, x.data, size);
-        return;
-    }
-
 
     void pluseq(SizedArray<double> &x) {
         if (x.size != size) {
@@ -378,6 +448,8 @@ struct SizedArray {
         impl::pluseq(data, x.data, size);
         return;
     }
+
+
     void pluseq(SizedArray<int> &x) {
         if (x.size != size) {
             DIE("Dimention mismatch.");
@@ -386,6 +458,7 @@ struct SizedArray {
         return;
     }
 
+
     void minuseq(SizedArray<double> &x) {
         if (x.size != size) {
             DIE("Dimention mismatch.");
@@ -393,6 +466,8 @@ struct SizedArray {
         impl::minuseq(data, x.data, size);
         return;
     }
+
+
     void minuseq(SizedArray<int> &x) {
         if (x.size != size) {
             DIE("Dimention mismatch.");
@@ -402,28 +477,63 @@ struct SizedArray {
     }
 
 
+    void timeseq(SizedArray<double> &x) {
+        if (x.size != size) {
+            DIE("Dimention mismatch.");
+        }
+        impl::timeseq(data, x.data, size);
+        return;
+    }
+
+
+    void timeseq(SizedArray<int> &x) {
+        if (x.size != size) {
+            DIE("Dimention mismatch.");
+        }
+        impl::timeseq(data, x.data, size);
+        return;
+    }
+
+
+    void minuseq_over2(SizedArray<double> &x) {
+        if (x.size != size) {
+            DIE("Dimention mismatch.");
+        }
+        impl::minuseq_over2(data, x.data, size);
+        return;
+    }
+
+
+
+    void pluseq(double x) {
+        impl::pluseq(data, size, x);
+        return;
+    }
+
 
     void minuseq(double x) {
         impl::minuseq(data, size, x);
         return;
     }
-    void pluseq(double x) {
-        impl::pluseq(data, size, x);
-        return;
-    }
+
+
     void timeseq(double x) {
         impl::timeseq(data, size, x);
         return;
     }
 
-    void minuseq(int x) {
-        impl::minuseq(data, size, x);
-        return;
-    }
+
     void pluseq(int x) {
         impl::pluseq(data, size, x);
         return;
     }
+
+
+    void minuseq(int x) {
+        impl::minuseq(data, size, x);
+        return;
+    }
+
     void timeseq(int x) {
         impl::timeseq(data, size, x);
         return;
@@ -433,17 +543,23 @@ struct SizedArray {
     inline void set(int i, T x) {
         data[idx(i)] = x;
     }
+
+
     inline T get(int i) {
         return data[idx(i)];
     }
 
+
     inline void set(int i, int j, T x) {
         data[idx(i, j)] = x;
     }
+
+
     inline T get(int i, int j) {
         return data[idx(i, j)];
     }
 };
+
 
 template <typename T>
 std::ostream & operator<<(std::ostream & os, SizedArray<T> const &sa) {
@@ -453,6 +569,5 @@ std::ostream & operator<<(std::ostream & os, SizedArray<T> const &sa) {
         <<sa.size<<") ndim("<<sa.ndim<< ") ["
         << s.str() << " ]";
 }
-
 
 #endif /* end of include guard */

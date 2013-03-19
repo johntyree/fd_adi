@@ -30,14 +30,14 @@ class BlackScholesOption(Option):
                 variance, tenor)
 
 
-
-
     def compute_analytical(self):
         return self._call_delta()[0]
+
 
     @property
     def delta(self):
         return self._call_delta()[1]
+
 
     def _call_delta(self):
         N = scipy.stats.distributions.norm.cdf
@@ -50,6 +50,7 @@ class BlackScholesOption(Option):
         if self.tenor == 0:
             d1 = np.infty
         else:
+            s += np.finfo(np.atleast_1d(s).dtype).tiny
             d1 = ((np.log(s/float(k)) + (r + 0.5*vol**2) * t)
                 / (vol * np.sqrt(t)))
 
