@@ -1,6 +1,7 @@
 #include <algorithm>
 #include <cstdlib>
 #include <cstdio>
+#include <iomanip>
 
 /* #include <thrust/host_vector.h> */
 #include <thrust/device_new.h>
@@ -10,7 +11,7 @@
 #include <thrust/adjacent_difference.h>
 #include <thrust/copy.h>
 #include <thrust/functional.h>
-#include <thrust/iterator/counting.h>
+#include <thrust/iterator/counting_iterator.h>
 
 #include <cusparse_v2.h>
 #include <cuda_runtime.h>
@@ -24,6 +25,8 @@ using namespace thrust::placeholders;
 
 using std::cout;
 using std::endl;
+using std::setw;
+#define NaN std::numeric_limits<double>::quiet_NaN()
 
 double* raw(Vec &v) {
    return thrust::raw_pointer_cast(v.data());
@@ -114,18 +117,19 @@ struct free_boundary_first {
 };
 
 
-struct free_boundary_bottom_second_with_first_derivative_one {
+struct free_boundary_second_with_first_derivative_one {
     template <typename Tuple>
     __host__ __device__
-    // (sup, mid, d[1], R[0])
-    // (sub, mid, d[-1], R[-1]) yes mid is still neg
+    // (sup, mid, sub, d[1], R[0])
+    // (sub, mid, sup, d[-1], R[-1]) yes mid is still neg
     void operator()(Tuple t) {
         using thrust::get;
-        const double x = get<2>(t)*get<2>(t);
+        const double x = get<3>(t)*get<3>(t);
         const double fst_deriv = 1;
         get<0>(t) =  2 / x;
         get<1>(t) = -2 / x;
-        get<3>(t) = -fst_deriv*2 / get<2>(t);
+        get<2>(t) = 0;
+        get<4>(t) = -fst_deriv*2 / get<3>(t);
     }
     /* Bdata[m-1, 1] =  2 / d[1]**2 */
     /* Bdata[m,   0] = -2 / d[1]**2 */
@@ -135,18 +139,19 @@ struct free_boundary_bottom_second_with_first_derivative_one {
     /* R[-1]          =  fst_deriv * 2 / d[-1] */
 };
 
-struct free_boundary_bottom_second {
+struct free_boundary_second {
     template <typename Tuple>
     __host__ __device__
-    // (supsup, sup, mid, d[1], d[2])
-    // (subsub, sub, mid, d[-1], d[-2])
+    // (supsup, sup, mid, sub, d[1], d[2])
+    // (subsub, sub, mid, sup, d[-1], d[-2])
     void operator()(Tuple t) {
         using thrust::get;
         const double recip_denom =
-            1.0 / (0.5 * (get<3>(t)+get<4>(t))*get<3>(t)*get<4>(t));
-        get<0>(t) = get<3>(t)              * recip_denom;
-        get<1>(t) = -(get<3>(t)+get<4>(t)) * recip_denom;
-        get<2>(t) = get<4>(t)              * recip_denom;
+            1.0 / (0.5 * (get<4>(t)+get<5>(t))*get<4>(t)*get<5>(t));
+        get<0>(t) = get<4>(t)              * recip_denom;
+        get<1>(t) = -(get<4>(t)+get<5>(t)) * recip_denom;
+        get<2>(t) = get<5>(t)              * recip_denom;
+        get<3>(t) = 0;
     }
     /* recip_denom = 1.0 / (0.5*(d[2]+d[1])*d[2]*d[1]); */
     /* Bdata[m-2,2] = d[1]         * recip_denom */
@@ -160,16 +165,25 @@ struct free_boundary_bottom_second {
 
 
 struct Diags {
-    thrust::device_ptr<double> sup, mid, sub, deltas, low_dirichlet, residual,
-        high_dirichlet, MEM;
+    thrust::device_ptr<double> MEM;
+
+    // Full Vectors
+    thrust::device_ptr<double> sup, mid, sub, deltas, residual;
+
+    // Vector tips
+    thrust::device_ptr<double> low_dirichlet, high_dirichlet,
+        top_factors, bottom_factors;
+
     int sz;
     int blksz;
+    int blks;
 
-    Diags(Vec v, int blks) {
+    Diags(Vec v, int blocks) {
         int i = 0;
         sz = v.size();
-        blksz = sz / blks;
-        MEM = thrust::device_new<double>(v.size()*5 + 2 + 2);
+        blks = blocks;
+        blksz = sz / blks;            //   5 vecs      4 tips
+        MEM = thrust::device_new<double>(v.size()*5 + 4*blksz);
         thrust::fill(MEM, MEM+sz*5 + 2, 0.);
         sup = MEM + (i++) * v.size();
         mid = MEM + (i++) * v.size();
@@ -177,10 +191,12 @@ struct Diags {
         deltas = MEM + (i++) * v.size();
         residual = MEM + (i++) * v.size();
         high_dirichlet = MEM + i * v.size();
-        low_dirichlet = MEM + i * v.size() + 1;
-        cout << v.size()*5 + 2 << ' ' << MEM.get() << ' ' << sup.get() << endl;
-        cout << low_dirichlet.get()+1 - sup.get() << endl;
+        low_dirichlet = MEM + i * v.size() + blksz;
+        top_factors = MEM + i * v.size() + blksz*2;
+        bottom_factors = MEM + i * v.size() + blksz*2;
         thrust::adjacent_difference(v.begin(), v.end(), deltas);
+        strided_range<Vec::iterator> d(deltas, deltas+sz, blksz);
+        thrust::fill(d.begin(), d.end(), NaN);
     }
 };
 
@@ -188,7 +204,7 @@ template <typename T>
 void printvec(const char *c, thrust::device_ptr<T> const &v, int size) {
     cout << c << ": ";
     cout << "DEVICE addr(" << v.get() << ") size(" << size << ")  [ ";
-    std::ostream_iterator<T> out = std::ostream_iterator<T>(cout, " ");
+    std::ostream_iterator<T> out = std::ostream_iterator<T>(cout, "\t");
     std::copy(v, v + size, out);
     cout << "]" << endl;
 }
@@ -196,25 +212,25 @@ void printvec(const char *c, thrust::device_ptr<T> const &v, int size) {
 int spot_first(Diags &d) {
     thrust::for_each(
             thrust::make_zip_iterator(thrust::make_tuple(d.sup+1, d.mid+1, d.sub+1, d.deltas+1, d.deltas+2)),
-            thrust::make_zip_iterator(thrust::make_tuple(d.sup+d.blksz-1, d.mid+d.blksz-1, d.sub+d.blksz-1, d.deltas+d.blksz-1, d.deltas+d.blksz)),
+            thrust::make_zip_iterator(thrust::make_tuple(d.sup+d.sz-1, d.mid+d.sz-1, d.sub+d.sz-1, d.deltas+d.sz-1, d.deltas+d.sz)),
             first_deriv()
             );
-    strided_range<Vec::iterator> topsup(d.sup, d.sup+d.blksz, d.sz);
-    strided_range<Vec::iterator> topmid(d.mid, d.mid+d.blksz, d.sz);
-    strided_range<Vec::iterator> topsub(d.sub, d.sub+d.blksz, d.sz);
+    strided_range<Vec::iterator> topsup(d.sup, d.sup+d.sz, d.blksz);
+    strided_range<Vec::iterator> topmid(d.mid, d.mid+d.sz, d.blksz);
+    strided_range<Vec::iterator> topsub(d.sub, d.sub+d.sz, d.blksz);
     thrust::for_each(
             thrust::make_zip_iterator(thrust::make_tuple(topsup.begin(), topmid.begin(), topsub.begin(), d.high_dirichlet)),
             thrust::make_zip_iterator(thrust::make_tuple(topsup.end(), topmid.end(), topsub.end(), d.high_dirichlet+1)),
             dirichlet_boundary(0)
             );
-    strided_range<Vec::iterator> botsup(d.sup+d.blksz-1, d.sup+d.blksz, d.sz);
-    strided_range<Vec::iterator> botmid(d.mid+d.blksz-1, d.mid+d.blksz, d.sz);
-    strided_range<Vec::iterator> botsub(d.sub+d.blksz-1, d.sub+d.blksz, d.sz);
+    strided_range<Vec::iterator> botsup(d.sup+d.blksz-1, d.sup+d.sz, d.blksz);
+    strided_range<Vec::iterator> botmid(d.mid+d.blksz-1, d.mid+d.sz, d.blksz);
+    strided_range<Vec::iterator> botsub(d.sub+d.blksz-1, d.sub+d.sz, d.blksz);
     thrust::for_each(
             thrust::make_zip_iterator(thrust::make_tuple(botsup.begin(),
                     botmid.begin(), botsub.begin(), d.residual+d.blksz-1)),
             thrust::make_zip_iterator(thrust::make_tuple(botsup.end(),
-                    botmid.end(), botsub.end(), d.residual+d.blksz)),
+                    botmid.end(), botsub.end(), d.residual+d.sz)),
             von_neumann_boundary(1)
             );
     return 0;
@@ -223,7 +239,7 @@ int spot_first(Diags &d) {
 int spot_second(Diags &d) {
     thrust::for_each(
             thrust::make_zip_iterator(thrust::make_tuple(d.sup+1, d.mid+1, d.sub+1, d.deltas+1, d.deltas+2)),
-            thrust::make_zip_iterator(thrust::make_tuple(d.sup+d.blksz-1, d.mid+d.blksz-1, d.sub+d.blksz-1, d.deltas+d.blksz-1, d.deltas+d.blksz)),
+            thrust::make_zip_iterator(thrust::make_tuple(d.sup+d.sz-1, d.mid+d.sz-1, d.sub+d.sz-1, d.deltas+d.sz-1, d.deltas+d.sz)),
             second_deriv()
             );
     strided_range<Vec::iterator> topsup(d.sup, d.sup+d.sz, d.blksz);
@@ -239,11 +255,13 @@ int spot_second(Diags &d) {
     strided_range<Vec::iterator> botsub(d.sub+d.blksz-1, d.sub+d.sz, d.blksz);
     strided_range<Vec::iterator> botdel(d.deltas+d.blksz-1, d.deltas+d.sz, d.blksz);
     thrust::for_each(
-            thrust::make_zip_iterator(thrust::make_tuple(botsup.begin(),
-                    botmid.begin(), botdel.begin(), d.residual+d.blksz-1)),
-            thrust::make_zip_iterator(thrust::make_tuple(botsup.end(),
-                    botmid.end(), botdel.end(), d.residual+d.blksz)),
-            free_boundary_bottom_second_with_first_derivative_one()
+            thrust::make_zip_iterator(thrust::make_tuple(
+                    botsup.begin(), botmid.begin(), botsub.begin(),
+                    botdel.begin(), d.residual+d.blksz-1)),
+            thrust::make_zip_iterator(thrust::make_tuple(
+                    botsup.end(), botmid.end(), botsup.end(),
+                    botdel.end(), d.residual+d.sz)),
+            free_boundary_second_with_first_derivative_one()
             );
     return 0;
 }
@@ -275,6 +293,44 @@ int var_first(Diags &d) {
     return 0;
 }
 
+int var_second(Diags &d) {
+    thrust::for_each(
+            thrust::make_zip_iterator(thrust::make_tuple(d.sup+1, d.mid+1, d.sub+1, d.deltas+1, d.deltas+2)),
+            thrust::make_zip_iterator(thrust::make_tuple(d.sup+d.sz-1, d.mid+d.sz-1, d.sub+d.sz-1, d.deltas+d.sz-1, d.deltas+d.sz)),
+            second_deriv()
+            );
+    strided_range<Vec::iterator> topsup(d.sup, d.sup+d.sz, d.blksz);
+    strided_range<Vec::iterator> topmid(d.mid, d.mid+d.sz, d.blksz);
+    strided_range<Vec::iterator> topsub(d.sub, d.sub+d.sz, d.blksz);
+    strided_range<Vec::iterator> topdel(d.deltas+1, d.deltas+d.sz, d.blksz);
+    strided_range<Vec::iterator> topdel2(d.deltas+2, d.deltas+d.sz, d.blksz);
+    thrust::for_each(
+            thrust::make_zip_iterator(thrust::make_tuple(d.top_factors,
+                    topsup.begin(), topmid.begin(), topsub.begin(),
+                    topdel.begin(), topdel2.begin())),
+            thrust::make_zip_iterator(thrust::make_tuple(d.top_factors + d.blks,
+                    topsup.end(), topmid.end(), topsub.end(),
+                    topdel.end(), topdel2.end())),
+            free_boundary_second()
+            );
+    strided_range<Vec::iterator> botsup(d.sup+d.blksz-1, d.sup+d.sz, d.blksz);
+    strided_range<Vec::iterator> botmid(d.mid+d.blksz-1, d.mid+d.sz, d.blksz);
+    strided_range<Vec::iterator> botsub(d.sub+d.blksz-1, d.sub+d.sz, d.blksz);
+    strided_range<Vec::iterator> botdel(d.deltas+d.blksz-1, d.deltas+d.sz, d.blksz);
+    strided_range<Vec::iterator> botdel2(d.deltas+d.blksz-2, d.deltas+d.sz, d.blksz);
+    thrust::for_each(
+            thrust::make_zip_iterator(thrust::make_tuple(d.bottom_factors,
+                    botsub.begin(), botmid.begin(), botsup.begin(),
+                    botdel.begin(), botdel2.begin())),
+            thrust::make_zip_iterator(thrust::make_tuple(d.bottom_factors + d.blks,
+                    botsub.end(), botmid.end(), botsup.end(),
+                    botdel.end(), botdel2.end())),
+            free_boundary_second()
+            );
+    return 0;
+}
+
+
 
 struct periodic_from_to_mask : thrust::unary_function<int, bool> {
     int begin;
@@ -291,15 +347,16 @@ struct periodic_from_to_mask : thrust::unary_function<int, bool> {
 };
 
 
-void plus_ident(Diags &d) {
+void plus_ident(Diags &d, int high, int low) {
     /* thrust::transform(d.mid+1, d.mid+d.sz, d.mid, _1 + 1); */
+    high = d.blksz-1 - high;
     thrust::transform_if(
             d.mid,
             d.mid+d.sz,
-            make_counting_iterator(0),
+            thrust::make_counting_iterator(0),
             d.mid,
             _1 + 1,
-            periodic_from_to_mask(begin, end, block_len));
+            periodic_from_to_mask(high, low, d.blksz));
 }
 
 int main(void) {
@@ -322,10 +379,10 @@ int main(void) {
     Vec tst(vec.size());
 
     thrust::counting_iterator<int> count_begin(0), count_end(tst.size());
-    thrust::transform(count_begin, count_end, count_begin, tst.begin(),
+    thrust::transform(v.begin(), v.end(), v.begin(), tst.begin(),
             thrust::multiplies<double>());
 
-    switch (3) {
+    switch (2) {
         case 1:
             spot_first(d);
             break;
@@ -335,18 +392,21 @@ int main(void) {
         case 3:
             var_first(d);
             break;
+        case 4:
+            var_second(d);
+            break;
     }
 
-    plus_ident(d);
+    /* plus_ident(d, -2, -2); */
 
     printvec("del", d.deltas, d.sz);
     printvec("sup", d.sup, d.sz);
     printvec("mid", d.mid, d.sz);
     printvec("sub", d.sub, d.sz);
-    /* printvec("res", d.residual, d.sz); */
-    /* printvec("tst", &tst[0], d.sz); */
     cout << "high_dirichlet: " << *d.high_dirichlet;
+    printvec("tst", &tst[0], d.sz);
 
+    /* thrust::transform(tst.begin(), tst.end(), d.residual, tst.begin(), _1 - _2); */
     status = cusparseDgtsvStridedBatch(handle, tst.size(),
             d.sub.get(), d.mid.get(), d.sup.get(),
             raw(tst),
