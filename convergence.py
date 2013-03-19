@@ -5,7 +5,7 @@
 from __future__ import division
 
 import sys
-# import os
+import os
 # import itertools as it
 
 import pylab
@@ -15,6 +15,9 @@ from FiniteDifference import utils
 from FiniteDifference.visualize import surface, wireframe
 from FiniteDifference.heston import HestonOption, hs_call_vector, HestonFiniteDifferenceEngine
 from FiniteDifference.blackscholes import BlackScholesOption, BlackScholesFiniteDifferenceEngine
+from FiniteDifference.Option import MeanRevertingProcess
+
+array = np.array
 
 from FiniteDifference.Grid import Grid
 from FiniteDifference import FiniteDifferenceEngine as FD
@@ -81,88 +84,91 @@ p = p_absolute_error
 pp = p_price
 
 
-def dsdv_convergence(dt=1.0/1000, nv=500, ns=500, func=None):
-    global F
-    errors = []
-    for i in range(4,10):
-    # for i in range(5,6):
-        nvols = nv
-        nspots = ns
-        if nv is None:
-            nvols = 2**i
-        if ns is None:
-            nspots = 2**i
-        schemes = {}
-        schemes[(1,)] = [{"scheme": "forward"}]
+def import_ConvergenceTest(fn):
+    with open(fn) as f:
+        l = f.read()
+    c = eval(l)
+    for mode in c.result:
+        for arr in c.result[mode]:
+            c.result[mode][arr] = np.loads(c.result[mode][arr])
+    return c
 
-        F = HestonFiniteDifferenceEngine(H, schemes=schemes, nspots=nspots,
-                                         nvols=nvols, spotdensity=10, varexp=4,
-                                         var_max=12, flip_idx_spot=True,
-                                         flip_idx_var=True, verbose=False,
-                                         force_exact=False)
-        if func is None:
-            print "No func. No-op"
-            return
-        funcs = {
-            'hv': lambda dt: F.solve_hundsdorferverwer(H.tenor/dt, dt, F.grid.domain[-1], theta=0.65),
-            'i' : lambda dt: F.solve_implicit(H.tenor/dt, dt, F.grid.domain[-1]),
-            'd' : lambda dt: F.solve_implicit(H.tenor/dt, dt, F.grid.domain[-1], theta=0.65),
-            'smooth': lambda dt: F.smooth(H.tenor/dt, dt, F.grid.domain[-1], smoothing_steps=1)
-        }
-        labels = {
-            'hv': "Hundsdorfer-Verwer",
-            'i' : "Fully Implicit",
-            'd' : "Douglas",
-            'smooth': "Smoothed HV"
-        }
-        Vs = funcs[func](dt)
-        # Vs = F.solve_hundsdorferverwer(H.tenor/dt, dt, theta=0.8)
+class ConvergenceTest(object):
+    attrs = ('Type',
+             'option',
+             'mode',
+             'backend',
+             'reference_solution',
+             'scheme',
+             'mesh',
+             'state',
+             'result'
+             )
+    def __init__(self, **kwargs):
+        kwargs.setdefault('mode', 'dt')
+        kwargs.setdefault('result', None)
+        kwargs['Type'] = 'ConvergenceTest'
+        for a in self.attrs:
+            assert a in kwargs, "Missing attr %s" % (a,)
+        for attr, val in kwargs.items():
+            setattr(self, attr, val)
 
-        xs = F.spots
-        ys = F.vars
-        trimx = (0.0 * H.spot <= xs) & (xs <= 2.0*H.spot)
+
+    def write(self, fout=None):
+        if fout is None:
+            fout = self.make_file_name()
+        with open(fout, 'w') as fout:
+            fout.write(repr(self))
+
+
+    def make_file_name(self):
+        fn = os.path.join("data_convergence", "{type}_strike-{k}_{scheme}_{mode}_{backend}.py")
+        return fn.format(type=self.option.Type,
+                         k=self.option.strike,
+                         scheme=self.scheme,
+                         mode=self.mode,
+                         backend=self.backend)
+
+
+        return
+
+    def __str__(self):
+        l = ["{attr}={val}".format(attr=attr, val=repr(getattr(self, attr))) for attr in self.attrs if attr != 'result']
+        s = self.Type + "(" + ", ".join(l) + ')'
+        return s
+
+    def __repr__(self):
+        for mode in self.result:
+            for arr in self.result[mode]:
+                self.result[mode][arr] = self.result[mode][arr].dumps()
+        l = ["{attr}={val}".format(attr=attr, val=repr(getattr(self, attr))) for attr in self.attrs]
+        s = self.Type + "(" + ", ".join(l) + ')'
+        for mode in self.result:
+            for arr in self.result[mode]:
+                self.result[mode][arr] = np.loads(self.result[mode][arr])
+        return s
+
+
+    def error2d_direct(self, err_func=None):
+        if err_func is None:
+            err_func = lambda tst, ref: pylab.mean(abs(tst-ref).flat)
+            # inf_norm = max(abs(res-a).flat)
+            # norm2 = pylab.sqrt(sum(((res-a)**2).flat))
+            # meanerr = pylab.mean(abs(res - a).flat)
+        xs, ys = self.mesh
+        trimx = (0.0 * self.option.spot <= xs) & (xs <= 2.0*self.option.spot)
         trimy = ys <= 1.0
         tr = lambda x: x[trimx, :][:, trimy]
-
-        xst = xs[trimx]
-        yst = ys[trimy]
-        res = tr(Vs)
-        a = tr(F.grid_analytical)
-        bad = F.BADANALYTICAL
-        price_err = F.price - H.analytical
-        inf_norm = max(abs(res-a).flat)
-        norm2 = pylab.sqrt(sum(((res-a)**2).flat))
-        err = norm2
-        if nv is None:
-            dx = max(ys) / nvols
-        else:
-            dx = max(xs) / nspots
-        label = "avg $dx = %s$" % dx
-        # err = abs(price_err[0,0])
-        # print dt, price_err, err
-        # pp(Vs, F.grid_analytical, xs, ys, label=label, bad=bad)
-        # p(Vs, F.grid_analytical, xs, ys, label=label, bad=bad)
-        p(res, a, xst, yst, label=label, bad=bad)
-        errors.append((dx, err))
-    print errors
-    vals, errs = zip(*errors)
-    pylab.plot(vals, errs)
-    pylab.plot(vals, errs, 'ro')
-    pylab.xlabel("dx")
-    pylab.ylabel("Error")
-    pylab.show()
-    pylab.loglog(vals, errs)
-    pylab.loglog(vals, errs, 'ro')
-    pylab.xlabel("dx")
-    pylab.ylabel("Error")
-    pylab.show()
-
-
-    return errors
+        a = tr(self.reference_solution)
+        errs = []
+        for res in self.result[self.mode]['domain']:
+            res = tr(res)
+            errs.append(err_func(res, a))
+        return errs
 
 
 class ConvergenceTester(object):
-    funcs = {
+    schemes = {
         'hv': lambda F, dt: F.solve_hundsdorferverwer(H.tenor/dt, dt, F.grid.domain[-1], theta=0.65),
         'i' : lambda F, dt: F.solve_implicit(H.tenor/dt, dt, F.grid.domain[-1]),
         'd' : lambda F, dt: F.solve_implicit(H.tenor/dt, dt, F.grid.domain[-1], theta=0.65),
@@ -182,7 +188,7 @@ class ConvergenceTester(object):
         def noop(*x, **y): return None
         kwargs.setdefault('display', noop)
         kwargs.setdefault('error_func', noop)
-        kwargs.setdefault('func', 'hv')
+        kwargs.setdefault('scheme', 'hv')
         kwargs.setdefault('label', '')
         kwargs.update(self.labels)
         self.kwargs = kwargs
@@ -191,15 +197,15 @@ class ConvergenceTester(object):
         return self.engine(self.option, verbose=False, **self.engine_kwargs)
 
     def dt(self):
-        if self.kwargs['func'] is None:
-            print "No func. No-op"
+        if self.kwargs['scheme'] is None:
+            print "No scheme. No-op"
             return
         self.kwargs.setdefault('update_kwargs', lambda self, i: 2**-i)
-        self.F = self.new()
-        self.kwargs['dx'] = tuple("%.1e" % ((max(mesh) - min(mesh)) / len(mesh)) for mesh in self.F.grid.mesh)
+        F = self.new()
+        self.kwargs['dx'] = tuple("%.1e" % ((max(mesh) - min(mesh)) / len(mesh)) for mesh in F.grid.mesh)
         d = dict(self.kwargs)
-        d['func_label'] = self.labels[d['func']]
-        self.title = ("Convergence test in dt using %(func_label)s scheme. "
+        d['scheme_label'] = self.labels[d['scheme']]
+        self.title = ("Convergence test in dt using %(scheme_label)s scheme. "
                "dx = %(dx)s" % d)
         print self.title
         self.mode = 'dt'
@@ -207,23 +213,34 @@ class ConvergenceTester(object):
         # self.domains = []
         self.meshes = []
         min_i, max_i = d.get('min_i', 1), d.get('max_i', 8)
+        null = np.empty([max_i - min_i] + list(F.grid.shape))
+        ct = ConvergenceTest(
+            option=self.option,
+            backend='GPU',
+            reference_solution=None,
+            scheme=d['scheme'],
+            mesh=F.grid.mesh,
+            state='INIT',
+            result={'dt':{'sequence':null.copy(), 'domain':null.copy()}})
         for i in range(min_i, max_i):
+            F.grid.reset()
             dt = self.kwargs['update_kwargs'](self, i)
-            F = self.new()
-            self.F = F
-            V = self.funcs[self.kwargs['func']](F, dt)
-            err = self.kwargs["error_func"](V, F)
-            print err
-            self.errors.append((dt, err))
-            self.kwargs['display'](V, F, self.errors, label=self.kwargs["label"])
+            V = self.schemes[self.kwargs['scheme']](F, dt)
+            ct.result['dt']['sequence'][i - min_i] = dt
+            ct.result['dt']['domain'][i - min_i] = V
+            # err = self.kwargs["error_func"](V, F)
+            # print err
+            # self.errors.append((dt, err))
+            # self.kwargs['display'](V, F, self.errors, label=self.kwargs["label"])
             # self.domains.append(V)
-            self.meshes.append(pylab.array(F.grid.mesh))
-            del F
-        return self.errors
+            # self.meshes.append(pylab.array(F.grid.mesh))
+
+            # del F
+        return ct
 
     def dx(self):
-        if self.kwargs['func'] is None:
-            print "No func. No-op"
+        if self.kwargs['scheme'] is None:
+            print "No scheme. No-op"
             return
         if 'update_kwargs' not in self.kwargs:
             raise ValueError("No definition for update_kwargs given. We don't"
@@ -231,8 +248,8 @@ class ConvergenceTester(object):
         self.mode = 'dx'
         self.errors = []
         d = dict(self.kwargs)
-        d['func_label'] = self.labels[d['func']]
-        self.title = ("Convergence test in dx using %(func_label)s scheme. "
+        d['scheme_label'] = self.labels[d['scheme']]
+        self.title = ("Convergence test in dx using %(scheme_label)s scheme. "
                "dt = %(dt).2e." % d)
         print self.title
         self.domains = []
@@ -243,7 +260,7 @@ class ConvergenceTester(object):
             F = self.new()
             self.F = F
             dx = self.kwargs['update_kwargs'](self, i)
-            V = self.funcs[self.kwargs['func']](F, self.kwargs["dt"])
+            V = self.schemes[self.kwargs['scheme']](F, self.kwargs["dt"])
             self.errors.append((dx, self.kwargs["error_func"](V, F)))
             print "dx:", dx, "err:", self.errors[-1][-1]
             self.kwargs['display'](V, F, self.errors, label=self.kwargs["label"])
@@ -307,10 +324,10 @@ def error2d(V, F):
 def error_price(V, F):
     return F.price - F.option.analytical
 
-def dt_convergence(nspots=100, nvols=100, func=None):
+def dt_convergence(nspots=100, nvols=100, scheme=None):
     # global F, vals, errs
     errors = []
-    funcs = {
+    schemes = {
         'hv': lambda dt: F.solve_hundsdorferverwer(H.tenor/dt, dt, F.grid.domain[-1], theta=0.65),
         'i' : lambda dt: F.solve_implicit(H.tenor/dt, dt, F.grid.domain[-1]),
         'd' : lambda dt: F.solve_implicit(H.tenor/dt, dt, F.grid.domain[-1], theta=0.65),
@@ -323,13 +340,13 @@ def dt_convergence(nspots=100, nvols=100, func=None):
                                          nvols=nvols, spotdensity=10, varexp=4,
                                          var_max=12, flip_idx_spot=True,
                                          flip_idx_var=True, verbose=False)
-        if func is None:
-            func = 'hv'
+        if scheme is None:
+            scheme = 'hv'
         dt = 1.0 / 2.0**i
         print dt, tuple("%.1e" % ((max(mesh) - min(mesh)) / len(mesh)) for mesh in F.grid.mesh)
         print map(len, F.grid.mesh), map(min, F.grid.mesh), map(max, F.grid.mesh)
 
-        Vs = funcs[func](dt)
+        Vs = schemes[scheme](dt)
 
         xs = F.spots
         ys = F.vars
@@ -369,35 +386,35 @@ def dt_convergence(nspots=100, nvols=100, func=None):
 
 def main():
     if len(sys.argv) > 2:
-        func = sys.argv[2]
+        scheme = sys.argv[2]
     else:
-        func=None
+        scheme=None
     m = 150
     if len(sys.argv) > 1:
         if sys.argv[1] == 'ds':
-            dsdv_convergence(2**-6, ns=None, func=func)
+            dsdv_convergence(2**-6, ns=None, scheme=scheme)
         elif sys.argv[1] == 'dv':
-            dsdv_convergence(2**-6, nv=None, func=func)
+            dsdv_convergence(2**-6, nv=None, scheme=scheme)
         else:
-            dt_convergence(200, 200, func=func)
+            dt_convergence(200, 200, scheme=scheme)
     else:
-        dt_convergence(150, 150, func=func)
+        dt_convergence(150, 150, scheme=scheme)
 
 def _main():
     if len(sys.argv) > 2:
-        func = sys.argv[2]
+        scheme = sys.argv[2]
     else:
-        func=None
+        scheme=None
     m = 150
     if len(sys.argv) > 1:
         if sys.argv[1] == 'ds':
-            dsdv_convergence(2**-6, ns=None, func=func)
+            dsdv_convergence(2**-6, ns=None, scheme=scheme)
         elif sys.argv[1] == 'dv':
-            dsdv_convergence(2**-6, nv=None, func=func)
+            dsdv_convergence(2**-6, nv=None, scheme=scheme)
         else:
-            dt_convergence(500, 500, func=func)
+            dt_convergence(500, 500, scheme=scheme)
     else:
-        dt_convergence(150, 150, func=func)
+        dt_convergence(150, 150, scheme=scheme)
 
 if __name__ == '__main__':
     main()
