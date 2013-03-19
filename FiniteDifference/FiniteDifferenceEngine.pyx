@@ -711,6 +711,12 @@ cdef class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
         for L in itertools.chain(Les, Lis):
             L.R = None
 
+        tags = dict()
+        for L in itertools.chain(Les, Lis, Firsts):
+            if L.is_foldable():
+                L.diagonalize()
+                tags[id(L)] = 1
+
         print_step = max(1, int(n / 10))
         to_percent = 100.0 / n
         utils.tic("Hundsdorfer-Verwer:\t")
@@ -746,6 +752,12 @@ cdef class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
             for Le, Li in zip(Les, Lis):
                 V -= Le.apply(Z)
                 V = Li.solve(V)
+
+        for i in tags:
+            for L in itertools.chain(Les, Lis, Firsts):
+                if id(L) == i:
+                    L.undiagonalize()
+                    break
 
         utils.toc(':  \t')
         self.grid.domain.append(V.copy())
@@ -934,6 +946,12 @@ cdef class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
         for L in itertools.chain(Les, Lis):
             L.R = None
 
+        tags = dict()
+        for L in itertools.chain(Les, Lis, Firsts):
+            if L.is_foldable():
+                L.diagonalize()
+                tags[id(L)] = 1
+
         print_step = max(1, int(n / 10))
         to_percent = 100.0 / n
         utils.tic("Douglas:\t")
@@ -955,6 +973,12 @@ cdef class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
                 Y -= Le.apply(V)
                 Y = Li.solve(Y)
             V = Y
+
+        for i in tags:
+            for L in itertools.chain(Les, Lis, Firsts):
+                if id(L) == i:
+                    L.undiagonalize()
+                    break
 
         utils.toc(':  \t')
         self.grid.domain.append(V.copy())

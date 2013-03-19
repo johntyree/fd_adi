@@ -322,6 +322,12 @@ cdef class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
         for L in itertools.chain(Les, Lis):
             L.enable_residual(False)
 
+        tags = dict()
+        for L in itertools.chain(Les, Lis, Firsts):
+            if L.is_foldable():
+                L.diagonalize()
+                tags[id(L)] = 1
+
         print_step = max(1, int(n / 10))
         to_percent = 100.0 / n
         utils.tic("Douglas:\t")
