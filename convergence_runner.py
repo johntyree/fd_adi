@@ -9,6 +9,7 @@ import os
 import sys
 import time
 import numpy as np
+import argparse
 
 import convergence as cv
 import FiniteDifference as FD
@@ -20,35 +21,13 @@ figure_dir = "/scratch/tyree/cudafd/src/fd_pricer/py_adi/data_convergence/figure
 
 fname = "temp"
 
-def engine(*args, **kwargs):
+def engineGPU(*args, **kwargs):
     F = FDEGPU(FD.heston.HestonFiniteDifferenceEngine(*args, **kwargs))
-    # for o in F.operators.values():
-        # if o.top_fold_status == 'CAN_FOLD':
-            # o.diagonalize()
-        # if o.bottom_fold_status == 'CAN_FOLD':
-            # o.diagonalize()
     return F
 
-def usage():
-    print sys.argv[0], "<func> <mode> (<nspots> <nvols> | <dt>)"
-    sys.exit(1)
-
-
-try:
-    func = sys.argv[1]
-    mode = sys.argv[2]
-    if mode == 'dt':
-        nspots = int(sys.argv[3])
-        nvols = int(sys.argv[4])
-    elif mode == 'dx':
-        dt = float(sys.argv[3])
-    else:
-        raise RuntimeError
-except IndexError:
-    usage()
-except RuntimeError:
-    usage()
-
+def engineCPU(*args, **kwargs):
+    F = FD.heston.HestonFiniteDifferenceEngine(*args, **kwargs)
+    return F
 
 def save(*args, **kwargs):
     args = list(args)
@@ -61,14 +40,11 @@ def mc_error(price):
         return abs(F.price - price)
     return newf
 
-def rundt():
-    ct = cv.ConvergenceTester(option, engine, {'nspots': nspots, 'nvols': nvols},
-                                func=func, max_i=7, error_func=cv.error2d)
-    err = ct.dt()
-    key = ('heston', mode, option.strike)
-    errors[key] = err
+    # err = ct.dt()
+    # key = ('heston', mode, option.strike)
+    # errors[key] = err
 
-def rundx():
+def rundx(option, egine, dt, min_i, max_i, scheme):
     def update_kwargs(self, i):
         self.engine_kwargs['nspots'] = 2**(i-1)
         self.engine_kwargs['nvols'] = 2**(i-1)
@@ -81,29 +57,45 @@ def rundx():
 
     ct = cv.ConvergenceTester(option, engine,
             {'force_exact': False, 'spotdensity': 10, 'varexp': 4},
-            dt=dt, min_i=4, max_i=9, func=func, error_func=mc_error(),
+            dt=dt, min_i=4, max_i=9, scheme=scheme, error_func=mc_error(),
             update_kwargs=update_kwargs)
-    err = ct.dx()
-    key = ('heston', mode, option.strike)
-    errors[key] = err
+    return ct.dx()
 
-errors = {}
 
-strike = 80.0
-price = 25.6137
-option = FD.heston.HestonOption(tenor=1, strike=strike, volatility=0.2, mean_reversion=1, vol_of_variance=0.2, correlation=-0.7)
-# option = FD.heston.HestonBarrierOption(tenor=1, strike=strike, volatility=0.2,
-                                       # mean_reversion=1, vol_of_variance=0.2,
-                                       # correlation=-0.7, top=(False, 120.0))
-print option
-print option.analytical
+def read_args():
+    parser = argparse.ArgumentParser(description="Run a convergence test")
+    mode_group = parser.add_mutually_exclusive_group(required=True)
+    backend_group = parser.add_mutually_exclusive_group(required=True)
+    parser.add_argument('-s', '--scheme', metavar='scheme', choices="i,d,hv,s".split(','))
+    parser.add_argument('-k', '--strike', metavar='strike', type=float)
+    mode_group.add_argument('-dx', metavar='nspots/vols', nargs=2, type=int)
+    mode_group.add_argument('-dt', metavar='timesteps', type=int)
+    backend_group.add_argument('--gpu', action='store_const', dest='engine', const=engineGPU)
+    backend_group.add_argument('--cpu', action='store_const', dest='engine', const=engineCPU)
+    return parser.parse_args()
 
-fname = "vanilla_strike-%s_%s_%s" % (strike, func, mode)
-# fname = "barrier_strike-%s_%s_%s" % (strike, func, mode)
 
-rundt()
+def main():
+    opt = read_args()
 
-with open('data_convergence/%s.py' % fname, 'w') as fout:
-    fout.write(str(errors) + '\n')
+    option = FD.heston.HestonOption(tenor=1, strike=opt.strike, volatility=0.2,
+                                    mean_reversion=1, vol_of_variance=0.2,
+                                    correlation=-0.7)
+    # option = FD.heston.HestonBarrierOption(tenor=1, strike=strike, volatility=0.2,
+                                        # mean_reversion=1, vol_of_variance=0.2,
+                                        # correlation=-0.7, top=(False, 120.0))
+    ctest = None
+    if opt.dx is not None:
+        ctester = cv.ConvergenceTester(option, opt.engine, {'nspots': opt.dx[0], 'nvols': opt.dx[1]},
+                                    scheme=opt.scheme, max_i=7, error_func=cv.error2d)
+        ctest = ctester.dt()
+    else:
+        ctest = rundx(option, engine, opt.dt, min_i, max_i, opt.scheme)
 
-print errors
+    ctest.reference_solution = ctest.result[ctest.mode]['domain'][-1]
+    print ctest.error2d_direct()
+    ctest.write()
+
+
+if __name__ == '__main__':
+    main()
