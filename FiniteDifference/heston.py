@@ -81,22 +81,11 @@ class HestonOption(Option):
                 ])
         return s
 
-    def __repr__(self):
-        args = {}
-        for attr in self.attrs:
-            if attr == 'Type':
-                args[attr] = getattr(self, attr)
-            else:
-                args[attr] = repr(getattr(self, attr))
 
-        return """{Type}(spot={spot}
-              , strike={strike}
-              , interest_rate={interest_rate}
-              , volatility=None
-              , variance={variance}
-              , tenor={tenor}
-              , correlation={correlation})
-              """.format(**args)
+    def __repr__(self):
+        l = ["{attr}={val}".format(attr=attr, val=repr(getattr(self, attr))) for attr in self.attrs]
+        s = self.Type + "(" + ", ".join(l) + ')'
+        return s
 
 
     def compute_analytical(self):
@@ -266,23 +255,9 @@ class HestonBarrierOption(HestonOption, BarrierOption):
 
 
     def __repr__(self):
-        args = {}
-        for attr in self.attrs:
-            if attr == 'Type':
-                args[attr] = getattr(self, attr)
-            else:
-                args[attr] = repr(getattr(self, attr))
-
-        return """{Type}(spot={spot}
-              , strike={strike}
-              , interest_rate={interest_rate}
-              , volatility=None
-              , variance={variance}
-              , tenor={tenor}
-              , correlation={correlation}
-              , top={top}
-              , bottom={bottom})
-              """.format(**args)
+        l = ["{attr}={val}".format(attr=attr, val=repr(getattr(self, attr))) for attr in self.attrs]
+        s = self.Type + "(" + ", ".join(l) + ')'
+        return s
 
 
     def compute_analytical(self):
