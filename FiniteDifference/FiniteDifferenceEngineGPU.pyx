@@ -310,6 +310,7 @@ cdef class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
 
 
     cpdef solve_douglas_(self, int n, double dt, SizedArrayPtr V, double theta=0.5):
+
         Firsts = [(o * dt) for d, o in self.operators.items()]
 
         Les = [(o * theta * dt)

@@ -87,7 +87,6 @@ class HestonOption(Option):
         s = self.Type + "(" + ", ".join(l) + ')'
         return s
 
-
     def compute_analytical(self):
         return HestonCos(
             self.spot,

@@ -134,8 +134,8 @@ def main():
     FG = FDE_ADI_GPU(F)
     # mc = F.option.monte_carlo()
     print
-    print run(dt, F, func)[idx]
-    F.grid.reset()
+    # print run(dt, F, func)[idx]
+    # F.grid.reset()
     print run(dt, FG,func,F.grid.domain[0])[idx], "Estimate:", mc['expected'], "+-", mc['error']
     # print run(dt, FG,func,F.grid.domain[0])[idx], F.option.analytical
 
