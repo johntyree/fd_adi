@@ -322,6 +322,13 @@ struct SizedArray {
 
 
     void sanity_check() {
+        int sz = 1;
+        for (int i = 0; i < ndim; ++i) {
+            sz *= shape[i];
+        }
+        if (sz != size) {
+            DIE(name << ": product(shape)("<<sz<<") != size("<<size<<")");
+        }
         if (data.get() == NULL || tempspace.get() == NULL) {
             if (owner) {
                 DIE(name << ": Failed to alloc memory of size("<<size<<")");
