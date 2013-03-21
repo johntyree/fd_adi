@@ -10,6 +10,7 @@ import os
 
 import pylab
 import numpy as np
+import pickle
 
 from FiniteDifference import utils
 from FiniteDifference.visualize import surface, wireframe
@@ -117,6 +118,7 @@ class ConvergenceTest(object):
     def write(self, fout=None):
         if fout is None:
             fout = self.make_file_name()
+        # print pickle.dumps(self)
         with open(fout, 'w') as fout:
             fout.write(repr(self))
 
@@ -130,17 +132,17 @@ class ConvergenceTest(object):
                          backend=self.backend)
 
 
-        return
-
     def __str__(self):
         l = ["{attr}={val}".format(attr=attr, val=repr(getattr(self, attr))) for attr in self.attrs if attr != 'result']
         s = self.Type + "(" + ", ".join(l) + ')'
         return s
 
+
     def __repr__(self):
         for mode in self.result:
             for arr in self.result[mode]:
                 self.result[mode][arr] = self.result[mode][arr].dumps()
+        np.set_printoptions(threshold=np.inf)
         l = ["{attr}={val}".format(attr=attr, val=repr(getattr(self, attr))) for attr in self.attrs]
         s = self.Type + "(" + ", ".join(l) + ')'
         for mode in self.result:
@@ -219,7 +221,7 @@ class ConvergenceTester(object):
             backend='GPU',
             reference_solution=None,
             scheme=d['scheme'],
-            mesh=F.grid.mesh.copy(),
+            mesh=np.array(F.grid.mesh).copy(),
             state='INIT',
             result={'dt':{'sequence':null.copy(), 'error':null.copy()}})
         for i in range(min_i, max_i):
@@ -403,22 +405,6 @@ def main():
             dsdv_convergence(2**-6, nv=None, scheme=scheme)
         else:
             dt_convergence(200, 200, scheme=scheme)
-    else:
-        dt_convergence(150, 150, scheme=scheme)
-
-def _main():
-    if len(sys.argv) > 2:
-        scheme = sys.argv[2]
-    else:
-        scheme=None
-    m = 150
-    if len(sys.argv) > 1:
-        if sys.argv[1] == 'ds':
-            dsdv_convergence(2**-6, ns=None, scheme=scheme)
-        elif sys.argv[1] == 'dv':
-            dsdv_convergence(2**-6, nv=None, scheme=scheme)
-        else:
-            dt_convergence(500, 500, scheme=scheme)
     else:
         dt_convergence(150, 150, scheme=scheme)
 
