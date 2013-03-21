@@ -12,6 +12,7 @@
 
 #include <cusparse_v2.h>
 
+#include <thrust/adjacent_difference.h>
 #include <thrust/copy.h>
 #include <thrust/device_ptr.h>
 #include <thrust/device_vector.h>
@@ -21,10 +22,9 @@
 #include <thrust/host_vector.h>
 #include <thrust/iterator/constant_iterator.h>
 #include <thrust/iterator/counting_iterator.h>
+#include <thrust/iterator/detail/normal_iterator.h>
 #include <thrust/iterator/discard_iterator.h>
 #include <thrust/iterator/zip_iterator.h>
-#include <thrust/iterator/detail/normal_iterator.h>
-#include <thrust/adjacent_difference.h>
 #include <thrust/sort.h>
 #include <thrust/version.h>
 
