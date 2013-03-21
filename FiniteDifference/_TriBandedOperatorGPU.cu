@@ -157,7 +157,7 @@ struct free_boundary_second_with_first_derivative_one {
     template <typename Tuple>
     __host__ __device__
     // (sup, mid, sub, d[1], R[0])
-    // (sub, mid, sup, d[-1], R[-1]) yes mid is still neg
+    // (sub, mid, sup, -d[-1], R[-1]) yes mid is still neg
     void operator()(Tuple t) {
         using thrust::get;
         const double x = get<3>(t)*get<3>(t);
@@ -249,7 +249,11 @@ int spot_second(Dptr &sup, Dptr &mid, Dptr &sub, T deltas,
     strided_range<DptrIterator> botsup(sup+blksz-1, sup+sz, blksz);
     strided_range<DptrIterator> botmid(mid+blksz-1, mid+sz, blksz);
     strided_range<DptrIterator> botsub(sub+blksz-1, sub+sz, blksz);
-    strided_range<T> botdel(deltas+blksz-1, deltas+sz, blksz);
+    strided_range<thrust::transform_iterator<thrust::negate<double>, T> > botdel(
+            make_transform_iterator(deltas+blksz-1, thrust::negate<double>()),
+            make_transform_iterator(deltas+sz, thrust::negate<double>()),
+            blksz);
+    strided_range<DptrIterator> botresidual(residual+blksz-1, residual+sz, blksz);
     thrust::for_each(
             thrust::make_zip_iterator(thrust::make_tuple(
                     botsup.begin(), botmid.begin(), botsub.begin(),
