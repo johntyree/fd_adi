@@ -97,6 +97,7 @@ def main():
     ctest.reference_solution = ctest.result[ctest.mode]['error'][-1]
     # print ctest.error2d_direct()
     ctest.write()
+    return ctest
 
 
 if __name__ == '__main__':
