@@ -128,7 +128,7 @@ cdef class BandedOperator(object):
     cdef emigrate_csr(self, other, tag=""):
         if tag:
             print "Emigrate CSR:", tag, to_string(self.thisptr_csr)
-        assert not (self.thisptr_csr)
+        assert not self.thisptr_csr
         csr = other.D.tocsr()
         coo = csr.tocoo()
         cdef:
@@ -152,7 +152,7 @@ cdef class BandedOperator(object):
     cdef immigrate_csr(self, tag=""):
         if tag:
             print "Immigrate CSR:", tag, to_string(self.thisptr_csr)
-        assert (self.thisptr_csr)
+        assert self.thisptr_csr, "Immigrating from void pointer"
 
         data = from_SizedArray(self.thisptr_csr.data)
         indices = from_SizedArray_i(self.thisptr_csr.col_ind)
@@ -228,7 +228,7 @@ cdef class BandedOperator(object):
 
         if tag:
             print "Immigrate Tri:", tag, to_string(self.thisptr_tri)
-        assert self.thisptr_tri != <void *>0
+        assert self.thisptr_tri, "Immigrating from void pointer"
 
         bots = from_SizedArray(self.thisptr_tri.bottom_factors)
         tops = from_SizedArray(self.thisptr_tri.top_factors)
@@ -475,7 +475,7 @@ cpdef for_vector(np.ndarray v, int blocks, int derivative, int axis):
 
     B.thisptr_tri = for_vector_(deref(V.p), blocks, derivative, axis)
 
-    B.blocks = blocks = B.thisptr_tri.blocks
+    B.blocks = B.thisptr_tri.blocks
     B.top_fold_status = B.thisptr_tri.top_fold_status
     B.bottom_fold_status = B.thisptr_tri.bottom_fold_status
     # B.derivative = B.thisptr_tri.derivative
