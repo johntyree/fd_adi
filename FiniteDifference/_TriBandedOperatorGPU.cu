@@ -23,6 +23,8 @@
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/discard_iterator.h>
 #include <thrust/iterator/zip_iterator.h>
+#include <thrust/iterator/detail/normal_iterator.h>
+#include <thrust/adjacent_difference.h>
 #include <thrust/sort.h>
 #include <thrust/version.h>
 
@@ -35,6 +37,14 @@ using thrust::make_constant_iterator;
 using thrust::make_counting_iterator;
 using thrust::make_tuple;
 using thrust::make_zip_iterator;
+
+using namespace thrust::placeholders;
+
+typedef thrust::device_ptr<double> Dptr;
+
+typedef thrust::detail::normal_iterator<thrust::device_ptr<double> > DptrIterator;
+
+const double NaN = std::numeric_limits<double>::quiet_NaN();
 
 
 template <typename T, typename U>
@@ -232,9 +242,8 @@ void _TriBandedOperator::apply(SizedArray<double> &V) {
     const unsigned N = V.size;
 
     // TODO: This Iterator works, but is it right?
-    typedef GPUVec<REAL_t>::iterator Iterator;
-    strided_range<Iterator> u0(V.data, V.data+V.size, block_len);
-    strided_range<Iterator> u1(V.data+block_len-1, V.data+V.size, block_len);
+    strided_range<DptrIterator> u0(V.data, V.data+V.size, block_len);
+    strided_range<DptrIterator> u1(V.data+block_len-1, V.data+V.size, block_len);
 
     if (axis == 1) {
         if (has_low_dirichlet) {
@@ -519,14 +528,13 @@ struct add_multiply3 : public thrust::unary_function<Tuple, Result> {
 void _TriBandedOperator::fold_vector(SizedArray<double> &vector, bool unfold) {
     FULLTRACE;
 
-    typedef GPUVec<REAL_t>::iterator Iterator;
     typedef thrust::tuple<REAL_t,REAL_t,REAL_t> REALTuple;
 
-    strided_range<Iterator> u0(vector.data, vector.data + vector.size, block_len);
-    strided_range<Iterator> u1(vector.data+1, vector.data + vector.size, block_len);
+    strided_range<DptrIterator> u0(vector.data, vector.data + vector.size, block_len);
+    strided_range<DptrIterator> u1(vector.data+1, vector.data + vector.size, block_len);
 
-    strided_range<Iterator> un(vector.data+block_len-1, vector.data + vector.size, block_len);
-    strided_range<Iterator> un1(vector.data+block_len-2, vector.data + vector.size, block_len);
+    strided_range<DptrIterator> un(vector.data+block_len-1, vector.data + vector.size, block_len);
+    strided_range<DptrIterator> un1(vector.data+block_len-2, vector.data + vector.size, block_len);
 
     // Top fold
     if (top_fold_status == FOLDED) {
@@ -731,9 +739,8 @@ void _TriBandedOperator::vectorized_scale(SizedArray<double> &vector) {
     Py_ssize_t vsize = vector.size;
     Py_ssize_t block_len = operator_rows / blocks;
 
-    typedef thrust::device_vector<REAL_t>::iterator Iterator;
-    tiled_range<Iterator> v(vector.data, vector.data + vector.size, block_len);
-    typedef tiled_range<Iterator>::iterator TiledIterator;
+    tiled_range<DptrIterator> v(vector.data, vector.data + vector.size, block_len);
+    typedef tiled_range<DptrIterator>::iterator TiledIterator;
 
     strided_range<TiledIterator> u0(v.begin(), v.end(), block_len);
     strided_range<TiledIterator> u1(v.begin()+block_len-1, v.end(), block_len);
