@@ -24,7 +24,7 @@ from FiniteDifference.blackscholes import BlackScholesFiniteDifferenceEngine, Bl
 from FiniteDifference.heston import HestonBarrierOption
 
 
-class Cpp_test(unittest.TestCase):
+class Operations_test(unittest.TestCase):
 
     def setUp(self):
         # print "Setting up Params for CPP tests"
@@ -48,7 +48,7 @@ class Cpp_test(unittest.TestCase):
 
         schemes = {}
 
-        self.G = Grid.Grid([np.arange(shape[0]), np.arange(shape[1])], lambda x, y: (x*shape[1]+y)**2)
+        self.G = Grid.Grid([np.arange(shape[0], dtype=float), np.arange(shape[1], dtype=float)], lambda x, y: (x*shape[1]+y)**2)
         self.F = FD.FiniteDifferenceEngineADI(self.G, coefficients=coeffs,
                 boundaries=bounds, schemes=schemes, force_bandwidth=None)
         # print "Setting up FDE for CPP tests"
