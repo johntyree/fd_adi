@@ -9,6 +9,7 @@ from libcpp cimport bool as cbool
 from libcpp.string cimport string as cpp_string
 
 from _CSRBandedOperatorGPU cimport _CSRBandedOperator
+from _CSRBandedOperatorGPU cimport mixed_for_vector as mixed_for_vector_
 from _TriBandedOperatorGPU cimport _TriBandedOperator, to_string
 from _TriBandedOperatorGPU cimport for_vector as for_vector_
 from FiniteDifference.VecArray cimport SizedArray
@@ -69,6 +70,7 @@ cdef class BandedOperator(object):
     cpdef vectorized_scale_(self, SizedArrayPtr vector)
 
 cpdef for_vector(np.ndarray v, int blocks, int derivative, int axis)
+cpdef mixed_for_vector(np.ndarray v0, np.ndarray v1)
 
 cdef inline int sign(int i)
 

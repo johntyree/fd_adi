@@ -488,6 +488,18 @@ cpdef for_vector(np.ndarray v, int blocks, int derivative, int axis):
     return B
 
 
+cpdef mixed_for_vector(np.ndarray v0, np.ndarray v1):
+    cdef SizedArrayPtr V0 = SizedArrayPtr(v0, tag='mixed_for_vector v0')
+    cdef SizedArrayPtr V1 = SizedArrayPtr(v1, tag='mixed_for_vector v1')
+    cdef BandedOperator B = BandedOperator(tag='mixed_for_vector')
+
+    B.thisptr_csr = mixed_for_vector_(deref(V0.p), deref(V1.p))
+
+    B.is_mixed_derivative = True
+    B.axis = 1
+    B.delta = None
+    return B
+
 cdef inline int sign(int i):
     if i < 0:
         return -1

@@ -325,6 +325,43 @@ class Operations_test(unittest.TestCase):
         npt.assert_equal(B, BG)
 
 
+    def test_mixed_derivative(self):
+        B = self.F.simple_operators[(0,1)]
+        # BG = BOG.mixed_for_vector(self.F.grid.mesh[0],
+                                  # self.F.grid.mesh[1]).immigrate()
+        B.D = scipy.sparse.csr_matrix(B.D)
+
+        n0 = self.F.grid.mesh[0].size
+        n1 = self.F.grid.mesh[1].size
+        indices = np.zeros((n0-2) * 9 * (n1-2))
+
+        ind = np.tile(np.hstack(([0,1,2], np.array([0,1,2])+n1, np.array([0,1,2])+2*n1)), (n1-2) * (n0-2)) + np.arange(108) // 9
+        # print np.vstack((B.D.indices, np.arange(108))).T
+        # indices[0::9] = np.arange(n0)
+        print B.blocks
+
+        print len(indices)
+        print len(B.D.indices)
+
+        fp(ind)
+        print
+        fp(indices)
+        print
+        fp(B.D.indices)
+
+
+        fp(B.D)
+        # print B.D.nnz
+        # print B.D.indices
+        # print B.D.indptr
+        # print B.D.data
+        # fp(BG.D)
+
+        # npt.assert_array_equal(B.D.data, BG.D.data)
+        # npt.assert_equal(B, BG)
+        assert False
+
+
 def main():
     """Run main."""
     import nose
