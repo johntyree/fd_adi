@@ -203,7 +203,7 @@ struct free_boundary_second {
 
 template <typename T>
 int spot_first(Dptr &sup, Dptr &mid, Dptr &sub, T deltas,
-        Dptr &high_dirichlet, Dptr &residual, int sz, int blksz) {
+        Dptr &low_dirichlet, Dptr &residual, int sz, int blksz) {
     thrust::for_each(
             thrust::make_zip_iterator(thrust::make_tuple(sup+1, mid+1, sub+1, deltas+1, deltas+2)),
             thrust::make_zip_iterator(thrust::make_tuple(sup+sz-1, mid+sz-1, sub+sz-1, deltas+sz-1, deltas+sz)),
@@ -213,18 +213,19 @@ int spot_first(Dptr &sup, Dptr &mid, Dptr &sub, T deltas,
     strided_range<DptrIterator> topmid(mid, mid+sz, blksz);
     strided_range<DptrIterator> topsub(sub, sub+sz, blksz);
     thrust::for_each(
-            thrust::make_zip_iterator(thrust::make_tuple(topsup.begin(), topmid.begin(), topsub.begin(), high_dirichlet)),
-            thrust::make_zip_iterator(thrust::make_tuple(topsup.end(), topmid.end(), topsub.end(), high_dirichlet+1)),
+            thrust::make_zip_iterator(thrust::make_tuple(topsup.begin(), topmid.begin(), topsub.begin(), low_dirichlet)),
+            thrust::make_zip_iterator(thrust::make_tuple(topsup.end(), topmid.end(), topsub.end(), low_dirichlet+1)),
             dirichlet_boundary(0)
             );
     strided_range<DptrIterator> botsup(sup+blksz-1, sup+sz, blksz);
     strided_range<DptrIterator> botmid(mid+blksz-1, mid+sz, blksz);
     strided_range<DptrIterator> botsub(sub+blksz-1, sub+sz, blksz);
+    strided_range<DptrIterator> botresidual(residual+blksz-1, residual+sz, blksz);
     thrust::for_each(
             thrust::make_zip_iterator(thrust::make_tuple(botsup.begin(),
-                    botmid.begin(), botsub.begin(), residual+blksz-1)),
+                    botmid.begin(), botsub.begin(), botresidual.begin())),
             thrust::make_zip_iterator(thrust::make_tuple(botsup.end(),
-                    botmid.end(), botsub.end(), residual+sz)),
+                    botmid.end(), botsub.end(), botresidual.end())),
             von_neumann_boundary(1)
             );
     return 0;
@@ -232,7 +233,7 @@ int spot_first(Dptr &sup, Dptr &mid, Dptr &sub, T deltas,
 
 template <typename T>
 int spot_second(Dptr &sup, Dptr &mid, Dptr &sub, T deltas,
-        Dptr &high_dirichlet, Dptr &residual, int sz, int blksz) {
+        Dptr &low_dirichlet, Dptr &residual, int sz, int blksz) {
     thrust::for_each(
             thrust::make_zip_iterator(thrust::make_tuple(sup+1, mid+1, sub+1, deltas+1, deltas+2)),
             thrust::make_zip_iterator(thrust::make_tuple(sup+sz-1, mid+sz-1, sub+sz-1, deltas+sz-1, deltas+sz)),
@@ -242,8 +243,8 @@ int spot_second(Dptr &sup, Dptr &mid, Dptr &sub, T deltas,
     strided_range<DptrIterator> topmid(mid, mid+sz, blksz);
     strided_range<DptrIterator> topsub(sub, sub+sz, blksz);
     thrust::for_each(
-            thrust::make_zip_iterator(thrust::make_tuple(topsup.begin(), topmid.begin(), topsub.begin(), high_dirichlet)),
-            thrust::make_zip_iterator(thrust::make_tuple(topsup.end(), topmid.end(), topsub.end(), high_dirichlet+1)),
+            thrust::make_zip_iterator(thrust::make_tuple(topsup.begin(), topmid.begin(), topsub.begin(), low_dirichlet)),
+            thrust::make_zip_iterator(thrust::make_tuple(topsup.end(), topmid.end(), topsub.end(), low_dirichlet+1)),
             dirichlet_boundary(0)
             );
     strided_range<DptrIterator> botsup(sup+blksz-1, sup+sz, blksz);
@@ -256,11 +257,11 @@ int spot_second(Dptr &sup, Dptr &mid, Dptr &sub, T deltas,
     strided_range<DptrIterator> botresidual(residual+blksz-1, residual+sz, blksz);
     thrust::for_each(
             thrust::make_zip_iterator(thrust::make_tuple(
-                    botsup.begin(), botmid.begin(), botsub.begin(),
-                    botdel.begin(), residual+blksz-1)),
+                    botsub.begin(), botmid.begin(), botsup.begin(),
+                    botdel.begin(), botresidual.begin())),
             thrust::make_zip_iterator(thrust::make_tuple(
-                    botsup.end(), botmid.end(), botsup.end(),
-                    botdel.end(), residual+sz)),
+                    botsub.end(), botmid.end(), botsup.end(),
+                    botdel.end(), botresidual.end())),
             free_boundary_second_with_first_derivative_one()
             );
     return 0;
@@ -296,7 +297,7 @@ int var_first(Dptr &sup, Dptr &mid, Dptr &sub, T deltas, int sz, int blksz) {
 
 template <typename T>
 int var_second(Dptr &sup, Dptr &mid, Dptr &sub, T deltas,
-        Dptr &top_factors, Dptr &bottom_factors,
+        Dptr &residual, Dptr &bottom_factors,
         int sz, int blksz) {
     int blks = sz / blksz;
     thrust::for_each(
@@ -307,17 +308,25 @@ int var_second(Dptr &sup, Dptr &mid, Dptr &sub, T deltas,
     strided_range<DptrIterator> topsup(sup, sup+sz, blksz);
     strided_range<DptrIterator> topmid(mid, mid+sz, blksz);
     strided_range<DptrIterator> topsub(sub, sub+sz, blksz);
-    strided_range<T> topdel(deltas+1, deltas+sz, blksz);
-    strided_range<T> topdel2(deltas+2, deltas+sz, blksz);
+    strided_range<DptrIterator> topresidual(residual, residual+sz, blksz);
+    /* We use the von neumann boundary here because we know this will all be
+     * multiplied by the 0 spot value. */
     thrust::for_each(
-            thrust::make_zip_iterator(thrust::make_tuple(top_factors,
-                    topsup.begin(), topmid.begin(), topsub.begin(),
-                    topdel.begin(), topdel2.begin())),
-            thrust::make_zip_iterator(thrust::make_tuple(top_factors + blks,
-                    topsup.end(), topmid.end(), topsub.end(),
-                    topdel.end(), topdel2.end())),
-            free_boundary_second()
+            thrust::make_zip_iterator(thrust::make_tuple(topsup.begin(),
+                    topmid.begin(), topsub.begin(), topresidual.begin())),
+            thrust::make_zip_iterator(thrust::make_tuple(topsup.end(),
+                    topmid.end(), topsub.end(), topresidual.end())),
+            von_neumann_boundary(0)
             );
+    /* thrust::for_each( */
+            /* thrust::make_zip_iterator(thrust::make_tuple(top_factors, */
+                    /* topsup.begin(), topmid.begin(), topsub.begin(), */
+                    /* topdel.begin(), topdel2.begin())), */
+            /* thrust::make_zip_iterator(thrust::make_tuple(top_factors + blks, */
+                    /* topsup.end(), topmid.end(), topsub.end(), */
+                    /* topdel.end(), topdel2.end())), */
+            /* free_boundary_second() */
+            /* ); */
     strided_range<DptrIterator> botsup(sup+blksz-1, sup+sz, blksz);
     strided_range<DptrIterator> botmid(mid+blksz-1, mid+sz, blksz);
     strided_range<DptrIterator> botsub(sub+blksz-1, sub+sz, blksz);
@@ -1033,6 +1042,7 @@ _TriBandedOperator *for_vector(SizedArray<double> &V, Py_ssize_t blocks,
     mid = sup + operator_rows;
     sub = mid + operator_rows;
 
+    thrust::fill(R.data, R.data + R.size, 0);
     thrust::adjacent_difference(V.data, V.data + V.size, deltas.data);
     // XXX
     deltas.data[0] = NaN;
@@ -1040,35 +1050,30 @@ _TriBandedOperator *for_vector(SizedArray<double> &V, Py_ssize_t blocks,
 
     if (derivative == 1) {
         if (axis == 0) {
-            spot_first(sup,
-                    mid,
-                    sub,
-                    delta_rep.begin(),
-                    high_dirichlet.data,
-                    R.data,
-                    operator_rows,
-                    blksz);
+            spot_first(sup, mid, sub, delta_rep.begin(),
+                    low_dirichlet.data, R.data, operator_rows, blksz);
         } else if (axis == 1) {
-            var_first(sup, mid, sub, delta_rep.begin(), operator_rows, blksz);
+            var_first(sup, mid, sub, delta_rep.begin(),
+                    operator_rows, blksz);
         } else {
             throw std::invalid_argument("axis must be one of (0, 1)");
         }
     } else if (derivative == 2) {
         if (axis == 0) {
             spot_second(sup, mid, sub, delta_rep.begin(),
-                high_dirichlet.data, R.data, operator_rows, blksz);
+                low_dirichlet.data, R.data, operator_rows, blksz);
         } else if (axis == 1) {
             var_second(sup, mid, sub, delta_rep.begin(),
-                top_factors.data, bottom_factors.data, operator_rows, blksz);
+                R.data, bottom_factors.data, operator_rows, blksz);
         } else {
             throw std::invalid_argument("derivative must be one of (1, 2)");
         }
     }
 
-    bool has_high_dirichlet = axis == 0;
-    bool has_low_dirichlet = false;
+    bool has_high_dirichlet = false;
+    bool has_low_dirichlet = axis == 0;
     std::string top_fold_status = "CANNOT_FOLD";
-    std::string bottom_fold_status = axis == 1 ? "CAN_FOLD" : "CANNOT_FOLD";
+    std::string bottom_fold_status = axis == 1 && derivative == 2 ? "CAN_FOLD" : "CANNOT_FOLD";
     bool has_residual = axis == 0;
 
     return new _TriBandedOperator(

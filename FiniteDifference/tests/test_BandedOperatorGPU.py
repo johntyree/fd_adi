@@ -250,23 +250,75 @@ class Operations_test(unittest.TestCase):
         ref = np.e**x
         tst = BG.apply(ref) / 2
         fp(ref - tst, 'e')
-        npt.assert_allclose(tst, ref, rtol=1e-4, atol=1e-6, err_msg="d/dx (apply) not accurate")
+        npt.assert_allclose(tst, ref, rtol=1e-4, atol=1e-6,
+                            err_msg="d/dx (apply) not accurate")
         # fp(B.D.data)
         tst = BG.solve(ref) * 2
-        npt.assert_allclose(ref, tst, rtol=1e-4, atol=1e-6, err_msg="integral (solve) not accurate")
+        npt.assert_allclose(ref, tst, rtol=1e-4, atol=1e-6,
+                            err_msg="integral (solve) not accurate")
 
 
     def test_axis_0_derivative_1(self):
-
         B = self.F.simple_operators[(0,)]
+        BG = BOG.for_vector(self.F.grid.mesh[0],
+                            self.F.grid.shape[1], 1, 0).immigrate()
 
-        BGG = BOG.for_vector(self.F.grid.mesh[0], self.F.grid.shape[1], 1, 0)
-
-        BG = BGG.immigrate()
+        # We don't care about the deltas, just duplicate here to pass the
+        # equality check
+        BG.deltas = B.deltas
 
         npt.assert_array_equal(B.D.data, BG.D.data)
         npt.assert_equal(B, BG)
 
+
+    def test_axis_0_derivative_2(self):
+        B = self.F.simple_operators[(0,0)]
+        BG = BOG.for_vector(self.F.grid.mesh[0],
+                            self.F.grid.shape[1], 2, 0).immigrate()
+
+        # We don't care about the deltas, just duplicate here to pass the
+        # equality check
+        BG.deltas = B.deltas
+
+        npt.assert_array_equal(B.D.data, BG.D.data)
+        npt.assert_equal(B, BG)
+
+
+    def test_axis_1_derivative_1(self):
+        B = self.F.simple_operators[(1,)]
+        BG = BOG.for_vector(self.F.grid.mesh[1],
+                            self.F.grid.shape[0], 1, 1).immigrate()
+
+        # We don't care about the deltas, just duplicate here to pass the
+        # equality check
+        BG.deltas = B.deltas
+
+        npt.assert_array_equal(B.D.data, BG.D.data)
+        npt.assert_equal(B, BG)
+
+
+    def test_axis_1_derivative_2(self):
+        B = self.F.simple_operators[(1,1)]
+        BG = BOG.for_vector(self.F.grid.mesh[1],
+                            self.F.grid.shape[0], 2, 1).immigrate()
+
+        # We don't care about the deltas, just duplicate here to pass the
+        # equality check
+        BG.deltas = B.deltas
+
+        fp(B.D.data)
+        print
+        fp(BG.D.data)
+        print
+        fp(B.D.data - BG.D.data)
+
+        print B.D.offsets
+        fp(B.D)
+        print BG.D.offsets
+        fp(BG.D)
+
+        npt.assert_array_equal(B.D.data, BG.D.data)
+        npt.assert_equal(B, BG)
 
 
 def main():
