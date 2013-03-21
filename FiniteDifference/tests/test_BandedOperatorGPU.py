@@ -28,7 +28,7 @@ class Operations_test(unittest.TestCase):
 
     def setUp(self):
         # print "Setting up Params for CPP tests"
-        shape = (25,25)
+        shape = (5,6)
         self.v1 = np.arange(shape[0]*shape[1], dtype=float)**2
         self.v2 = self.v1.copy()
         self.v2.resize(shape)
@@ -48,7 +48,7 @@ class Operations_test(unittest.TestCase):
 
         schemes = {}
 
-        self.G = Grid.Grid([np.arange(shape[0], dtype=float), np.arange(shape[1], dtype=float)], lambda x, y: (x*shape[1]+y)**2)
+        self.G = Grid.Grid([np.arange(shape[0], dtype=float)**2, np.arange(shape[1], dtype=float)**2], lambda x, y: (x*shape[1]+y)**2)
         self.F = FD.FiniteDifferenceEngineADI(self.G, coefficients=coeffs,
                 boundaries=bounds, schemes=schemes, force_bandwidth=None)
         # print "Setting up FDE for CPP tests"
