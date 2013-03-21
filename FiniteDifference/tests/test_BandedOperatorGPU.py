@@ -33,11 +33,11 @@ class Operations_test(unittest.TestCase):
         self.v2 = self.v1.copy()
         self.v2.resize(shape)
 
-        coeffs = {(0,) : lambda *x: 1,
-                  (0,0): lambda *x: 1,
-                  (1,) : lambda *x: 1,
-                  (1,1): lambda *x: 1,
-                  (0,1): lambda *x: 1,
+        coeffs = {(0,) : lambda t, *x: x[0]*x[1],
+                  (0,0): lambda t, *x: x[0]*x[1],
+                  (1,) : lambda t, *x: x[0]*x[1],
+                  (1,1): lambda t, *x: x[0]*x[1],
+                  (0,1): lambda t, *x: x[0]*x[1],
                   }
         bounds = {
                 (0,)  : ((0,    lambda *args: 0),    (1,    lambda *args: 1)),
@@ -75,6 +75,9 @@ class Operations_test(unittest.TestCase):
         B = B.immigrate("test 1")
         npt.assert_array_equal([1, 0, -1, -2], B.D.offsets)
         npt.assert_equal(B.bottom_fold_status, "CAN_FOLD")
+        npt.assert_array_almost_equal(B.D.data, ref.D.data, decimal=14)
+        ref.D *= 0
+        B.D *= 0
         assert ref == B
 
 
@@ -91,8 +94,9 @@ class Operations_test(unittest.TestCase):
         B = B.immigrate("test 1")
         npt.assert_array_equal([1, 0, -1], B.D.offsets)
         npt.assert_equal(B.bottom_fold_status, "FOLDED")
-        # fp(ref.D)
-        # fp(B.D)
+        npt.assert_array_almost_equal(B.D.data, ref.D.data, decimal=14)
+        ref.D *= 0
+        B.D *= 0
         assert ref == B
 
 
