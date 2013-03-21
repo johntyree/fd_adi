@@ -256,112 +256,17 @@ class Cpp_test(unittest.TestCase):
         npt.assert_allclose(ref, tst, rtol=1e-4, atol=1e-6, err_msg="integral (solve) not accurate")
 
 
+    def test_axis_0_derivative_1(self):
 
-class Operator_Folding_test(unittest.TestCase):
+        B = self.F.simple_operators[(0,)]
 
-    def setUp(self):
-        loops = 200
-        blocks = 2
-        decimals = 12
+        BGG = BOG.for_vector(self.F.grid.mesh[0], self.F.grid.shape[1], 1, 0)
 
-        self.loops = loops
-        self.blocks = blocks
-        self.decimals = decimals
+        BG = BGG.immigrate()
 
-        mat = np.matrix("""
-                        -1.5 0.5 2 0 0;
-                        -1   2  -1 0 0;
-                        0   -1   2 -1 0;
-                        0   0    -1 2 -1;
-                        0   0   -1.5 0.5 2""").A
-        diamat = todia(scipy.sparse.dia_matrix(mat))
+        npt.assert_array_equal(B.D.data, BG.D.data)
+        npt.assert_equal(B, BG)
 
-        x = foldMatFor(diamat, 1).todense().A
-        topx = x.copy()
-        bottomx = x.copy()
-        topx[-1,-2] = 0
-        bottomx[0,1] = 0
-        x, topx, bottomx = map(todia, [x, topx, bottomx])
-
-
-        topblockx = scipy.sparse.block_diag([topx]*blocks)
-        bottomblockx = scipy.sparse.block_diag([bottomx]*blocks)
-        blockx = todia(scipy.sparse.block_diag([x]*blocks))
-        self.blockxI = blockx.todense().I.A
-        self.topblockxI = topblockx.todense().I.A
-        self.bottomblockxI = bottomblockx.todense().I.A
-
-        npt.assert_array_equal(todia(topblockx.dot(bottomblockx)).data, blockx.data)
-
-        blockdiamat = todia(scipy.sparse.block_diag([diamat]*blocks))
-
-        blocktridiamat = todia(blockx.dot(blockdiamat))
-        topblocktridiamat = todia(topblockx.dot(blockdiamat))
-        bottomblocktridiamat = todia(bottomblockx.dot(blockdiamat))
-
-        self.blockdiamat = blockdiamat
-
-        self.blockx = blockx
-        self.topblockx = topblockx
-        self.bottomblockx = bottomblockx
-
-        self.blocktridiamat = blocktridiamat
-        self.topblocktridiamat = topblocktridiamat
-        self.bottomblocktridiamat = bottomblocktridiamat
-
-        self.vec = np.random.random(mat.shape[1]*blocks)
-
-        self.B = FD.BandedOperator((blockdiamat.data, (2, 1, 0, -1, -2)), inplace=False)
-        self.B.blocks = blocks
-
-
-    def test_diagonalize(self):
-        mat = self.B.D.data.view().reshape(-1)
-        zeros = mat == 0
-        mat[:] = np.arange(self.B.D.data.size)
-        mat[zeros] = 0
-        B = self.B.copy()
-        # print "ref pre"
-        # fp(self.B.D)
-        # fp(self.B.D.data)
-
-        # print "Collected off-tridiag points as bottom_factors"
-        block_len = B.shape[0] / B.blocks
-        bottom_factors = B.D.data[-1,block_len-3::block_len]
-        # print B.blocks, len(bottom_factors)
-        # print bottom_factors
-
-        self.B.diagonalize()
-        B.diagonalize()
-        # print "ref mid"
-        # fp(self.B.D)
-        # fp(self.B.D.data)
-        # print "tst mid"
-        # fp(B.D)
-        # fp(B.D.data)
-
-        npt.assert_array_equal(self.B.D.data, B.D.data, err_msg="Diagonalize alone doesn't preserve operator matrix.")
-        npt.assert_(B == self.B, msg="Diagonalize alone doesn't preserve operator.")
-
-        B.undiagonalize()
-        self.B.undiagonalize()
-        npt.assert_(not B.is_tridiagonal())
-        # print "ref after"
-        # fp(self.B.D)
-        # fp(self.B.D.data)
-        # print "tst after"
-        # fp(B.D)
-        # fp(B.D.data)
-        # print "ref top"
-        # fp(self.B.top_factors or np.array([np.nan]))
-        # print "tst top"
-        # fp(B.top_factors or np.array([np.nan]))
-        # print "ref bot"
-        # fp(self.B.bottom_factors or np.array([np.nan]))
-        # print "tst bot"
-        # fp(B.bottom_factors or np.array([np.nan]))
-        npt.assert_array_equal(self.B.D.data, B.D.data, err_msg="Undiagonalize roundtrip doesn't preserve operator matrix.")
-        npt.assert_(B == self.B, msg="Undiagonalize roundtrip doesn't preserve operator.")
 
 
 def main():

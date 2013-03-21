@@ -10,6 +10,7 @@ from libcpp.string cimport string as cpp_string
 
 from _CSRBandedOperatorGPU cimport _CSRBandedOperator
 from _TriBandedOperatorGPU cimport _TriBandedOperator, to_string
+from _TriBandedOperatorGPU cimport for_vector as for_vector_
 from FiniteDifference.VecArray cimport SizedArray
 from FiniteDifference.SizedArrayPtr cimport SizedArrayPtr, SizedArrayPtr_i
 from FiniteDifference.SizedArrayPtr cimport from_SizedArray, from_SizedArray_i
@@ -67,6 +68,7 @@ cdef class BandedOperator(object):
     cpdef vectorized_scale(self, np.ndarray vector)
     cpdef vectorized_scale_(self, SizedArrayPtr vector)
 
+cpdef for_vector(np.ndarray v, int blocks, int derivative, int axis)
 
 cdef inline int sign(int i)
 
