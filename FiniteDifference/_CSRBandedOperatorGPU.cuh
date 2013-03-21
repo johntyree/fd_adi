@@ -44,6 +44,9 @@ class _CSRBandedOperator {
 };
 
 
+_CSRBandedOperator * mixed_for_vector(
+        SizedArray<double> &v0, SizedArray<double> &v1);
+
 std::ostream & operator<<(std::ostream & os, _CSRBandedOperator const &B);
 
 #endif

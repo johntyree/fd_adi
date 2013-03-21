@@ -157,3 +157,20 @@ void _CSRBandedOperator::vectorized_scale(SizedArray<double> &vector) {
     FULLTRACE;
     return;
 }
+
+_CSRBandedOperator * mixed_for_vector(SizedArray<double> &v0,
+                                      SizedArray<double> &v1) {
+
+    Py_ssize_t operator_rows = v0.size * v1.size;
+    Py_ssize_t blocks = 1;
+
+    SizedArray<double> data(operator_rows * 3 - 2 * v0.size - 2 * v1.size, "data");
+    SizedArray<int> row_ptr(operator_rows, "row_ptr");
+    SizedArray<int> row_ind(blocks, "row_ind");
+    SizedArray<int> col_ind(blocks, "col_ind");
+
+    std::string name = "mixed_for_vector CSR";
+
+    return new _CSRBandedOperator(data, row_ptr, row_ind,
+            col_ind, operator_rows, blocks, name);
+}

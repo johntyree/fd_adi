@@ -29,4 +29,4 @@ cdef extern from "_CSRBandedOperatorGPU.cuh":
             cpp_string name
         ) except +
 
-
+    _CSRBandedOperator * mixed_for_vector(SizedArray[double] &, SizedArray[double] &) except +
