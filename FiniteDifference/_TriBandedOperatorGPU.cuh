@@ -74,4 +74,7 @@ class _TriBandedOperator {
         cusparseStatus_t status;
 };
 
+_TriBandedOperator * for_vector(SizedArray<double> &,
+        Py_ssize_t blocks, Py_ssize_t derivative, Py_ssize_t axis);
+
 #endif

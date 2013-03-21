@@ -53,3 +53,6 @@ cdef extern from "_TriBandedOperatorGPU.cuh":
             cpp_string bottom_fold_status,
             cbool has_residual
         ) except +
+
+    _TriBandedOperator * for_vector(SizedArray[double] &,
+            Py_ssize_t blocks, Py_ssize_t derivative, Py_ssize_t axis) except +
