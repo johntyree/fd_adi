@@ -20,13 +20,15 @@
 #include "tiled_range.h"
 
 typedef thrust::device_vector<double> Vec;
+typedef thrust::device_ptr<double> Dptr;
+typedef thrust::detail::normal_iterator<thrust::device_ptr<double> > DptrIterator;
 
 using namespace thrust::placeholders;
 
 using std::cout;
 using std::endl;
 using std::setw;
-#define NaN std::numeric_limits<double>::quiet_NaN()
+const double NaN = std::numeric_limits<double>::quiet_NaN();
 
 double* raw(Vec &v) {
    return thrust::raw_pointer_cast(v.data());
@@ -209,82 +211,84 @@ void printvec(const char *c, thrust::device_ptr<T> const &v, int size) {
     cout << "]" << endl;
 }
 
-int spot_first(Diags &d) {
+int spot_first(Dptr &sup, Dptr &mid, Dptr &sub, Dptr &deltas,
+        Dptr &high_dirichlet, Dptr &residual, int sz, int blksz) {
     thrust::for_each(
-            thrust::make_zip_iterator(thrust::make_tuple(d.sup+1, d.mid+1, d.sub+1, d.deltas+1, d.deltas+2)),
-            thrust::make_zip_iterator(thrust::make_tuple(d.sup+d.sz-1, d.mid+d.sz-1, d.sub+d.sz-1, d.deltas+d.sz-1, d.deltas+d.sz)),
+            thrust::make_zip_iterator(thrust::make_tuple(sup+1, mid+1, sub+1, deltas+1, deltas+2)),
+            thrust::make_zip_iterator(thrust::make_tuple(sup+sz-1, mid+sz-1, sub+sz-1, deltas+sz-1, deltas+sz)),
             first_deriv()
             );
-    strided_range<Vec::iterator> topsup(d.sup, d.sup+d.sz, d.blksz);
-    strided_range<Vec::iterator> topmid(d.mid, d.mid+d.sz, d.blksz);
-    strided_range<Vec::iterator> topsub(d.sub, d.sub+d.sz, d.blksz);
+    strided_range<Vec::iterator> topsup(sup, sup+sz, blksz);
+    strided_range<Vec::iterator> topmid(mid, mid+sz, blksz);
+    strided_range<Vec::iterator> topsub(sub, sub+sz, blksz);
     thrust::for_each(
-            thrust::make_zip_iterator(thrust::make_tuple(topsup.begin(), topmid.begin(), topsub.begin(), d.high_dirichlet)),
-            thrust::make_zip_iterator(thrust::make_tuple(topsup.end(), topmid.end(), topsub.end(), d.high_dirichlet+1)),
+            thrust::make_zip_iterator(thrust::make_tuple(topsup.begin(), topmid.begin(), topsub.begin(), high_dirichlet)),
+            thrust::make_zip_iterator(thrust::make_tuple(topsup.end(), topmid.end(), topsub.end(), high_dirichlet+1)),
             dirichlet_boundary(0)
             );
-    strided_range<Vec::iterator> botsup(d.sup+d.blksz-1, d.sup+d.sz, d.blksz);
-    strided_range<Vec::iterator> botmid(d.mid+d.blksz-1, d.mid+d.sz, d.blksz);
-    strided_range<Vec::iterator> botsub(d.sub+d.blksz-1, d.sub+d.sz, d.blksz);
+    strided_range<Vec::iterator> botsup(sup+blksz-1, sup+sz, blksz);
+    strided_range<Vec::iterator> botmid(mid+blksz-1, mid+sz, blksz);
+    strided_range<Vec::iterator> botsub(sub+blksz-1, sub+sz, blksz);
     thrust::for_each(
             thrust::make_zip_iterator(thrust::make_tuple(botsup.begin(),
-                    botmid.begin(), botsub.begin(), d.residual+d.blksz-1)),
+                    botmid.begin(), botsub.begin(), residual+blksz-1)),
             thrust::make_zip_iterator(thrust::make_tuple(botsup.end(),
-                    botmid.end(), botsub.end(), d.residual+d.sz)),
+                    botmid.end(), botsub.end(), residual+sz)),
             von_neumann_boundary(1)
             );
     return 0;
 }
 
-int spot_second(Diags &d) {
+int spot_second(Dptr &sup, Dptr &mid, Dptr &sub, Dptr &deltas,
+        Dptr &high_dirichlet, Dptr &residual, int sz, int blksz) {
     thrust::for_each(
-            thrust::make_zip_iterator(thrust::make_tuple(d.sup+1, d.mid+1, d.sub+1, d.deltas+1, d.deltas+2)),
-            thrust::make_zip_iterator(thrust::make_tuple(d.sup+d.sz-1, d.mid+d.sz-1, d.sub+d.sz-1, d.deltas+d.sz-1, d.deltas+d.sz)),
+            thrust::make_zip_iterator(thrust::make_tuple(sup+1, mid+1, sub+1, deltas+1, deltas+2)),
+            thrust::make_zip_iterator(thrust::make_tuple(sup+sz-1, mid+sz-1, sub+sz-1, deltas+sz-1, deltas+sz)),
             second_deriv()
             );
-    strided_range<Vec::iterator> topsup(d.sup, d.sup+d.sz, d.blksz);
-    strided_range<Vec::iterator> topmid(d.mid, d.mid+d.sz, d.blksz);
-    strided_range<Vec::iterator> topsub(d.sub, d.sub+d.sz, d.blksz);
+    strided_range<Vec::iterator> topsup(sup, sup+sz, blksz);
+    strided_range<Vec::iterator> topmid(mid, mid+sz, blksz);
+    strided_range<Vec::iterator> topsub(sub, sub+sz, blksz);
     thrust::for_each(
-            thrust::make_zip_iterator(thrust::make_tuple(topsup.begin(), topmid.begin(), topsub.begin(), d.high_dirichlet)),
-            thrust::make_zip_iterator(thrust::make_tuple(topsup.end(), topmid.end(), topsub.end(), d.high_dirichlet+1)),
+            thrust::make_zip_iterator(thrust::make_tuple(topsup.begin(), topmid.begin(), topsub.begin(), high_dirichlet)),
+            thrust::make_zip_iterator(thrust::make_tuple(topsup.end(), topmid.end(), topsub.end(), high_dirichlet+1)),
             dirichlet_boundary(0)
             );
-    strided_range<Vec::iterator> botsup(d.sup+d.blksz-1, d.sup+d.sz, d.blksz);
-    strided_range<Vec::iterator> botmid(d.mid+d.blksz-1, d.mid+d.sz, d.blksz);
-    strided_range<Vec::iterator> botsub(d.sub+d.blksz-1, d.sub+d.sz, d.blksz);
-    strided_range<Vec::iterator> botdel(d.deltas+d.blksz-1, d.deltas+d.sz, d.blksz);
+    strided_range<Vec::iterator> botsup(sup+blksz-1, sup+sz, blksz);
+    strided_range<Vec::iterator> botmid(mid+blksz-1, mid+sz, blksz);
+    strided_range<Vec::iterator> botsub(sub+blksz-1, sub+sz, blksz);
+    strided_range<Vec::iterator> botdel(deltas+blksz-1, deltas+sz, blksz);
     thrust::for_each(
             thrust::make_zip_iterator(thrust::make_tuple(
                     botsup.begin(), botmid.begin(), botsub.begin(),
-                    botdel.begin(), d.residual+d.blksz-1)),
+                    botdel.begin(), residual+blksz-1)),
             thrust::make_zip_iterator(thrust::make_tuple(
                     botsup.end(), botmid.end(), botsup.end(),
-                    botdel.end(), d.residual+d.sz)),
+                    botdel.end(), residual+sz)),
             free_boundary_second_with_first_derivative_one()
             );
     return 0;
 }
 
-int var_first(Diags &d) {
+int var_first(Dptr &sup, Dptr &mid, Dptr &sub, Dptr &deltas, int sz, int blksz) {
     thrust::for_each(
-            thrust::make_zip_iterator(thrust::make_tuple(d.sup+1, d.mid+1, d.sub+1, d.deltas+1, d.deltas+2)),
-            thrust::make_zip_iterator(thrust::make_tuple(d.sup+d.sz-1, d.mid+d.sz-1, d.sub+d.sz-1, d.deltas+d.sz-1, d.deltas+d.sz)),
+            thrust::make_zip_iterator(thrust::make_tuple(sup+1, mid+1, sub+1, deltas+1, deltas+2)),
+            thrust::make_zip_iterator(thrust::make_tuple(sup+sz-1, mid+sz-1, sub+sz-1, deltas+sz-1, deltas+sz)),
             first_deriv()
             );
-    strided_range<Vec::iterator> topsup(d.sup, d.sup+d.sz, d.blksz);
-    strided_range<Vec::iterator> topmid(d.mid, d.mid+d.sz, d.blksz);
-    strided_range<Vec::iterator> topsub(d.sub, d.sub+d.sz, d.blksz);
-    strided_range<Vec::iterator> topdel(d.deltas+1, d.deltas+d.sz, d.blksz);
+    strided_range<Vec::iterator> topsup(sup, sup+sz, blksz);
+    strided_range<Vec::iterator> topmid(mid, mid+sz, blksz);
+    strided_range<Vec::iterator> topsub(sub, sub+sz, blksz);
+    strided_range<Vec::iterator> topdel(deltas+1, deltas+sz, blksz);
     thrust::for_each(
             thrust::make_zip_iterator(thrust::make_tuple(topsup.begin(), topmid.begin(), topsub.begin(), topdel.begin())),
             thrust::make_zip_iterator(thrust::make_tuple(topsup.end(), topmid.end(), topsub.end(), topdel.end())),
             free_boundary_first()
             );
-    strided_range<Vec::iterator> botsup(d.sup+d.blksz-1, d.sup+d.sz, d.blksz);
-    strided_range<Vec::iterator> botmid(d.mid+d.blksz-1, d.mid+d.sz, d.blksz);
-    strided_range<Vec::iterator> botsub(d.sub+d.blksz-1, d.sub+d.sz, d.blksz);
-    strided_range<Vec::iterator> botdel(d.deltas+d.blksz-1, d.deltas+d.sz, d.blksz);
+    strided_range<Vec::iterator> botsup(sup+blksz-1, sup+sz, blksz);
+    strided_range<Vec::iterator> botmid(mid+blksz-1, mid+sz, blksz);
+    strided_range<Vec::iterator> botsub(sub+blksz-1, sub+sz, blksz);
+    strided_range<Vec::iterator> botdel(deltas+blksz-1, deltas+sz, blksz);
     thrust::for_each(
             thrust::make_zip_iterator(thrust::make_tuple(botmid.begin(), botsub.begin(), botsup.begin(), botdel.begin())),
             thrust::make_zip_iterator(thrust::make_tuple(botmid.end(), botsub.end(), botsup.end(), botdel.end())),
@@ -293,36 +297,39 @@ int var_first(Diags &d) {
     return 0;
 }
 
-int var_second(Diags &d) {
+int var_second(Dptr &sup, Dptr &mid, Dptr &sub, Dptr &deltas,
+        Dptr &top_factors, Dptr &bottom_factors,
+        int sz, int blksz) {
+    int blks = sz / blksz;
     thrust::for_each(
-            thrust::make_zip_iterator(thrust::make_tuple(d.sup+1, d.mid+1, d.sub+1, d.deltas+1, d.deltas+2)),
-            thrust::make_zip_iterator(thrust::make_tuple(d.sup+d.sz-1, d.mid+d.sz-1, d.sub+d.sz-1, d.deltas+d.sz-1, d.deltas+d.sz)),
+            thrust::make_zip_iterator(thrust::make_tuple(sup+1, mid+1, sub+1, deltas+1, deltas+2)),
+            thrust::make_zip_iterator(thrust::make_tuple(sup+sz-1, mid+sz-1, sub+sz-1, deltas+sz-1, deltas+sz)),
             second_deriv()
             );
-    strided_range<Vec::iterator> topsup(d.sup, d.sup+d.sz, d.blksz);
-    strided_range<Vec::iterator> topmid(d.mid, d.mid+d.sz, d.blksz);
-    strided_range<Vec::iterator> topsub(d.sub, d.sub+d.sz, d.blksz);
-    strided_range<Vec::iterator> topdel(d.deltas+1, d.deltas+d.sz, d.blksz);
-    strided_range<Vec::iterator> topdel2(d.deltas+2, d.deltas+d.sz, d.blksz);
+    strided_range<Vec::iterator> topsup(sup, sup+sz, blksz);
+    strided_range<Vec::iterator> topmid(mid, mid+sz, blksz);
+    strided_range<Vec::iterator> topsub(sub, sub+sz, blksz);
+    strided_range<Vec::iterator> topdel(deltas+1, deltas+sz, blksz);
+    strided_range<Vec::iterator> topdel2(deltas+2, deltas+sz, blksz);
     thrust::for_each(
-            thrust::make_zip_iterator(thrust::make_tuple(d.top_factors,
+            thrust::make_zip_iterator(thrust::make_tuple(top_factors,
                     topsup.begin(), topmid.begin(), topsub.begin(),
                     topdel.begin(), topdel2.begin())),
-            thrust::make_zip_iterator(thrust::make_tuple(d.top_factors + d.blks,
+            thrust::make_zip_iterator(thrust::make_tuple(top_factors + blks,
                     topsup.end(), topmid.end(), topsub.end(),
                     topdel.end(), topdel2.end())),
             free_boundary_second()
             );
-    strided_range<Vec::iterator> botsup(d.sup+d.blksz-1, d.sup+d.sz, d.blksz);
-    strided_range<Vec::iterator> botmid(d.mid+d.blksz-1, d.mid+d.sz, d.blksz);
-    strided_range<Vec::iterator> botsub(d.sub+d.blksz-1, d.sub+d.sz, d.blksz);
-    strided_range<Vec::iterator> botdel(d.deltas+d.blksz-1, d.deltas+d.sz, d.blksz);
-    strided_range<Vec::iterator> botdel2(d.deltas+d.blksz-2, d.deltas+d.sz, d.blksz);
+    strided_range<Vec::iterator> botsup(sup+blksz-1, sup+sz, blksz);
+    strided_range<Vec::iterator> botmid(mid+blksz-1, mid+sz, blksz);
+    strided_range<Vec::iterator> botsub(sub+blksz-1, sub+sz, blksz);
+    strided_range<Vec::iterator> botdel(deltas+blksz-1, deltas+sz, blksz);
+    strided_range<Vec::iterator> botdel2(deltas+blksz-2, deltas+sz, blksz);
     thrust::for_each(
-            thrust::make_zip_iterator(thrust::make_tuple(d.bottom_factors,
+            thrust::make_zip_iterator(thrust::make_tuple(bottom_factors,
                     botsub.begin(), botmid.begin(), botsup.begin(),
                     botdel.begin(), botdel2.begin())),
-            thrust::make_zip_iterator(thrust::make_tuple(d.bottom_factors + d.blks,
+            thrust::make_zip_iterator(thrust::make_tuple(bottom_factors + blks,
                     botsub.end(), botmid.end(), botsup.end(),
                     botdel.end(), botdel2.end())),
             free_boundary_second()
@@ -330,6 +337,10 @@ int var_second(Diags &d) {
     return 0;
 }
 
+int mixed(Diags &d) {
+
+    return 0;
+}
 
 
 struct periodic_from_to_mask : thrust::unary_function<int, bool> {
@@ -384,16 +395,19 @@ int main(void) {
 
     switch (2) {
         case 1:
-            spot_first(d);
+            spot_first(d.sup, d.mid, d.sub, d.deltas,
+                    d.high_dirichlet, d.residual, d.sz, d.blksz);
             break;
         case 2:
-            spot_second(d);
+            spot_second(d.sup, d.mid, d.sub, d.deltas,
+                    d.high_dirichlet, d.residual, d.sz, d.blksz);
             break;
         case 3:
-            var_first(d);
+            var_first(d.sup, d.mid, d.sub, d.deltas, d.sz, d.blksz);
             break;
         case 4:
-            var_second(d);
+            var_second(d.sup, d.mid, d.sub, d.deltas,
+                   d.top_factors, d.bottom_factors, d.sz, d.blksz);
             break;
     }
 
@@ -427,3 +441,52 @@ int main(void) {
     std::cout << "=======" << std::endl;
     return 0;
 }
+/*
+ *
+ *         # This expects only 2 dimensions
+ *         self.check_mixed_derivative_parameters(mixed_derivs.keys())
+ *         for d in mixed_derivs.keys():
+ *             d0_size = len(self.grid.mesh[d[0]])
+ *             d1_size = len(self.grid.mesh[d[1]])
+ *
+ *             # TODO: We'll need to do complicated transposing for this in the
+ *             # general case
+ *             Bs = BO.for_vector(self.grid.mesh[d[0]], "center", 1, 2, None, None, 0)
+ *             Bm1 = BO.for_vector(self.grid.mesh[d[1]], "center", 1, 2, None, None, 1)
+ *             Bb1 = Bm1.copy()
+ *             Bp1 = Bm1.copy()
+ *
+ *             # TODO: Hardcoding in for centered differencing
+ *             Bps = [Bp1 * 0, Bp1 * 0] + replicate(d0_size-2, Bp1)
+ *             Bbs = [Bb1 * 0] + replicate(d0_size-2, Bb1) +  [Bb1 * 0]
+ *             Bms = replicate(d0_size-2, Bm1) + [Bm1 * 0, Bm1 * 0]
+ *
+ *             offsets = Bs.D.offsets
+ *             data = [Bps, Bbs, Bms]
+ *             for row, o in enumerate(offsets):
+ *                 if o >= 0:
+ *                     for i in range(Bs.shape[0]-o):
+ *                         a = (np.array(self.grid.mesh[d[0]][i]).repeat(d1_size),)
+ *                         # vec = self.evalvectorfunc(coeffs[d], a, 1)
+ *                         # data[row][i+o].vectorized_scale(vec)
+ *                         data[row][i+o] *= Bs.D.data[row, i+o]
+ *                 else:
+ *                     for i in range(abs(o), Bs.shape[0]):
+ *                         # a = (np.array(self.grid.mesh[d[0]][i]).repeat(d1_size),)
+ *                         # vec = self.evalvectorfunc(coeffs[d], a, 1)
+ *                         # data[row][i-abs(o)].vectorized_scale(vec)
+ *                         data[row][i-abs(o)] *= Bs.D.data[row, i-abs(o)]
+ *
+ *             # We flatten here because it's faster
+ *             # Check is set to False because we're only faking that the offsets.
+ *             # The resulting operator will take the offsets from only the first
+ *             # in the list.
+ *             Bps[0].D.offsets += d1_size
+ *             Bms[0].D.offsets -= d1_size
+ *             BP = flatten_tensor_aligned(Bps, check=False)
+ *             BB = flatten_tensor_aligned(Bbs, check=False)
+ *             BM = flatten_tensor_aligned(Bms, check=False)
+ *             templates[d] = BP + BM + BB
+ *             templates[d].is_mixed_derivative = True
+ */
+
