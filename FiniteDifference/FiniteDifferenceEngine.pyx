@@ -527,7 +527,7 @@ cdef class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
             for row, o in enumerate(offsets):
                 if o >= 0:
                     for i in range(Bs.shape[0]-o):
-                        a = (np.array(self.grid.mesh[d[0]][i]).repeat(d1_size),)
+                        # a = (np.array(self.grid.mesh[d[0]][i]).repeat(d1_size),)
                         # vec = self.evalvectorfunc(coeffs[d], a, 1)
                         # data[row][i+o].vectorized_scale(vec)
                         data[row][i+o] *= Bs.D.data[row, i+o]
