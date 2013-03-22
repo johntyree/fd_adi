@@ -74,5 +74,5 @@ cpdef mixed_for_vector(np.ndarray v0, np.ndarray v1)
 
 cdef inline int sign(int i)
 
-cdef  cublas_to_scipy(B)
-cdef  scipy_to_cublas(B)
+cpdef  cublas_to_scipy(B)
+cpdef  scipy_to_cublas(B)

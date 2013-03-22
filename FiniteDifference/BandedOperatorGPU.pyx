@@ -507,7 +507,7 @@ cdef inline int sign(int i):
         return 1
 
 
-cdef cublas_to_scipy(B):
+cpdef cublas_to_scipy(B):
     # Shift because of scipy/cublas row configuration
     for row, o in enumerate(B.D.offsets):
         if o > 0:
@@ -518,7 +518,7 @@ cdef cublas_to_scipy(B):
             B.D.data[row,o:] = 0
 
 
-cdef scipy_to_cublas(B):
+cpdef scipy_to_cublas(B):
     # We have to shift the offsets between scipy and cublas
     for row, o in enumerate(B.D.offsets):
         if o > 0:
