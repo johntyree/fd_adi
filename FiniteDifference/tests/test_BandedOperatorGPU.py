@@ -28,7 +28,7 @@ class Operations_test(unittest.TestCase):
 
     def setUp(self):
         # print "Setting up Params for CPP tests"
-        shape = (5,6)
+        shape = (5,4)
         self.v1 = np.arange(shape[0]*shape[1], dtype=float)**2
         self.v2 = self.v1.copy()
         self.v2.resize(shape)
@@ -329,28 +329,71 @@ class Operations_test(unittest.TestCase):
         B = self.F.simple_operators[(0,1)]
         # BG = BOG.mixed_for_vector(self.F.grid.mesh[0],
                                   # self.F.grid.mesh[1]).immigrate()
-        B.D = scipy.sparse.csr_matrix(B.D)
+        B.D = scipy.sparse.coo_matrix(B.D)
 
         n0 = self.F.grid.mesh[0].size
         n1 = self.F.grid.mesh[1].size
-        indices = np.zeros((n0-2) * 9 * (n1-2))
 
-        ind = np.tile(np.hstack(([0,1,2], np.array([0,1,2])+n1, np.array([0,1,2])+2*n1)), (n1-2) * (n0-2)) + np.arange(108) // 9
-        # print np.vstack((B.D.indices, np.arange(108))).T
-        # indices[0::9] = np.arange(n0)
-        print B.blocks
+        compute_deltas = lambda v: np.hstack((np.nan, np.diff(v)))
 
-        print len(indices)
-        print len(B.D.indices)
+        d0 = compute_deltas(self.F.grid.mesh[0])
+        d1 = compute_deltas(self.F.grid.mesh[1])
 
-        fp(ind)
+        dlen = n1 * (n0-2)
+        nnz = 9 * (dlen - 2 * (n0-2))
+
+        data = np.zeros(n1*(n0-2)*9)
+
+        sup = np.zeros(n1)
+        mid = sup.copy()
+        sub = sup.copy()
+
+        for i in xrange(1, len(d1)-1):
+            sup[i] =            d1[i]  / (d1[i+1]*(d1[i]+d1[i+1]))
+            mid[i] = (-d1[i] + d1[i+1]) /         (d1[i]*d1[i+1])
+            sub[i] =         -d1[i+1]  / (d1[i  ]*(d1[i]+d1[i+1]))
+
+        supsup = np.tile(sup, n0-2)
+        supmid = np.tile(mid, n0-2)
+        supsub = np.tile(sub, n0-2)
+
+        midsup = supsup.copy()
+        midmid = supmid.copy()
+        midsub = supsub.copy()
+
+        subsup = supsup.copy()
+        submid = supmid.copy()
+        subsub = supsub.copy()
+
+        for i in xrange(1, len(d0)-1):
+            supsup[(i-1)*(n0-1):(i)*(n0-1)] *= d0[i]  / (d0[i+1]*(d0[i]+d0[i+1]))
+            supmid[(i-1)*(n0-1):(i)*(n0-1)] *= d0[i]  / (d0[i+1]*(d0[i]+d0[i+1]))
+            supsub[(i-1)*(n0-1):(i)*(n0-1)] *= d0[i]  / (d0[i+1]*(d0[i]+d0[i+1]))
+
+            midsup[(i-1)*(n0-1):(i)*(n0-1)] *= (-d0[i] + d0[i+1]) / (d0[i]*d0[i+1])
+            midmid[(i-1)*(n0-1):(i)*(n0-1)] *= (-d0[i] + d0[i+1]) / (d0[i]*d0[i+1])
+            midsub[(i-1)*(n0-1):(i)*(n0-1)] *= (-d0[i] + d0[i+1]) / (d0[i]*d0[i+1])
+
+            subsup[(i-1)*(n0-1):(i)*(n0-1)] *= -d0[i+1]  / (d0[i]*(d0[i]+d0[i+1]))
+            submid[(i-1)*(n0-1):(i)*(n0-1)] *= -d0[i+1]  / (d0[i]*(d0[i]+d0[i+1]))
+            subsub[(i-1)*(n0-1):(i)*(n0-1)] *= -d0[i+1]  / (d0[i]*(d0[i]+d0[i+1]))
+
+        tst = np.vstack([supsup,supmid,supsub,midsup,midmid,midsub,subsup,submid,subsub])
+        fp(tst, 2)
         print
-        fp(indices)
+        B.D = utils.todia(scipy.sparse.dia_matrix(B.D))
+        BOG.scipy_to_cublas(B)
+        ref = B.D.data[:,n1:-n1]
+        fp(ref, 2)
         print
-        fp(B.D.indices)
+        fp(tst-ref, 'e')
+
+        print d0
+        print d1
+        print B.deltas
 
 
-        fp(B.D)
+        # fp(B.D)
         # print B.D.nnz
         # print B.D.indices
         # print B.D.indptr
