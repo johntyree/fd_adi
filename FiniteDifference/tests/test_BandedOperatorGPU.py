@@ -339,18 +339,18 @@ class Operations_test(unittest.TestCase):
         d0 = compute_deltas(self.F.grid.mesh[0])
         d1 = compute_deltas(self.F.grid.mesh[1])
 
-        dlen = n1 * (n0-2)
-        nnz = 9 * (dlen - 2 * (n0-2))
+        dlen = (n1-2) * (n0-2)
+        nnz = 9 * (dlen * (n0-2))
 
-        data = np.zeros(n1*(n0-2)*9)
+        data = np.zeros(dlen*(n0-2)*9)
 
         sup = np.zeros(n1)
         mid = sup.copy()
         sub = sup.copy()
 
-        sup[1:n1-1] =   d1[1:n1-1]             /   (d1[2:n1]*(d1[1:n1-1]+d1[2:n1]))
-        mid[1:n1-1] = (-d1[1:n1-1] + d1[2:n1]) /             (d1[1:n1-1]*d1[2:n1])
-        sub[1:n1-1] =               -d1[2:n1]  / (d1[1:n1-1]*(d1[1:n1-1]+d1[2:n1]))
+        sup =   d1[1:n1-1]             /   (d1[2:n1]*(d1[1:n1-1]+d1[2:n1]))
+        mid = (-d1[1:n1-1] + d1[2:n1]) /             (d1[1:n1-1]*d1[2:n1])
+        sub =               -d1[2:n1]  / (d1[1:n1-1]*(d1[1:n1-1]+d1[2:n1]))
 
         supsup = np.tile(sup, n0-2)
         supmid = np.tile(mid, n0-2)
@@ -369,9 +369,9 @@ class Operations_test(unittest.TestCase):
         dmid = (-d0[1:n0-1] + d0[2:n0]) /           (d0[1:n0-1]*d0[2:n0])
         dsub =               -d0[2:n0]  / (d0[1:n0-1]*(d0[1:n0-1]+d0[2:n0]))
 
-        dsup = np.repeat(dsup, n1)
-        dmid = np.repeat(dmid, n1)
-        dsub = np.repeat(dsub, n1)
+        dsup = np.repeat(dsup, n1-2)
+        dmid = np.repeat(dmid, n1-2)
+        dsub = np.repeat(dsub, n1-2)
 
         supsup *= dsup
         supmid *= dsup
@@ -390,7 +390,7 @@ class Operations_test(unittest.TestCase):
         print
         B.D = utils.todia(scipy.sparse.dia_matrix(B.D))
         BOG.scipy_to_cublas(B)
-        ref = B.D.data[:,n1:-n1]
+        ref = B.D.data[B.D.data.nonzero()].reshape((9, -1))
         fp(ref, 2)
         print
         fp(tst-ref, 'e')
