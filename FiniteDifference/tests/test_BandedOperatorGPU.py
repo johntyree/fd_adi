@@ -48,7 +48,7 @@ class Operations_test(unittest.TestCase):
 
         schemes = {}
 
-        self.G = Grid.Grid([np.arange(shape[0], dtype=float)**2, np.arange(shape[1], dtype=float)**2], lambda x, y: (x*shape[1]+y)**2)
+        self.G = Grid.Grid([np.arange(shape[0], dtype=float)**3, np.arange(shape[1], dtype=float)**3], lambda x, y: (x*shape[1]+y)**2)
         self.F = FD.FiniteDifferenceEngineADI(self.G, coefficients=coeffs,
                 boundaries=bounds, schemes=schemes, force_bandwidth=None)
         # print "Setting up FDE for CPP tests"
@@ -116,11 +116,11 @@ class Operations_test(unittest.TestCase):
         # fp(B0.D.data)
         R = B.R.copy()
         ref = B.apply(self.v2)
-        B = BOG.BandedOperator(B, "C1 0")
-        tst = B.apply(self.v2.copy())
-        B = B.immigrate("C1 0")
-        npt.assert_array_equal(R, B.R)
-        npt.assert_array_equal(ref, tst)
+        BG = BOG.BandedOperator(B, "C1 0")
+        tst = BG.apply(self.v2.copy())
+        BG = BG.immigrate("C1 0")
+        npt.assert_array_almost_equal(R, BG.R, decimal=12)
+        npt.assert_array_almost_equal(ref, tst, decimal=12)
 
 
     def test_tri_apply_axis_1(self):
@@ -129,11 +129,11 @@ class Operations_test(unittest.TestCase):
         # fp(B0.D.data)
         R = B.R.copy()
         ref = B.apply(self.v2)
-        B = BOG.BandedOperator(B)
-        tst = B.apply(self.v2.copy())
-        B = B.immigrate()
-        npt.assert_array_equal(R, B.R)
-        npt.assert_array_equal(ref, tst)
+        BG = BOG.BandedOperator(B)
+        tst = BG.apply(self.v2.copy())
+        BG = BG.immigrate()
+        npt.assert_array_almost_equal(R, BG.R, decimal=12)
+        npt.assert_array_almost_equal(ref, tst, decimal=12)
 
 
     def test_csr_apply_0(self):
@@ -348,10 +348,9 @@ class Operations_test(unittest.TestCase):
         mid = sup.copy()
         sub = sup.copy()
 
-        for i in xrange(1, len(d1)-1):
-            sup[i] =            d1[i]  / (d1[i+1]*(d1[i]+d1[i+1]))
-            mid[i] = (-d1[i] + d1[i+1]) /         (d1[i]*d1[i+1])
-            sub[i] =         -d1[i+1]  / (d1[i  ]*(d1[i]+d1[i+1]))
+        sup[1:n1-1] =   d1[1:n1-1]             /   (d1[2:n1]*(d1[1:n1-1]+d1[2:n1]))
+        mid[1:n1-1] = (-d1[1:n1-1] + d1[2:n1]) /             (d1[1:n1-1]*d1[2:n1])
+        sub[1:n1-1] =               -d1[2:n1]  / (d1[1:n1-1]*(d1[1:n1-1]+d1[2:n1]))
 
         supsup = np.tile(sup, n0-2)
         supmid = np.tile(mid, n0-2)
@@ -365,18 +364,26 @@ class Operations_test(unittest.TestCase):
         submid = supmid.copy()
         subsub = supsub.copy()
 
-        for i in xrange(1, len(d0)-1):
-            supsup[(i-1)*(n0-1):(i)*(n0-1)] *= d0[i]  / (d0[i+1]*(d0[i]+d0[i+1]))
-            supmid[(i-1)*(n0-1):(i)*(n0-1)] *= d0[i]  / (d0[i+1]*(d0[i]+d0[i+1]))
-            supsub[(i-1)*(n0-1):(i)*(n0-1)] *= d0[i]  / (d0[i+1]*(d0[i]+d0[i+1]))
 
-            midsup[(i-1)*(n0-1):(i)*(n0-1)] *= (-d0[i] + d0[i+1]) / (d0[i]*d0[i+1])
-            midmid[(i-1)*(n0-1):(i)*(n0-1)] *= (-d0[i] + d0[i+1]) / (d0[i]*d0[i+1])
-            midsub[(i-1)*(n0-1):(i)*(n0-1)] *= (-d0[i] + d0[i+1]) / (d0[i]*d0[i+1])
+        dsup =   d0[1:n0-1]             / (d0[2:n0]*(d0[1:n0-1]+d0[2:n0]))
+        dmid = (-d0[1:n0-1] + d0[2:n0]) /           (d0[1:n0-1]*d0[2:n0])
+        dsub =               -d0[2:n0]  / (d0[1:n0-1]*(d0[1:n0-1]+d0[2:n0]))
 
-            subsup[(i-1)*(n0-1):(i)*(n0-1)] *= -d0[i+1]  / (d0[i]*(d0[i]+d0[i+1]))
-            submid[(i-1)*(n0-1):(i)*(n0-1)] *= -d0[i+1]  / (d0[i]*(d0[i]+d0[i+1]))
-            subsub[(i-1)*(n0-1):(i)*(n0-1)] *= -d0[i+1]  / (d0[i]*(d0[i]+d0[i+1]))
+        dsup = np.repeat(dsup, n1)
+        dmid = np.repeat(dmid, n1)
+        dsub = np.repeat(dsub, n1)
+
+        supsup *= dsup
+        supmid *= dsup
+        supsub *= dsup
+
+        midsup *= dmid
+        midmid *= dmid
+        midsub *= dmid
+
+        subsup *= dsub
+        submid *= dsub
+        subsub *= dsub
 
         tst = np.vstack([supsup,supmid,supsub,midsup,midmid,midsub,subsup,submid,subsub])
         fp(tst, 2)
@@ -393,6 +400,29 @@ class Operations_test(unittest.TestCase):
         print B.deltas
 
 
+    # def tocoo(self):
+        # num_data = len(self.data)
+        # len_data = self.data.shape[1]
+
+        # row = np.arange(len_data).reshape(1,-1).repeat(num_data,axis=0)
+        # col = row.copy()
+
+        # for i,k in enumerate(self.offsets):
+            # row[i,:] -= k
+
+        # row,col,data = row.ravel(),col.ravel(),self.data.ravel()
+
+        # mask  = (row >= 0)
+        # mask &= (row < self.shape[0])
+        # mask &= (col < self.shape[1])
+        # mask &= data != 0
+        # row,col,data = row[mask],col[mask],data[mask]
+
+        # from .coo import coo_matrix
+        # return coo_matrix((data,(row,col)), shape=self.shape)
+
+
+
         # fp(B.D)
         # print B.D.nnz
         # print B.D.indices
@@ -400,9 +430,9 @@ class Operations_test(unittest.TestCase):
         # print B.D.data
         # fp(BG.D)
 
-        # npt.assert_array_equal(B.D.data, BG.D.data)
+        npt.assert_array_equal(ref, tst)
         # npt.assert_equal(B, BG)
-        assert False
+        # assert False
 
 
 def main():
