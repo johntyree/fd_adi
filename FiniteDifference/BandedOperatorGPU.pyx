@@ -500,7 +500,7 @@ cpdef mixed_for_vector(np.ndarray v0, np.ndarray v1):
     B.axis = 1
     B.order = 2
     B.deltas = None
-    B.blocks = 0
+    B.blocks = v0.size
     return B
 
 cdef inline int sign(int i):
