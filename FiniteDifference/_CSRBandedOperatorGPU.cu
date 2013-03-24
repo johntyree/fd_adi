@@ -199,207 +199,202 @@ _CSRBandedOperator * mixed_for_vector(SizedArray<double> &v0,
     int n1 = v1.size;
     int dlen = (n1-2) * (n0-2);
 
-    /* GPUVec<double> d0(n0); */
-    /* GPUVec<double> d1(n1); */
+    GPUVec<double> d0(n0);
+    GPUVec<double> d1(n1);
 
-    /* thrust::adjacent_difference(v0.data, v0.data + n0, d0.begin()); */
-    /* thrust::adjacent_difference(v1.data, v1.data + n1, d1.begin()); */
+    thrust::adjacent_difference(v0.data, v0.data + n0, d0.begin());
+    thrust::adjacent_difference(v1.data, v1.data + n1, d1.begin());
 
-    /* GPUVec<double> sup(n1-2); */
-    /* GPUVec<double> mid(n1-2); */
-    /* GPUVec<double> sub(n1-2); */
+    GPUVec<double> sup(n1-2);
+    GPUVec<double> mid(n1-2);
+    GPUVec<double> sub(n1-2);
 
-    /* thrust::for_each( */
-            /* thrust::make_zip_iterator( */
-                /* thrust::make_tuple( */
-                    /* sup.begin(), */
-                    /* mid.begin(), */
-                    /* sub.begin(), */
-                    /* d1.begin()+1, */
-                    /* d1.begin()+2 */
-                    /* ) */
-                /* ), */
-            /* thrust::make_zip_iterator( */
-                /* thrust::make_tuple( */
-                    /* sup.end(), */
-                    /* mid.end(), */
-                    /* sub.end(), */
-                    /* d1.end()-1, */
-                    /* d1.end() */
-                    /* ) */
-                /* ), */
-            /* first_deriv_() */
-            /* ); */
+    thrust::for_each(
+            thrust::make_zip_iterator(
+                thrust::make_tuple(
+                    sup.begin(),
+                    mid.begin(),
+                    sub.begin(),
+                    d1.begin()+1,
+                    d1.begin()+2
+                    )
+                ),
+            thrust::make_zip_iterator(
+                thrust::make_tuple(
+                    sup.end(),
+                    mid.end(),
+                    sub.end(),
+                    d1.end()-1,
+                    d1.end()
+                    )
+                ),
+            first_deriv_()
+            );
 
-    /* SizedArray<double> data(dlen * 9, "data"); */
-
-
-    /* thrust::device_ptr<double> ssup(data.data); */
-    /* thrust::device_ptr<double> smid(data.data+1*dlen); */
-    /* thrust::device_ptr<double> ssub(data.data+2*dlen); */
-
-    /* thrust::device_ptr<double> msup(data.data+3*dlen); */
-    /* thrust::device_ptr<double> mmid(data.data+4*dlen); */
-    /* thrust::device_ptr<double> msub(data.data+5*dlen); */
-
-    /* thrust::device_ptr<double> bsup(data.data+6*dlen); */
-    /* thrust::device_ptr<double> bmid(data.data+7*dlen); */
-    /* thrust::device_ptr<double> bsub(data.data+8*dlen); */
+    SizedArray<double> data(dlen * 9, "coo_data");
 
 
-    /* tiled_range<DptrIterator> supsup(ssup, ssup+dlen, n0-2); */
-    /* tiled_range<DptrIterator> supmid(smid, smid+dlen, n0-2); */
-    /* tiled_range<DptrIterator> supsub(ssub, ssub+dlen, n0-2); */
+    thrust::device_ptr<double> supsup(data.data+8*dlen);
+    thrust::device_ptr<double> supmid(data.data+7*dlen);
+    thrust::device_ptr<double> supsub(data.data+6*dlen);
 
-    /* tiled_range<DptrIterator> midsup(msup, msup+dlen, n0-2); */
-    /* tiled_range<DptrIterator> midmid(mmid, mmid+dlen, n0-2); */
-    /* tiled_range<DptrIterator> midsub(msub, msub+dlen, n0-2); */
+    thrust::device_ptr<double> midsup(data.data+5*dlen);
+    thrust::device_ptr<double> midmid(data.data+4*dlen);
+    thrust::device_ptr<double> midsub(data.data+3*dlen);
 
-    /* tiled_range<DptrIterator> subsup(bsup, bsup+dlen, n0-2); */
-    /* tiled_range<DptrIterator> submid(bmid, bmid+dlen, n0-2); */
-    /* tiled_range<DptrIterator> subsub(bsub, bsub+dlen, n0-2); */
+    thrust::device_ptr<double> subsup(data.data+2*dlen);
+    thrust::device_ptr<double> submid(data.data+1*dlen);
+    thrust::device_ptr<double> subsub(data.data);
 
+    tiled_range<DptrIterator> sups(sup.begin(), sup.end(), n0-2);
+    tiled_range<DptrIterator> mids(mid.begin(), mid.end(), n0-2);
+    tiled_range<DptrIterator> subs(sub.begin(), sub.end(), n0-2);
 
-    /* sup.resize(n0-2); */
-    /* mid.resize(n0-2); */
-    /* sub.resize(n0-2); */
-    /* thrust::for_each( */
-            /* thrust::make_zip_iterator( */
-                /* thrust::make_tuple( */
-                    /* sup.begin(), */
-                    /* mid.begin(), */
-                    /* sub.begin(), */
-                    /* d0.begin()+1, */
-                    /* d0.begin()+2 */
-                    /* ) */
-                /* ), */
-            /* thrust::make_zip_iterator( */
-                /* thrust::make_tuple( */
-                    /* sup.end(), */
-                    /* mid.end(), */
-                    /* sub.end(), */
-                    /* d0.end()-1, */
-                    /* d0.end() */
-                    /* ) */
-                /* ), */
-            /* first_deriv_() */
-            /* ); */
+    thrust::copy(sups.begin(), sups.end(), supsup);
+    thrust::copy(mids.begin(), mids.end(), supmid);
+    thrust::copy(subs.begin(), subs.end(), supsub);
 
-    /* repeated_range<DptrIterator> dsup(sup.begin(), sup.end(), n1-2); */
-    /* repeated_range<DptrIterator> dmid(mid.begin(), mid.end(), n1-2); */
-    /* repeated_range<DptrIterator> dsub(sub.begin(), sub.end(), n1-2); */
+    thrust::copy(sups.begin(), sups.end(), midsup);
+    thrust::copy(mids.begin(), mids.end(), midmid);
+    thrust::copy(subs.begin(), subs.end(), midsub);
+
+    thrust::copy(sups.begin(), sups.end(), subsup);
+    thrust::copy(mids.begin(), mids.end(), submid);
+    thrust::copy(subs.begin(), subs.end(), subsub);
 
 
-    /* thrust::for_each( */
-            /* thrust::make_zip_iterator( */
-                /* thrust::make_tuple( */
-                    /* supsup.begin(), */
-                    /* supmid.begin(), */
-                    /* supsub.begin(), */
-                    /* dsup.begin() */
-                    /* ) */
-                /* ), */
-            /* thrust::make_zip_iterator( */
-                /* thrust::make_tuple( */
-                    /* supsup.end(), */
-                    /* supmid.end(), */
-                    /* supsub.end(), */
-                    /* dsup.end() */
-                    /* ) */
-                /* ), */
-            /* multiply3x1() */
-            /* ); */
+    sup.resize(n0-2);
+    mid.resize(n0-2);
+    sub.resize(n0-2);
+    thrust::for_each(
+            thrust::make_zip_iterator(
+                thrust::make_tuple(
+                    sup.begin(),
+                    mid.begin(),
+                    sub.begin(),
+                    d0.begin()+1,
+                    d0.begin()+2
+                    )
+                ),
+            thrust::make_zip_iterator(
+                thrust::make_tuple(
+                    sup.end(),
+                    mid.end(),
+                    sub.end(),
+                    d0.end()-1,
+                    d0.end()
+                    )
+                ),
+            first_deriv_()
+            );
 
-    /* thrust::for_each( */
-            /* thrust::make_zip_iterator( */
-                /* thrust::make_tuple( */
-                    /* midsup.begin(), */
-                    /* midmid.begin(), */
-                    /* midsub.begin(), */
-                    /* dmid.begin() */
-                    /* ) */
-                /* ), */
-            /* thrust::make_zip_iterator( */
-                /* thrust::make_tuple( */
-                    /* midsup.end(), */
-                    /* midmid.end(), */
-                    /* midsub.end(), */
-                    /* dmid.end() */
-                    /* ) */
-                /* ), */
-            /* multiply3x1() */
-            /* ); */
+    repeated_range<DptrIterator> dsup(sup.begin(), sup.end(), n1-2);
+    repeated_range<DptrIterator> dmid(mid.begin(), mid.end(), n1-2);
+    repeated_range<DptrIterator> dsub(sub.begin(), sub.end(), n1-2);
 
-    /* thrust::for_each( */
-            /* thrust::make_zip_iterator( */
-                /* thrust::make_tuple( */
-                    /* subsup.begin(), */
-                    /* submid.begin(), */
-                    /* subsub.begin(), */
-                    /* dsub.begin() */
-                    /* ) */
-                /* ), */
-            /* thrust::make_zip_iterator( */
-                /* thrust::make_tuple( */
-                    /* subsup.end(), */
-                    /* submid.end(), */
-                    /* subsub.end(), */
-                    /* dsub.end() */
-                    /* ) */
-                /* ), */
-            /* multiply3x1() */
-            /* ); */
+    thrust::for_each(
+            thrust::make_zip_iterator(
+                thrust::make_tuple(
+                    supsup,
+                    supmid,
+                    supsub,
+                    dsup.begin()
+                    )
+                ),
+            thrust::make_zip_iterator(
+                thrust::make_tuple(
+                    supsup+dlen,
+                    supmid+dlen,
+                    supsub+dlen,
+                    dsup.end()
+                    )
+                ),
+            multiply3x1()
+            );
 
-    /* [> row = np.tile(np.arange(1, n1-1), n0-2) <] */
-    /* tiled_range<counting_iterator<int> > row0( */
-            /* counting_iterator<int>(1), */
-            /* counting_iterator<int>(n1-1), */
-            /* n0-2 */
-            /* ); */
-    /* [> row += np.repeat(np.arange(1, n0-1), n1-2) * n1 <] */
-    /* repeated_range<counting_iterator<int> > row1( */
-            /* counting_iterator<int>(1), */
-            /* counting_iterator<int>(n0-1), */
-            /* n1-2 */
-            /* ); */
-    /* GPUVec<int> rowr(dlen); */
-    /* thrust::transform( */
-            /* row1.begin(), */
-            /* row1.end(), */
-            /* rowr.begin(), */
-            /* _1 * n1 */
-            /* ); */
+    thrust::for_each(
+            thrust::make_zip_iterator(
+                thrust::make_tuple(
+                    midsup,
+                    midmid,
+                    midsub,
+                    dmid.begin()
+                    )
+                ),
+            thrust::make_zip_iterator(
+                thrust::make_tuple(
+                    midsup+dlen,
+                    midmid+dlen,
+                    midsub+dlen,
+                    dmid.end()
+                    )
+                ),
+            multiply3x1()
+            );
 
-    /* [> row = np.tile(row, 9) <] */
-    /* tiled_range<GPUVec<int>::iterator> rowrt( */
-            /* rowr.begin(), */
-            /* rowr.end(), */
-            /* 9); */
 
-    /* int offsets0[] = {-n1-1, -n1, -n1+1, -1, 0, 1, n1-1, n1, n1+1}; */
-    /* GPUVec<int> o(offsets0+0, offsets0+9); */
-    /* repeated_range<GPUVec<int>::iterator> offsets(o.begin(), o.end(), (n1-2) * (n0-2)); */
+    thrust::for_each(
+            thrust::make_zip_iterator(
+                thrust::make_tuple(
+                    subsup,
+                    submid,
+                    subsub,
+                    dsub.begin()
+                    )
+                ),
+            thrust::make_zip_iterator(
+                thrust::make_tuple(
+                    subsup+dlen,
+                    submid+dlen,
+                    subsub+dlen,
+                    dsub.end()
+                    )
+                ),
+            multiply3x1()
+            );
 
-    /* GPUVec<int> row(rowrt.begin(), rowrt.end()); */
-    /* GPUVec<int> rowptr(row.size()); */
-    /* SizedArray<int> col(row.size(), "col"); */
-    /* thrust::transform( */
-        /* row.begin(), */
-        /* row.end(), */
-        /* offsets.begin(), */
-        /* col.data, */
-        /* thrust::plus<int>() */
-        /* ); */
+    /* row = np.tile(np.arange(1, n1-1), n0-2) */
+    tiled_range<counting_iterator<int> > row0(
+            counting_iterator<int>(1),
+            counting_iterator<int>(n1-1),
+            n0-2
+            );
+    /* row += np.repeat(np.arange(1, n0-1), n1-2) * n1 */
+    repeated_range<counting_iterator<int> > row1(
+            counting_iterator<int>(1),
+            counting_iterator<int>(n0-1),
+            n1-2
+            );
+    GPUVec<int> rowr(dlen);
+    thrust::transform(
+            row0.begin(),
+            row0.end(),
+            row1.begin(),
+            rowr.begin(),
+            _1 + _2 * n1
+            );
 
-    SizedArray<double> data(dlen*9, "row_ptr");
-    SizedArray<int> row_ptr(dlen*9, "row_ptr");
-    SizedArray<int> row_ind(dlen*9, "row_ind");
-    SizedArray<int> col_ind(dlen*9, "col_ind");
+    /* row = np.tile(row, 9) */
+    tiled_range<GPUVec<int>::iterator> rowrt(
+            rowr.begin(),
+            rowr.end(),
+            9);
 
-    thrust::fill_n(data.data, data.size, 0);
-    thrust::fill_n(row_ptr.data, row_ptr.size, 0);
-    thrust::fill_n(row_ind.data, row_ind.size, 0);
-    thrust::fill_n(col_ind.data, col_ind.size, 0);
+    int offsets0[] = {-n1-1, -n1, -n1+1, -1, 0, 1, n1-1, n1, n1+1};
+    GPUVec<int> o(offsets0+0, offsets0+9);
+    repeated_range<GPUVec<int>::iterator> offsets(o.begin(), o.end(), dlen);
+
+    SizedArray<int> row_ind(rowrt.end() - rowrt.begin(), "row_ind");
+    thrust::copy(rowrt.begin(), rowrt.end(), row_ind.data);
+    SizedArray<int> row_ptr(operator_rows+1, "row_ptr");
+    SizedArray<int> col_ind(row_ind.size, "col_ind");
+    thrust::transform(
+        row_ind.data,
+        row_ind.data + row_ind.size,
+        offsets.begin(),
+        col_ind.data,
+        _1 + _2
+        );
 
     cusparseHandle_t handle;
     cusparseStatus_t status;
@@ -410,15 +405,23 @@ _CSRBandedOperator * mixed_for_vector(SizedArray<double> &v0,
         assert(false);
     }
 
+    thrust::stable_sort_by_key(
+        row_ind.data,
+        row_ind.data + row_ind.size,
+        make_zip_iterator(
+            make_tuple(
+                data.data,
+                col_ind.data
+                )
+            )
+        );
+
     int * cooRowInd = row_ind.data.get();
     int * csrRowPtr = row_ptr.data.get();
     int m = operator_rows;
     cusparseXcoo2csr(handle,
         cooRowInd, row_ind.size, m, csrRowPtr,
         CUSPARSE_INDEX_BASE_ZERO);
-
-    /* SizedArray<int> row_ptr(rowptr.raw(), rowptr.size(), "row_ptr", false); */
-    /* SizedArray<int> row_ind(row.raw(), row.size(), "row_ind", false); */
 
     std::string name = "mixed_for_vector CSR";
 

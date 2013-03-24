@@ -496,8 +496,11 @@ cpdef mixed_for_vector(np.ndarray v0, np.ndarray v1):
     B.thisptr_csr = mixed_for_vector_(deref(V0.p), deref(V1.p))
 
     B.is_mixed_derivative = True
+    B.derivative = 1
     B.axis = 1
+    B.order = 2
     B.deltas = None
+    B.blocks = 0
     return B
 
 cdef inline int sign(int i):
