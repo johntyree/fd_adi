@@ -112,6 +112,71 @@ class HestonOption_test(unittest.TestCase):
         self.F.operators[1].diagonalize()
         self.FG = FDG.FiniteDifferenceEngineADI()
         self.FG.from_host_FiniteDifferenceEngine(self.F)
+        self.FGG = FDG.HestonFiniteDifferenceEngine(option, nspots=150, nvols=80)
+        self.FGG.make_operator_templates()
+
+
+    def test_verify_simple_operators_0(self):
+        ref = self.F.simple_operators[(0,)].copy()
+        tst = self.FGG.simple_operators[(0,)].copy().immigrate()
+        tst.deltas = ref.deltas
+        npt.assert_equal(tst, ref)
+        ref = self.F.simple_operators[(0,)].copy()
+        tst = self.FGG.simple_operators[(0,)].copy()
+        ref.diagonalize(), tst.diagonalize()
+        tst = tst.immigrate()
+        tst.deltas = ref.deltas
+        npt.assert_equal(tst, ref)
+
+
+    def test_verify_simple_operators_1(self):
+        ref = self.F.simple_operators[(1,)].copy()
+        tst = self.FGG.simple_operators[(1,)].copy().immigrate()
+        tst.deltas = ref.deltas
+        npt.assert_equal(tst, ref)
+        ref = self.F.simple_operators[(1,)].copy()
+        tst = self.FGG.simple_operators[(1,)].copy()
+        ref.diagonalize(), tst.diagonalize()
+        tst = tst.immigrate()
+        tst.deltas = ref.deltas
+        npt.assert_equal(tst, ref)
+
+
+    def test_verify_simple_operators_00(self):
+        ref = self.F.simple_operators[(0,0)].copy()
+        tst = self.FGG.simple_operators[(0,0)].copy().immigrate()
+        tst.deltas = ref.deltas
+        npt.assert_equal(tst, ref)
+        ref = self.F.simple_operators[(0,0)].copy()
+        tst = self.FGG.simple_operators[(0,0)].copy()
+        ref.diagonalize(), tst.diagonalize()
+        tst = tst.immigrate()
+        tst.deltas = ref.deltas
+        npt.assert_equal(tst, ref)
+
+
+    def test_verify_simple_operators_11(self):
+        ref = self.F.simple_operators[(1,1)].copy()
+        tst = self.FGG.simple_operators[(1,1)].copy()
+        tst = tst.immigrate()
+        tst.deltas = ref.deltas
+        npt.assert_equal(tst, ref)
+        ref = self.F.simple_operators[(1,1)].copy()
+        tst = self.FGG.simple_operators[(1,1)].copy()
+        ref.diagonalize(), tst.diagonalize()
+        tst = tst.immigrate()
+        tst.deltas = ref.deltas
+        npt.assert_array_almost_equal(tst.D.data, ref.D.data)
+        tst.D *= 0
+        ref.D *= 0
+        npt.assert_equal(tst, ref)
+
+
+    def test_verify_simple_operators_01(self):
+        ref = self.F.simple_operators[(0,1)]
+        tst = self.FGG.simple_operators[(0,1)].immigrate()
+        tst.deltas = ref.deltas
+        npt.assert_equal(tst, ref)
 
 
     def test_implicit(self):
@@ -252,6 +317,7 @@ class FiniteDifferenceEngineADIGPU_test(unittest.TestCase):
         tst = self.FG.simple_operators[(0,)].copy()
         ref.diagonalize(), tst.diagonalize()
         tst = tst.immigrate()
+        tst.deltas = ref.deltas
         npt.assert_equal(tst, ref)
 
 
@@ -263,6 +329,7 @@ class FiniteDifferenceEngineADIGPU_test(unittest.TestCase):
         tst = self.FG.simple_operators[(1,)].copy()
         ref.diagonalize(), tst.diagonalize()
         tst = tst.immigrate()
+        tst.deltas = ref.deltas
         npt.assert_equal(tst, ref)
 
 
@@ -274,6 +341,7 @@ class FiniteDifferenceEngineADIGPU_test(unittest.TestCase):
         tst = self.FG.simple_operators[(0,0)].copy()
         ref.diagonalize(), tst.diagonalize()
         tst = tst.immigrate()
+        tst.deltas = ref.deltas
         npt.assert_equal(tst, ref)
 
 
@@ -286,6 +354,7 @@ class FiniteDifferenceEngineADIGPU_test(unittest.TestCase):
         tst = self.FG.simple_operators[(1,1)].copy()
         ref.diagonalize(), tst.diagonalize()
         tst = tst.immigrate()
+        tst.deltas = ref.deltas
         npt.assert_equal(tst, ref)
 
 
