@@ -41,7 +41,8 @@ class BlackScholesOption_test(unittest.TestCase):
                                                    , flip_idx_spot=False
                                                      )
         self.F.init()
-        self.FG = FDG.FiniteDifferenceEngineADI(self.F)
+        self.FG = FDG.FiniteDifferenceEngineADI()
+        self.FG.from_host_FiniteDifferenceEngine(self.F)
 
 
     def test_implicit(self):
@@ -109,7 +110,8 @@ class HestonOption_test(unittest.TestCase):
                                          # force_exact=False)
         self.F.init()
         self.F.operators[1].diagonalize()
-        self.FG = FDG.FiniteDifferenceEngineADI(self.F)
+        self.FG = FDG.FiniteDifferenceEngineADI()
+        self.FG.from_host_FiniteDifferenceEngine(self.F)
 
 
     def test_implicit(self):
@@ -238,7 +240,8 @@ class FiniteDifferenceEngineADIGPU_test(unittest.TestCase):
                 boundaries=bounds, schemes=schemes, force_bandwidth=None)
         self.F.init()
         # self.F.operators[1].diagonalize()
-        self.FG = FDG.FiniteDifferenceEngineADI(self.F)
+        self.FG = FDG.FiniteDifferenceEngineADI()
+        self.FG.from_host_FiniteDifferenceEngine(self.F)
 
 
     def test_verify_simple_operators_0(self):

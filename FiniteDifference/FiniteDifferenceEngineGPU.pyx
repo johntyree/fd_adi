@@ -48,7 +48,7 @@ cdef class FiniteDifferenceEngine(object):
     cdef SizedArrayPtr gpugrid
 
 
-    def __init__(self, other):
+    def __init__(self):
         """
         @coefficients@ is a dict of tuple, function pairs with c[i,j] referring to the
         coefficient of the i j derivative, dU/didj. Absent pairs are counted as zeros.
