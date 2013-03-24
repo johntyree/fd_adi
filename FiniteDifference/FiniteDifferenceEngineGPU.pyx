@@ -635,8 +635,8 @@ cdef class HestonFiniteDifferenceEngine(FiniteDifferenceEngineADI):
         m1 = self.grid.mesh[1]
         self.simple_operators[(0,)] = BOG.for_vector(m0, m1.size, 1, 0)
         self.simple_operators[(0,0)] = BOG.for_vector(m0, m1.size, 2, 0)
-        self.simple_operators[(1,)] = BOG.for_vector(m0, m1.size, 1, 1)
-        self.simple_operators[(1,1)] = BOG.for_vector(m0, m1.size, 2, 1)
+        self.simple_operators[(1,)] = BOG.for_vector(m1, m0.size, 1, 1)
+        self.simple_operators[(1,1)] = BOG.for_vector(m1, m0.size, 2, 1)
         self.simple_operators[(0,1)] = BOG.mixed_for_vector(m0, m1)
 
 
