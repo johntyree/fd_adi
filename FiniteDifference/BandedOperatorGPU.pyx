@@ -65,12 +65,15 @@ cdef class BandedOperator(object):
 
     def copy_meta_data(self, other, **kwargs):
         for attr in self.attrs:
-            if attr in kwargs:
-                setattr(self, attr, kwargs[attr])
-            elif attr in ('deltas', 'top_factors', 'bottom_factors'):
-                setattr(self, attr, getattr(other, attr).copy())
-            else:
-                setattr(self, attr, getattr(other, attr))
+            try:
+                if attr in kwargs:
+                    setattr(self, attr, kwargs[attr])
+                elif attr in ('deltas', 'top_factors', 'bottom_factors'):
+                        setattr(self, attr, getattr(other, attr).copy())
+                else:
+                    setattr(self, attr, getattr(other, attr))
+            except AttributeError, e:
+                print attr, e
 
 
     def __richcmp__(self, other, op):
