@@ -497,7 +497,7 @@ cpdef mixed_for_vector(np.ndarray v0, np.ndarray v1):
 
     B.is_mixed_derivative = True
     B.axis = 1
-    B.delta = None
+    B.deltas = None
     return B
 
 cdef inline int sign(int i):
