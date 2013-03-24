@@ -327,10 +327,12 @@ class Operations_test(unittest.TestCase):
 
     def test_mixed_derivative(self):
         B = self.F.simple_operators[(0,1)]
-        B.D = scipy.sparse.coo_matrix(B.D)
-        BG = BOG.mixed_for_vector(*self.F.grid.mesh).immigrate()
-        npt.assert_array_almost_equal(B.D.todense(), BG.D.todense())
-        assert False
+        BG = BOG.mixed_for_vector(*self.F.grid.mesh)
+        BG = BG.immigrate()
+        # We don't care about deltas
+        BG.deltas = B.deltas
+        npt.assert_array_equal(B.D.todense(), BG.D.todense())
+        assert BG == B
 
 
     def test_create_mixed_derivative(self):
