@@ -69,6 +69,7 @@ cdef class BandedOperator(object):
     cpdef vectorized_scale(self, np.ndarray vector)
     cpdef vectorized_scale_(self, SizedArrayPtr vector)
 
+
 cpdef for_vector(np.ndarray v, int blocks, int derivative, int axis)
 cpdef mixed_for_vector(np.ndarray v0, np.ndarray v1)
 

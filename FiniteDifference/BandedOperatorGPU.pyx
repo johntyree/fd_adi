@@ -473,7 +473,6 @@ cdef class BandedOperator(object):
 
 cpdef for_vector(np.ndarray v, int blocks, int derivative, int axis):
     cdef SizedArrayPtr V = SizedArrayPtr(v, tag='for_vector v')
-
     cdef BandedOperator B = BandedOperator(tag='for_vector')
 
     B.thisptr_tri = for_vector_(deref(V.p), blocks, derivative, axis)
@@ -481,13 +480,11 @@ cpdef for_vector(np.ndarray v, int blocks, int derivative, int axis):
     B.blocks = B.thisptr_tri.blocks
     B.top_fold_status = B.thisptr_tri.top_fold_status
     B.bottom_fold_status = B.thisptr_tri.bottom_fold_status
-    # B.derivative = B.thisptr_tri.derivative
     B.is_mixed_derivative = False
     B.axis = axis
     B.order = 2
     B.derivative = derivative
     B.deltas = None
-
     return B
 
 
