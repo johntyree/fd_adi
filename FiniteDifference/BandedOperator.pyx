@@ -102,8 +102,12 @@ cdef class BandedOperator(object):
                 print "FAIL %s:" % attr,  getattr(self, attr), getattr(other, attr)
                 return false
 
-        if self.D.offsets.shape != other.D.offsets.shape:
-            print "Offset mismatch", self.D.offsets, other.D.offsets
+        if type(self.D) != type(other.D):
+            print "Matrices are in different formats. %s %s" % (type(self.D), type(other.D))
+            return false
+        if hasattr(self.D, 'offsets'):
+            if self.D.offsets.shape != other.D.offsets.shape:
+                print "Offset mismatch", self.D.offsets, other.D.offsets
         offsets        = np.array_equal(self.D.offsets, other.D.offsets)
         top_factors    = np.array_equal(no_nan(self.top_factors), no_nan(other.top_factors))
         bottom_factors = np.array_equal(no_nan(self.bottom_factors), no_nan(other.bottom_factors))
