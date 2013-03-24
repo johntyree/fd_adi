@@ -328,7 +328,8 @@ class Operations_test(unittest.TestCase):
     def test_mixed_derivative(self):
         B = self.F.simple_operators[(0,1)]
         B.D = scipy.sparse.coo_matrix(B.D)
-        BG = BOG.mixed_for_vector(*self.F.grid.mesh)
+        BG = BOG.mixed_for_vector(*self.F.grid.mesh).immigrate()
+        npt.assert_array_almost_equal(B.D.todense(), BG.D.todense())
         assert False
 
 
@@ -348,10 +349,6 @@ class Operations_test(unittest.TestCase):
         d1 = compute_deltas(self.F.grid.mesh[1])
 
         dlen = (n1-2) * (n0-2)
-
-        sup = np.zeros(n1)
-        mid = sup.copy()
-        sub = sup.copy()
 
         sup =   d1[1:n1-1]             /   (d1[2:n1]*(d1[1:n1-1]+d1[2:n1]))
         mid = (-d1[1:n1-1] + d1[2:n1]) /             (d1[1:n1-1]*d1[2:n1])
@@ -403,14 +400,12 @@ class Operations_test(unittest.TestCase):
 
         col = row.copy()
         offsets = np.array([-n1-1, -n1, -n1+1, -1, 0, 1, n1-1, n1, n1+1])
-        col = row + np.repeat(offsets, dlen)
+        col += np.repeat(offsets, dlen)
 
         tstcoo = scipy.sparse.coo_matrix((tstdata, (row, col)), shape=2*[n0*n1])
 
         # fp(tstcoo - B.D)
         npt.assert_equal(tstcoo.todense(), refcoo.todense())
-
-        # npt.assert_equal(B, BG)
         assert False
 
 
