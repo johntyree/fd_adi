@@ -32,6 +32,7 @@ from FiniteDifference.Grid import Grid
 cdef class FiniteDifferenceEngine(object):
 
     cdef public:
+        boundaries
         coefficients
         default_order
         default_scheme
@@ -43,6 +44,8 @@ cdef class FiniteDifferenceEngine(object):
         operators
         option
         t
+        cache
+        schemes
 
 
     cdef SizedArrayPtr gpugrid
@@ -465,6 +468,11 @@ cdef class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
 
 
 cdef class HestonFiniteDifferenceEngine(FiniteDifferenceEngineADI):
+
+    cdef public:
+        vars
+        spots
+
     """FDEGPU specialized for Heston options."""
     def __init__(self, option,
             grid=None,
@@ -488,6 +496,7 @@ cdef class HestonFiniteDifferenceEngine(FiniteDifferenceEngineADI):
             force_bandwidth=None
             ):
         """@option@ is a HestonOption"""
+        FiniteDifferenceEngineADI.__init__(self)
 
         if schemes is not None or flip_idx_var or flip_idx_spot:
             raise NotImplementedError, "Only central differencing supported on GPU"
@@ -619,8 +628,6 @@ cdef class HestonFiniteDifferenceEngine(FiniteDifferenceEngineADI):
         self.coefficients = coefficients
         self.boundaries = boundaries
         self.schemes = schemes
-        self.force_bandwidth = force_bandwidth
-        self._initialized = False
 
 
     def make_operator_templates(self):
