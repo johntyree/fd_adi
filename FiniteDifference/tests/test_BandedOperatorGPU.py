@@ -327,9 +327,17 @@ class Operations_test(unittest.TestCase):
 
     def test_mixed_derivative(self):
         B = self.F.simple_operators[(0,1)]
+        B.D = scipy.sparse.coo_matrix(B.D)
+        BG = BOG.mixed_for_vector(*self.F.grid.mesh)
+        assert False
+
+
+    def test_create_mixed_derivative(self):
+        B = self.F.simple_operators[(0,1)]
         # BG = BOG.mixed_for_vector(self.F.grid.mesh[0],
                                   # self.F.grid.mesh[1]).immigrate()
         B.D = scipy.sparse.coo_matrix(B.D)
+        refcoo = B.D.copy()
 
         n0 = self.F.grid.mesh[0].size
         n1 = self.F.grid.mesh[1].size
@@ -340,9 +348,6 @@ class Operations_test(unittest.TestCase):
         d1 = compute_deltas(self.F.grid.mesh[1])
 
         dlen = (n1-2) * (n0-2)
-        nnz = 9 * (dlen * (n0-2))
-
-        data = np.zeros(dlen*(n0-2)*9)
 
         sup = np.zeros(n1)
         mid = sup.copy()
@@ -385,54 +390,28 @@ class Operations_test(unittest.TestCase):
         submid *= dsub
         subsub *= dsub
 
-        tst = np.vstack([supsup,supmid,supsub,midsup,midmid,midsub,subsup,submid,subsub])
-        fp(tst, 2)
-        print
+        tstdata = np.vstack(reversed([supsup,supmid,supsub,midsup,midmid,midsub,subsup,submid,subsub])).ravel()
         B.D = utils.todia(scipy.sparse.dia_matrix(B.D))
         BOG.scipy_to_cublas(B)
-        ref = B.D.data[B.D.data.nonzero()].reshape((9, -1))
-        fp(ref, 2)
-        print
-        fp(tst-ref, 'e')
+        refdata = B.D.data[B.D.data.nonzero()].reshape((9, -1))[::-1].ravel()
+        BOG.cublas_to_scipy(B)
+        npt.assert_array_equal(tstdata, refdata)
 
-        print d0
-        print d1
-        print B.deltas
+        row = np.tile(np.arange(1, n1-1), n0-2)
+        row += np.repeat(np.arange(1, n0-1), n1-2) * n1
+        row = np.tile(row, 9)
 
+        col = row.copy()
+        offsets = np.array([-n1-1, -n1, -n1+1, -1, 0, 1, n1-1, n1, n1+1])
+        col = row + np.repeat(offsets, dlen)
 
-    # def tocoo(self):
-        # num_data = len(self.data)
-        # len_data = self.data.shape[1]
+        tstcoo = scipy.sparse.coo_matrix((tstdata, (row, col)), shape=2*[n0*n1])
 
-        # row = np.arange(len_data).reshape(1,-1).repeat(num_data,axis=0)
-        # col = row.copy()
+        # fp(tstcoo - B.D)
+        npt.assert_equal(tstcoo.todense(), refcoo.todense())
 
-        # for i,k in enumerate(self.offsets):
-            # row[i,:] -= k
-
-        # row,col,data = row.ravel(),col.ravel(),self.data.ravel()
-
-        # mask  = (row >= 0)
-        # mask &= (row < self.shape[0])
-        # mask &= (col < self.shape[1])
-        # mask &= data != 0
-        # row,col,data = row[mask],col[mask],data[mask]
-
-        # from .coo import coo_matrix
-        # return coo_matrix((data,(row,col)), shape=self.shape)
-
-
-
-        # fp(B.D)
-        # print B.D.nnz
-        # print B.D.indices
-        # print B.D.indptr
-        # print B.D.data
-        # fp(BG.D)
-
-        npt.assert_array_equal(ref, tst)
         # npt.assert_equal(B, BG)
-        # assert False
+        assert False
 
 
 def main():
