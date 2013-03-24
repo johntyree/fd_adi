@@ -267,6 +267,19 @@ struct SizedArray {
         FULLTRACE;
     }
 
+    SizedArray(GPUVec<T> const &S, std::string name)
+        : owner(true),
+          data(device_malloc<T>(S.size())),
+          tempspace(device_malloc<T>(S.size())),
+          ndim(1),
+          size(S.size()),
+          name(name) {
+        thrust::copy(S.begin(), S.end(), data);
+        shape[0] = size;
+        sanity_check();
+        FULLTRACE;
+    }
+
 
     SizedArray(T *rawptr, Py_ssize_t size, std::string name, bool from_host)
         : owner(from_host),
