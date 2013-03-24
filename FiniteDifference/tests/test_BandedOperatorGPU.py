@@ -368,7 +368,6 @@ class Operations_test(unittest.TestCase):
         submid = supmid.copy()
         subsub = supsub.copy()
 
-
         dsup =   d0[1:n0-1]             / (d0[2:n0]*(d0[1:n0-1]+d0[2:n0]))
         dmid = (-d0[1:n0-1] + d0[2:n0]) /           (d0[1:n0-1]*d0[2:n0])
         dsub =               -d0[2:n0]  / (d0[1:n0-1]*(d0[1:n0-1]+d0[2:n0]))
@@ -406,9 +405,8 @@ class Operations_test(unittest.TestCase):
 
         tstcoo = scipy.sparse.coo_matrix((tstdata, (row, col)), shape=2*[n0*n1])
 
-        # fp(tstcoo - B.D)
+        # fp(tstcoo - B.D ,'e')
         npt.assert_equal(tstcoo.todense(), refcoo.todense())
-        assert False
 
 
 def main():
