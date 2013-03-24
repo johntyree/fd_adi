@@ -11,6 +11,7 @@ import itertools
 import numpy as np
 cimport numpy as np
 
+from bisect import bisect_left
 
 import FiniteDifference.utils as utils
 
@@ -23,6 +24,9 @@ BandedOperator = BO.BandedOperator
 
 from FiniteDifference.VecArray cimport SizedArray, GPUVec
 from FiniteDifference.SizedArrayPtr cimport SizedArrayPtr
+
+from FiniteDifference.Option import Option, BarrierOption
+from FiniteDifference.Grid import Grid
 
 
 cdef class FiniteDifferenceEngine(object):
@@ -125,6 +129,14 @@ cdef class FiniteDifferenceEngine(object):
 
         Can't do this with C/Cuda of course... maybe cython?
         """
+        self.simple_operators = {}
+        self.operators = {}
+        self.t = 0
+        self.default_scheme = 'center'
+        self.default_order = 2
+
+
+    def from_host_FiniteDifferenceEngine(self, other):
         other.init()
         for attr in ['option', 'grid_analytical']:
             if hasattr(other, attr):
@@ -136,9 +148,6 @@ cdef class FiniteDifferenceEngine(object):
         self.shape = self.grid.shape
         self.ndim = self.grid.ndim
         self.coefficients = other.coefficients
-        self.t = 0
-        self.default_scheme = 'center'
-        self.default_order = 2
 
         # Setup
         self.operators = {k:BOG.BandedOperator(v) for k,v in other.operators.items()}
@@ -152,9 +161,8 @@ cdef class FiniteDifferenceEngine(object):
 
 cdef class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
 
-    def __init__(self, other):
-        FiniteDifferenceEngine.__init__(self, other)
-
+    def __init__(self):
+        FiniteDifferenceEngine.__init__(self)
 
     def scale_and_combine_operators(self):
         raise NotImplementedError
@@ -454,3 +462,203 @@ cdef class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
     cpdef solve_smooth_(self, n, dt, SizedArrayPtr V, smoothing_steps=2):
         self.solve_implicit_(smoothing_steps*2, dt*0.5, V)
         self.solve_hundsdorferverwer_(n-smoothing_steps, dt, V, theta=0.60)
+
+
+cdef class HestonFiniteDifferenceEngine(FiniteDifferenceEngineADI):
+    """FDEGPU specialized for Heston options."""
+    def __init__(self, option,
+            grid=None,
+            spot_max=1500.0,
+            spot_min=0.0,
+            spots=None,
+            vars=None,
+            var_max=10.0,
+            nspots=100,
+            nvols=100,
+            spotdensity=7.0,
+            varexp=4.0,
+            force_exact=True,
+            flip_idx_var=False,
+            flip_idx_spot=False,
+            schemes=None,
+            coefficients=None,
+            boundaries=None,
+            cache=True,
+            verbose=True,
+            force_bandwidth=None
+            ):
+        """@option@ is a HestonOption"""
+
+        if schemes is not None or flip_idx_var or flip_idx_spot:
+            raise NotImplementedError, "Only central differencing supported on GPU"
+
+        self.cache = cache
+        assert isinstance(option, Option)
+        self.option = option
+
+        if not coefficients:
+            def mu_s(t, *dim):
+                # return option.interest_rate.value - 0.5 * dim[1]
+                return option.interest_rate.value * dim[0]
+            def gamma2_s(t, *dim):
+                # return 0.5 * dim[1]
+                return 0.5 * dim[1] * dim[0]**2
+            def mu_v(t, *dim):
+                if np.isscalar(dim[0]):
+                    if dim[0] == 0:
+                        return 0
+                ret = option.variance.reversion * (option.variance.mean - dim[1])
+                ret[dim[0]==0] = 0
+                return ret
+            def gamma2_v(t, *dim):
+                if np.isscalar(dim[0]):
+                    if dim[0] == 0:
+                        return 0
+                ret = 0.5 * option.variance.volatility**2 * dim[1]
+                ret[dim[0]==0] = 0
+                return ret
+            def cross(t, *dim):
+                # return option.correlation * option.variance.volatility * dim[1]
+                return option.correlation * option.variance.volatility * dim[0] * dim[1]
+
+            coefficients = {()   : lambda t: -option.interest_rate.value,
+                    (0,) : mu_s,
+                    (0,0): gamma2_s,
+                    (1,) : mu_v,
+                    (1,1): gamma2_v,
+                    (0,1): cross,
+                    }
+
+        if not boundaries:
+            boundaries = {
+                            # D: U = 0              VN: dU/dS = 1
+                    # (0,)  : ((0, lambda t, *dim: 0.0), (1, lambda t, *dim: np.exp(dim[0]))),
+                    (0,)  : ((0, lambda t, *dim: 0.0), (1, lambda t, *dim: 1.0)),
+                            # D: U = 0              Free boundary
+                    # (0,0) : ((0, lambda t, *dim: 0.0), (None, lambda t, *dim:  np.exp(dim[0]))),
+                    (0,0) : ((0, lambda t, *dim: 0.0), (None, lambda t, *dim: 1.0)),
+                            # Free boundary at low variance
+                    (1,)  : ((None, lambda t, *dim: None),
+                            # # D intrinsic value at high variance
+                            # (0, lambda t, *dim: np.exp(-option.interest_rate.value * t) * dim[0])
+                            (None, lambda t, *dim: None)
+                            # (0, lambda t, *dim: dim[0])
+                            ),
+                            # We know from the PDE that this will be 0 because
+                            # the vol is 0 at the low boundary
+                    (1,1) : ((1, lambda t, *dim: 0),
+                            # D intrinsic value at high variance
+                            # (0, lambda t, *dim: np.exp(-option.interest_rate.value * t) * np.maximum(0.0, np.exp(dim[0])-option.strike))),
+                            (None, lambda t, *dim: None)
+                            # (0, lambda t, *dim: dim[0])
+                            # (0, lambda t, *dim: 0)
+                            )
+                    }
+
+        # if isinstance(option, BarrierOption):
+            # if option.top:
+                # if option.top[0]: # Knockin, not sure about implementing this
+                    # raise NotImplementedError("Knockin barriers are not supported.")
+                # else:
+                    # spot_max = option.top[1]
+                    # if grid:
+                        # assert np.allclose(spot_max, max(grid.mesh[0]))
+                    # boundaries[(0,)] = (boundaries[(0,)][0], (0, lambda *x: 0.0))
+                    # boundaries[(0,0)] = boundaries[(0,)]
+            # if option.bottom:
+                # if option.bottom[0]: # Knockin, not sure about implementing this
+                    # raise NotImplementedError("Knockin barriers are not supported.")
+                # else:
+                    # spot_min = option.bottom[1]
+                    # boundaries[(0,)] = ((0, lambda *x: 0.0), boundaries[(0,)][1])
+                    # boundaries[(0,0)] = boundaries[(0,)]
+
+
+        if grid:
+            self.spots = grid.mesh[0]
+            self.vars = grid.mesh[1]
+        else:
+            if vars is None:
+                # vars = np.linspace(0, var_max, nvols)
+                vars = utils.exponential_space(0.00, option.variance.value, var_max,
+                                            varexp, nvols,
+                                            force_exact=force_exact)
+            self.vars = vars
+            if spots is None:
+                # spots = np.linspace(0,spot_max,nspots)
+                if isinstance(option, BarrierOption) and option.top and not option.top[0]:
+                        p = 3
+                        spots = np.linspace(0, spot_max**p, nspots)**(1.0/p)
+                        print "Barrier spots"
+                else:
+                    spots = utils.sinh_space(option.strike-spot_min, spot_max-spot_min, spotdensity, nspots, force_exact=force_exact) + spot_min
+            self.spots = spots
+            grid = Grid([self.spots, self.vars], initializer=lambda *x: np.maximum(x[0]-option.strike,0))
+
+
+        newstrike = self.spots[np.argmin(np.abs(self.spots - option.strike))]
+        self.spots[np.argmin(np.abs(self.spots - option.spot))] = option.spot
+        # if newstrike != option.strike:
+            # print "Strike %s -> %s" % (option.strike, newstrike)
+            # option.strike = newstrike
+        # if newspot != option.spot:
+            # print "Spot %s -> %s" % (option.spot, newspot)
+            # option.spot = newspot
+
+        # if flip_idx_var is True: # Need explicit boolean True
+            # flip_idx_var = bisect_left(
+                    # np.round(self.vars, decimals=5),
+                    # np.round(option.variance.mean, decimals=5))
+        # if flip_idx_spot is True: # Need explicit boolean True
+            # flip_idx_spot = bisect_left(
+                    # np.round(self.spots, decimals=5),
+                    # np.round(option.strike, decimals=5))
+
+
+        self.grid = grid
+        self.coefficients = coefficients
+        self.boundaries = boundaries
+        self.schemes = schemes
+        self.force_bandwidth = force_bandwidth
+        self._initialized = False
+
+
+    def make_operator_templates(self):
+        m0 = self.grid.mesh[0]
+        m1 = self.grid.mesh[1]
+        self.simple_operators[(0,)] = BOG.for_vector(m0, m1.size, 1, 0)
+        self.simple_operators[(0,0)] = BOG.for_vector(m0, m1.size, 2, 0)
+        self.simple_operators[(1,)] = BOG.for_vector(m0, m1.size, 1, 1)
+        self.simple_operators[(1,1)] = BOG.for_vector(m0, m1.size, 2, 1)
+        self.simple_operators[(0,1)] = BOG.mixed_for_vector(m0, m1)
+
+
+    @property
+    def idx(self):
+        ids = bisect_left(np.round(self.spots, decimals=4), np.round(self.option.spot, decimals=4))
+        idv = bisect_left(np.round(self.vars, decimals=4), np.round(self.option.variance.value, decimals=4))
+        return (ids, idv)
+
+    @property
+    def price(self):
+        return self.grid.domain[-1][self.idx]
+
+
+    @property
+    def grid_analytical(self):
+        raise NotImplementedError
+        # H = self.option
+        # if isinstance(H, BarrierOption):
+            # raise NotImplementedError("No analytical solution for Heston barrier options.")
+        # hs = hs_call_vector(self.spots, H.strike,
+            # H.interest_rate.value, np.sqrt(self.vars), H.tenor,
+            # H.variance.reversion, H.variance.mean, H.variance.volatility,
+            # H.correlation, HFUNC=HestonCos, cache=self.cache)
+
+        # if max(hs.flat) > self.spots[-1] * 2:
+            # self.BADANALYTICAL = True
+            # print "Warning: Analytical solution looks like trash."
+        # else:
+            # self.BADANALYTICAL = False
+        # return hs
+
