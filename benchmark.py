@@ -137,8 +137,10 @@ def main():
     print
     # print run(dt, F, func)[idx]
     # F.grid.reset()
-    print run(dt, FG,func,F.grid.domain[0])[idx], "Estimate:", mc['expected'], "+-", mc['error']
-    # print run(dt, FG,func,F.grid.domain[0])[idx], F.option.analytical
+    print run(dt, FG,func,F.grid.domain[0])[idx],
+    # print "Estimate:", mc['expected'], "+-", mc['error']
+    # print F.option.analytical
+    print
 
 if __name__ == '__main__':
     main()
