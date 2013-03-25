@@ -26,7 +26,7 @@ build () {
 }
 
 run () {
-    args=($failed --rednose --verbosity=4 --with-id "$@")
+    args=($failed --rednose --verbosity=3 --with-id "$@")
     if [[ $USE_GDB ]]; then
         echo "gdb --args python $(which nosetests) ${args[@]} <<< run"
         gdb --args python $(which nosetests) ${args[@]} <<< run
