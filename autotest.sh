@@ -4,6 +4,7 @@ onmodify () {
     TARGET=${1:-.};
     shift
     remove_ids
+    build && run "${@}";
     while inotifywait -qq -r -e close_write,moved_to,move_self $TARGET; do
         sleep 0.5;
         build && run "${@}";
@@ -25,8 +26,7 @@ build () {
 }
 
 run () {
-    # echo "nosetests $failed --rednose --verbosity=3 --with-id ${ARGS[@]} || echo -ne \'\a\'"
-    args=(--debug-log=/scratch/noselog $failed --rednose --verbosity=4 --with-id "$@")
+    args=($failed --rednose --verbosity=4 --with-id "$@")
     if [[ $USE_GDB ]]; then
         echo "gdb --args python $(which nosetests) ${args[@]} <<< run"
         gdb --args python $(which nosetests) ${args[@]} <<< run
