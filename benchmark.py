@@ -131,7 +131,8 @@ def main():
 
     F = create(nspots=nspots, nvols=nvols)
     idx = F.idx
-    FG = FDE_ADI_GPU(F)
+    FG = FDE_ADI_GPU()
+    FG.from_host_FiniteDifferenceEngine(F)
     # mc = F.option.monte_carlo()
     print
     # print run(dt, F, func)[idx]
