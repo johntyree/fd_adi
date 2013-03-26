@@ -640,6 +640,68 @@ cdef class HestonFiniteDifferenceEngine(FiniteDifferenceEngineADI):
         self.simple_operators[(0,1)] = BOG.mixed_for_vector(m0, m1)
 
 
+    def coefficient_vector(self, f, t, dim):
+        """Evaluate f with the cartesian product of the elements of
+        self.grid.mesh, ordered such that dim is the fastest varying. The
+        relative order of the other dimensions remains the same.
+
+        Example (actual implementation is vectorized):
+            mesh = [(1,2,3), (4,5,6), (7,8,9)]
+            dim = 1
+            newmesh = [(4,5,6), (1,2,3), (7,8,9)]
+            [f(4,1,7), f(5,1,7), ..., f(4,2,7), f(5,2,7), ..., f(5,3,9), f(6,3,9)]
+            output = [f(a,b,c)
+                        for b in mesh[1]
+                        for a in mesh[0]
+                        for c in mesh[2]
+                        ]
+        """
+        gridsize = self.grid.size
+        mesh = list(self.grid.mesh)
+        m = mesh.pop(dim)
+        mesh.append(m)
+        # This can be rewritten with repeat and tile, not sure if faster
+        args = np.fromiter(
+            itertools.chain(*itertools.izip(*itertools.product(*mesh))), float)
+        args = np.split(args, self.grid.ndim)
+        m = args.pop()
+        args.insert(dim, m)
+        ret = f(t, *iter(args))
+        if np.isscalar(ret):
+            ret = np.repeat(<float>ret, gridsize)
+        return ret
+
+
+    def scale_and_combine_operators(self):
+        coeffs = self.coefficients
+        self.operators = {}
+
+        for d, op in sorted(self.simple_operators.items()):
+            print "Scaling op:", d
+            op = op.copy()
+            dim = op.axis
+            if d in coeffs:
+                op.vectorized_scale(self.coefficient_vector(coeffs[d], self.t, dim))
+
+            if len(set(d)) > 1:
+                self.operators[d] = op
+            else:
+                # Combine scaled derivatives for this dimension
+                if dim not in self.operators:
+                    self.operators[dim] = op
+                    # 0th derivative (r * V) is split evenly among each dimension
+                    #TODO: This function is ONLY dependent on time. NOT MESH
+                    if () in coeffs:
+                        self.operators[dim] += coeffs[()](self.t) / float(self.grid.ndim)
+                else:
+                        self.operators[dim] += op
+
+        # for op in self.operators.values():
+            # if op.is_foldable():
+                # print "Diagonalizing:", op
+                # op.diagonalize()
+
+
     @property
     def idx(self):
         ids = bisect_left(np.round(self.spots, decimals=4), np.round(self.option.spot, decimals=4))
