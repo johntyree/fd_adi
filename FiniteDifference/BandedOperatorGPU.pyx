@@ -43,6 +43,32 @@ cdef class BandedOperator(object):
             self.emigrate(other, tag)
 
 
+    property has_high_dirichlet:
+        def __get__(self):
+            if self.is_mixed_derivative:
+                return False
+            else:
+                return self.thisptr_tri.has_high_dirichlet
+        def __set__(self, val):
+            if self.is_mixed_derivative:
+                raise NotImplementedError("Mixed derivatives cannot have dirichlet boundaries.")
+            else:
+                self.thisptr_tri.has_high_dirichlet = val
+
+
+    property has_low_dirichlet:
+        def __get__(self):
+            if self.is_mixed_derivative:
+                return False
+            else:
+                return self.thisptr_tri.has_low_dirichlet
+        def __set__(self, val):
+            if self.is_mixed_derivative:
+                raise NotImplementedError("Mixed derivatives cannot have dirichlet boundaries.")
+            else:
+                self.thisptr_tri.has_low_dirichlet = val
+
+
     property operator_rows:
         def __get__(self):
             if self.is_mixed_derivative:

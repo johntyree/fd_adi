@@ -38,7 +38,6 @@ cdef class BandedOperator(object):
         order
         top_fold_status
 
-
     cdef _TriBandedOperator *thisptr_tri
     cdef _CSRBandedOperator *thisptr_csr
 
