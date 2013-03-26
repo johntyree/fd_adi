@@ -570,7 +570,7 @@ cdef class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
         coeffs = self.coefficients
         self.operators = {}
 
-        for d, op in self.simple_operators.items():
+        for d, op in sorted(self.simple_operators.items()):
             op = op.copy()
             dim = op.axis
             if d in coeffs:
