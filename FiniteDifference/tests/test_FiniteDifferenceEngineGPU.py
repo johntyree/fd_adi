@@ -280,42 +280,56 @@ class HestonOptionConstruction_test(unittest.TestCase):
         npt.assert_equal(tst, ref)
 
 
-    def test_combine_operators_0_FGG(self):
-        ref = self.F.operators[0]
+    def test_add_operators_0_FGG(self):
+        fst = self.F.simple_operators[(0,)]
+        snd = self.F.simple_operators[(0,0)]
+        ref = (snd + fst) + 0.5
         fst = self.FGG.simple_operators[(0,)]
         snd = self.FGG.simple_operators[(0,0)]
         tst = (snd + fst) + 0.5
         tst = tst.immigrate()
         tst.derivative = ref.derivative
-        tstD = tst.D.data
-        refD = ref.D.data
-        npt.assert_array_almost_equal(tstD, refD)
-
+        npt.assert_array_almost_equal(ref.D.data, tst.D.data)
         tst.D.data *= 0
         ref.D.data *= 0
+        ref.deltas = tst.deltas
         npt.assert_equal(tst, ref)
 
 
-    def test_combine_operators_1(self):
-        ref = self.F.operators[1]
-        npt.assert_array_equal([1, 0, -1, -2], ref.D.offsets)
-        npt.assert_equal(ref.bottom_fold_status, "CAN_FOLD")
+    def test_add_operators_1(self):
+        fst = self.F.simple_operators[(1,)]
+        snd = self.F.simple_operators[(1,1)]
+        ref = (snd + fst) + 0.5
         fst = self.FGG.simple_operators[(1,)]
         snd = self.FGG.simple_operators[(1,1)]
-        tst = (fst + snd) + 0.5
+        tst = (snd + fst) + 0.5
         tst = tst.immigrate()
-        npt.assert_array_equal([1, 0, -1, -2], tst.D.offsets)
-        npt.assert_equal(tst.bottom_fold_status, "CAN_FOLD")
         tst.derivative = ref.derivative
-        fp(tst.D.data - ref.D.data, 'e')
-
-        tstD = tst.D.data
-        refD = ref.D.data
-        npt.assert_array_almost_equal(tstD, refD)
-
+        npt.assert_array_almost_equal(ref.D.data, tst.D.data)
         tst.D.data *= 0
         ref.D.data *= 0
+        ref.deltas = tst.deltas
         npt.assert_equal(tst, ref)
+
+        # ref = self.F.operators[1]
+        # npt.assert_array_equal([1, 0, -1, -2], ref.D.offsets)
+        # npt.assert_equal(ref.bottom_fold_status, "CAN_FOLD")
+        # fst = self.FGG.simple_operators[(1,)]
+        # snd = self.FGG.simple_operators[(1,1)]
+        # tst = (fst + snd) + 0.5
+        # tst = tst.immigrate()
+        # npt.assert_array_equal([1, 0, -1, -2], tst.D.offsets)
+        # npt.assert_equal(tst.bottom_fold_status, "CAN_FOLD")
+        # tst.derivative = ref.derivative
+        # fp(tst.D.data - ref.D.data, 'e')
+
+        # tstD = tst.D.data
+        # refD = ref.D.data
+        # npt.assert_array_almost_equal(tstD, refD)
+
+        # tst.D.data *= 0
+        # ref.D.data *= 0
+        # npt.assert_equal(tst, ref)
 
 
 
