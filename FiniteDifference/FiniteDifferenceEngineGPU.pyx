@@ -379,13 +379,15 @@ cdef class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
 
 
     cpdef solve_hundsdorferverwer_(self, n, dt, SizedArrayPtr V, theta=0.5):
-        Firsts = [(o * dt) for o in self.operators.values()]
+        withdt = {k: (o * dt) for k,o in self.operators.iteritems()}
 
-        Les = [(o * theta * dt)
-               for d, o in sorted(self.operators.iteritems())
+        Firsts = withdt.values()
+
+        Les = [(o * theta)
+               for d, o in sorted(withdt.iteritems())
                if type(d) != tuple]
-        Lis = [(o * (theta * -dt)).add(1, inplace=True)
-               for d, o in sorted(self.operators.iteritems())
+        Lis = [(o * -theta).add(1, inplace=True)
+               for d, o in sorted(withdt.iteritems())
                if type(d) != tuple]
 
         for L in itertools.chain(Les, Lis):
