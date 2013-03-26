@@ -214,6 +214,39 @@ class HestonOptionConstruction_test(unittest.TestCase):
         self.FGG.make_operator_templates()
 
 
+    def test_scale_and_combine_FGG_0(self):
+        self.FGG.scale_and_combine_operators()
+        ref = self.F.operators[0]
+        tst = self.FGG.operators[0].immigrate()
+        ref.deltas = tst.deltas
+        npt.assert_array_almost_equal(tst.D.data, ref.D.data)
+        tst.D *= 0
+        ref.D *= 0
+        npt.assert_equal(tst, ref)
+
+
+    def test_scale_and_combine_FGG_1(self):
+        self.FGG.scale_and_combine_operators()
+        ref = self.F.operators[1]
+        tst = self.FGG.operators[1].immigrate()
+        ref.deltas = tst.deltas
+        npt.assert_array_almost_equal(tst.D.data, ref.D.data)
+        tst.D *= 0
+        ref.D *= 0
+        npt.assert_equal(tst, ref)
+
+
+    def test_scale_and_combine_FGG_1(self):
+        self.FGG.scale_and_combine_operators()
+        ref = self.F.operators[(0,1)]
+        tst = self.FGG.operators[(0,1)].immigrate()
+        ref.deltas = tst.deltas
+        npt.assert_array_almost_equal(tst.D.data, ref.D.data)
+        tst.D *= 0
+        ref.D *= 0
+        npt.assert_equal(tst, ref)
+
+
     def test_verify_simple_operators_0_FGG(self):
         ref = self.F.simple_operators[(0,)].copy()
         tst = self.FGG.simple_operators[(0,)].copy().immigrate()
@@ -264,10 +297,10 @@ class HestonOptionConstruction_test(unittest.TestCase):
         ref.diagonalize(), tst.diagonalize()
         tst = tst.immigrate()
         tst.deltas = ref.deltas
-        npt.assert_array_almost_equal(tst.D.data, ref.D.data)
         npt.assert_array_almost_equal(ref.bottom_factors, tst.bottom_factors)
         tst.bottom_factors *= 0
         ref.bottom_factors *= 0
+        npt.assert_array_almost_equal(tst.D.data, ref.D.data)
         tst.D *= 0
         ref.D *= 0
         npt.assert_equal(tst, ref)
@@ -312,7 +345,7 @@ class HestonOptionConstruction_test(unittest.TestCase):
         npt.assert_equal(tst, ref)
 
 
-    def test_multiply_operators_0_FGG(self):
+    def test_scale_operators_0_FGG(self):
         d = (0,)
         ref = self.F.simple_operators[d]
         ref.vectorized_scale(self.F.coefficient_vector(self.F.coefficients[d],
@@ -329,7 +362,7 @@ class HestonOptionConstruction_test(unittest.TestCase):
         npt.assert_equal(tst, ref)
 
 
-    def test_multiply_operators_00_FGG(self):
+    def test_scale_operators_00_FGG(self):
         d = (0,0)
         ref = self.F.simple_operators[d]
         ref.vectorized_scale(
@@ -348,7 +381,7 @@ class HestonOptionConstruction_test(unittest.TestCase):
         npt.assert_equal(tst, ref)
 
 
-    def test_multiply_operators_1_FGG(self):
+    def test_scale_operators_1_FGG(self):
         d = (1,)
         ref = self.F.simple_operators[d]
         ref.vectorized_scale(self.F.coefficient_vector(self.F.coefficients[d],
@@ -365,8 +398,27 @@ class HestonOptionConstruction_test(unittest.TestCase):
         npt.assert_equal(tst, ref)
 
 
-    def test_multiply_operators_11_FGG(self):
+    def test_scale_operators_11_FGG(self):
         d = (1,1)
+        ref = self.F.simple_operators[d]
+        ref.vectorized_scale(
+                self.F.coefficient_vector(self.F.coefficients[d], self.F.t,
+                    d[0]))
+        tst = self.FGG.simple_operators[d]
+        tst.vectorized_scale(
+                self.FGG.coefficient_vector(self.FGG.coefficients[d],
+                    self.FGG.t, d[0]))
+        tst = tst.immigrate()
+
+        npt.assert_array_almost_equal(ref.D.data, tst.D.data)
+        tst.D.data *= 0
+        ref.D.data *= 0
+        ref.deltas = tst.deltas
+        npt.assert_equal(tst, ref)
+
+
+    def test_scale_operators_01_FGG(self):
+        d = (0,1)
         ref = self.F.simple_operators[d]
         ref.vectorized_scale(
                 self.F.coefficient_vector(self.F.coefficients[d], self.F.t,
