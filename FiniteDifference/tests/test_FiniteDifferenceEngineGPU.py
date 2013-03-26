@@ -311,27 +311,77 @@ class HestonOptionConstruction_test(unittest.TestCase):
         ref.deltas = tst.deltas
         npt.assert_equal(tst, ref)
 
-        # ref = self.F.operators[1]
-        # npt.assert_array_equal([1, 0, -1, -2], ref.D.offsets)
-        # npt.assert_equal(ref.bottom_fold_status, "CAN_FOLD")
-        # fst = self.FGG.simple_operators[(1,)]
-        # snd = self.FGG.simple_operators[(1,1)]
-        # tst = (fst + snd) + 0.5
-        # tst = tst.immigrate()
-        # npt.assert_array_equal([1, 0, -1, -2], tst.D.offsets)
-        # npt.assert_equal(tst.bottom_fold_status, "CAN_FOLD")
-        # tst.derivative = ref.derivative
-        # fp(tst.D.data - ref.D.data, 'e')
 
-        # tstD = tst.D.data
-        # refD = ref.D.data
-        # npt.assert_array_almost_equal(tstD, refD)
+    def test_multiply_operators_0_FGG(self):
+        d = (0,)
+        ref = self.F.simple_operators[d]
+        ref.vectorized_scale(self.F.coefficient_vector(self.F.coefficients[d],
+            self.F.t, d[0]))
+        tst = self.FGG.simple_operators[d]
+        tst.vectorized_scale(self.FGG.coefficient_vector(self.FGG.coefficients[d],
+            self.FGG.t, d[0]))
+        tst = tst.immigrate()
 
-        # tst.D.data *= 0
-        # ref.D.data *= 0
-        # npt.assert_equal(tst, ref)
+        npt.assert_array_almost_equal(ref.D.data, tst.D.data)
+        tst.D.data *= 0
+        ref.D.data *= 0
+        ref.deltas = tst.deltas
+        npt.assert_equal(tst, ref)
 
 
+    def test_multiply_operators_00_FGG(self):
+        d = (0,0)
+        ref = self.F.simple_operators[d]
+        ref.vectorized_scale(
+                self.F.coefficient_vector(self.F.coefficients[d], self.F.t,
+                    d[0]))
+        tst = self.FGG.simple_operators[d]
+        tst.vectorized_scale(
+                self.FGG.coefficient_vector(self.FGG.coefficients[d],
+                    self.FGG.t, d[0]))
+        tst = tst.immigrate()
+
+        npt.assert_array_almost_equal(ref.D.data, tst.D.data)
+        tst.D.data *= 0
+        ref.D.data *= 0
+        ref.deltas = tst.deltas
+        npt.assert_equal(tst, ref)
+
+
+    def test_multiply_operators_1_FGG(self):
+        d = (1,)
+        ref = self.F.simple_operators[d]
+        ref.vectorized_scale(self.F.coefficient_vector(self.F.coefficients[d],
+            self.F.t, d[0]))
+        tst = self.FGG.simple_operators[d]
+        tst.vectorized_scale(self.FGG.coefficient_vector(self.FGG.coefficients[d],
+            self.FGG.t, d[0]))
+        tst = tst.immigrate()
+
+        npt.assert_array_almost_equal(ref.D.data, tst.D.data)
+        tst.D.data *= 0
+        ref.D.data *= 0
+        ref.deltas = tst.deltas
+        npt.assert_equal(tst, ref)
+
+
+    def test_multiply_operators_11_FGG(self):
+        d = (1,1)
+        ref = self.F.simple_operators[d]
+        ref.vectorized_scale(
+                self.F.coefficient_vector(self.F.coefficients[d], self.F.t,
+                    d[0]))
+        tst = self.FGG.simple_operators[d]
+        tst.vectorized_scale(
+                self.FGG.coefficient_vector(self.FGG.coefficients[d],
+                    self.FGG.t, d[0]))
+        tst = tst.immigrate()
+
+        npt.assert_array_almost_equal(ref.D.data, tst.D.data)
+        tst.D.data *= 0
+        ref.D.data *= 0
+        ref.deltas = tst.deltas
+        npt.assert_equal(tst, ref)
 
 
 class FiniteDifferenceEngineADIGPU_test(unittest.TestCase):
