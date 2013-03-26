@@ -979,7 +979,9 @@ void _TriBandedOperator::vectorized_scale(SizedArray<double> &vector) {
             << "\n vsize("<<vsize<<") operator_rows("<<operator_rows<<")");
     }
 
-    if (vsize == 0) {DIE("vsize == 0")}
+    if (vsize == 0) {
+        DIE("vsize == 0");
+    }
 
     for (Py_ssize_t row = 0; row < 3; ++row) {
         int o = 1 - row;
