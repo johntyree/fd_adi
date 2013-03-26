@@ -419,7 +419,7 @@ cdef class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
         mesh = list(self.grid.mesh)
         m = mesh.pop(dim)
         mesh.append(m)
-        # This can be rewritten with repeat and tile, not sure if faster
+        # XXX: This can be rewritten with repeat and tile, not sure if faster
         args = np.fromiter(
             itertools.chain(*itertools.izip(*itertools.product(*mesh))), float)
         args = np.split(args, self.grid.ndim)
