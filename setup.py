@@ -80,7 +80,7 @@ for m in cython_modules:
     m.extra_compile_args = {}
     m.extra_compile_args['gcc'] = ["-Wextra", "-pedantic", "-std=c++0x"] + embedded_gcc_args
     m.extra_compile_args['nvcc'] = ['-arch='+NVCC_ARCH,
-        '--ptxas-options=-v', '-c', '--compiler-options="%s"'
+        '--ptxas-options=""', '-c', '--compiler-options="%s"'
         % ' '.join(embedded_gcc_args)] + both_args
 
 
