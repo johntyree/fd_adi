@@ -167,33 +167,30 @@ cdef class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
     def __init__(self):
         FiniteDifferenceEngine.__init__(self)
 
+
     def scale_and_combine_operators(self):
-        raise NotImplementedError
-        # coeffs = self.coefficients
-        # self.operators = {}
+        coeffs = self.coefficients
+        self.operators = {}
 
-        # for d, op in self.simple_operators.items():
-            # op = op.copy()
-            # dim = op.axis
-            # if d in coeffs:
-                # op.vectorized_scale(self.coefficient_vector(coeffs[d], self.t, dim))
+        for d, op in sorted(self.simple_operators.items()):
+            print "Scaling op:", d
+            op = op.copy()
+            dim = op.axis
+            if d in coeffs:
+                op.vectorized_scale(self.coefficient_vector(coeffs[d], self.t, dim))
 
-            # if len(set(d)) > 1:
-                # self.operators[d] = op
-            # else:
-                # # Combine scaled derivatives for this dimension
-                # if dim not in self.operators:
-                    # self.operators[dim] = op
-                    # # 0th derivative (r * V) is split evenly among each dimension
-                    # #TODO: This function is ONLY dependent on time. NOT MESH
-                    # if () in coeffs:
-                        # self.operators[dim] += coeffs[()](self.t) / float(self.grid.ndim)
-                # else:
-                    # if tuple(self.operators[dim].D.offsets) == tuple(op.D.offsets):
-                        # self.operators[dim] += op
-                    # else:
-                        # # print col, dim, combined_ops[dim].axis, self.simple_operators[dim].axis
-                        # self.operators[dim] = self.operators[dim] + op
+            if len(set(d)) > 1:
+                self.operators[d] = op
+            else:
+                # Combine scaled derivatives for this dimension
+                if dim not in self.operators:
+                    self.operators[dim] = op
+                    # 0th derivative (r * V) is split evenly among each dimension
+                    #TODO: This function is ONLY dependent on time. NOT MESH
+                    if () in coeffs:
+                        self.operators[dim] += coeffs[()](self.t) / float(self.grid.ndim)
+                else:
+                        self.operators[dim] += op
 
 
     def cross_term(self, V, numpy=True):
@@ -379,6 +376,8 @@ cdef class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
 
 
     cpdef solve_hundsdorferverwer_(self, n, dt, SizedArrayPtr V, theta=0.5):
+        self.operators = {}
+        self.scale_and_combine_operators()
         withdt = {k: (o * dt) for k,o in self.operators.iteritems()}
 
         Firsts = withdt.values()
@@ -679,36 +678,6 @@ cdef class HestonFiniteDifferenceEngine(FiniteDifferenceEngineADI):
         if np.isscalar(ret):
             ret = np.repeat(<float>ret, gridsize)
         return ret
-
-
-    def scale_and_combine_operators(self):
-        coeffs = self.coefficients
-        self.operators = {}
-
-        for d, op in sorted(self.simple_operators.items()):
-            print "Scaling op:", d
-            op = op.copy()
-            dim = op.axis
-            if d in coeffs:
-                op.vectorized_scale(self.coefficient_vector(coeffs[d], self.t, dim))
-
-            if len(set(d)) > 1:
-                self.operators[d] = op
-            else:
-                # Combine scaled derivatives for this dimension
-                if dim not in self.operators:
-                    self.operators[dim] = op
-                    # 0th derivative (r * V) is split evenly among each dimension
-                    #TODO: This function is ONLY dependent on time. NOT MESH
-                    if () in coeffs:
-                        self.operators[dim] += coeffs[()](self.t) / float(self.grid.ndim)
-                else:
-                        self.operators[dim] += op
-
-        # for op in self.operators.values():
-            # if op.is_foldable():
-                # print "Diagonalizing:", op
-                # op.diagonalize()
 
 
     @property

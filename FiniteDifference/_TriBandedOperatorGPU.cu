@@ -68,6 +68,14 @@ int find_index(T haystack, U needle, int max) {
     return idx;
 }
 
+struct scale_0 {
+    template <typename Tuple>
+    __host__ __device__
+    void operator()(Tuple t) {
+        using thrust::get
+    }
+}
+
 struct first_deriv {
     template <typename Tuple>
     __host__ __device__
