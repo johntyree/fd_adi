@@ -177,7 +177,6 @@ class HestonOption_test(unittest.TestCase):
         npt.assert_allclose(V, ans, rtol=0.001)
 
 
-
 class HestonOptionConstruction_test(unittest.TestCase):
 
     def setUp(self):
@@ -198,8 +197,8 @@ class HestonOptionConstruction_test(unittest.TestCase):
 
 
         self.dt = 1.0/150.0
-        self.F = HestonFiniteDifferenceEngine(option, nspots=150,
-                                                   nvols=80,
+        self.F = HestonFiniteDifferenceEngine(option, nspots=5,
+                                                   nvols=5,
                                                    force_bandwidth=None,
                                                    flip_idx_var=False)
 
@@ -211,9 +210,7 @@ class HestonOptionConstruction_test(unittest.TestCase):
                                          # force_bandwidth=None,
                                          # force_exact=False)
         self.F.init()
-        self.F.operators[1].diagonalize()
         self.FGG = FDG.HestonFiniteDifferenceEngine(option, nspots=self.F.grid.shape[0], nvols=self.F.grid.shape[1])
-        self.FGG.make_operator_templates()
         self.FGG.make_operator_templates()
 
 
@@ -261,13 +258,16 @@ class HestonOptionConstruction_test(unittest.TestCase):
         tst = self.FGG.simple_operators[(1,1)].copy()
         tst = tst.immigrate()
         tst.deltas = ref.deltas
-        npt.assert_equal(tst, ref)
+        npt.assert_array_almost_equal(tst.D.data, ref.D.data, decimal=12)
         ref = self.F.simple_operators[(1,1)].copy()
         tst = self.FGG.simple_operators[(1,1)].copy()
         ref.diagonalize(), tst.diagonalize()
         tst = tst.immigrate()
         tst.deltas = ref.deltas
         npt.assert_array_almost_equal(tst.D.data, ref.D.data)
+        npt.assert_array_almost_equal(ref.bottom_factors, tst.bottom_factors)
+        tst.bottom_factors *= 0
+        ref.bottom_factors *= 0
         tst.D *= 0
         ref.D *= 0
         npt.assert_equal(tst, ref)
@@ -278,6 +278,46 @@ class HestonOptionConstruction_test(unittest.TestCase):
         tst = self.FGG.simple_operators[(0,1)].immigrate()
         tst.deltas = ref.deltas
         npt.assert_equal(tst, ref)
+
+
+    def test_combine_operators_0_FGG(self):
+        ref = self.F.operators[0]
+        fst = self.FGG.simple_operators[(0,)]
+        snd = self.FGG.simple_operators[(0,0)]
+        tst = (snd + fst) + 0.5
+        tst = tst.immigrate()
+        tst.derivative = ref.derivative
+        tstD = tst.D.data
+        refD = ref.D.data
+        npt.assert_array_almost_equal(tstD, refD)
+
+        tst.D.data *= 0
+        ref.D.data *= 0
+        npt.assert_equal(tst, ref)
+
+
+    def test_combine_operators_1(self):
+        ref = self.F.operators[1]
+        npt.assert_array_equal([1, 0, -1, -2], ref.D.offsets)
+        npt.assert_equal(ref.bottom_fold_status, "CAN_FOLD")
+        fst = self.FGG.simple_operators[(1,)]
+        snd = self.FGG.simple_operators[(1,1)]
+        tst = (fst + snd) + 0.5
+        tst = tst.immigrate()
+        npt.assert_array_equal([1, 0, -1, -2], tst.D.offsets)
+        npt.assert_equal(tst.bottom_fold_status, "CAN_FOLD")
+        tst.derivative = ref.derivative
+        fp(tst.D.data - ref.D.data, 'e')
+
+        tstD = tst.D.data
+        refD = ref.D.data
+        npt.assert_array_almost_equal(tstD, refD)
+
+        tst.D.data *= 0
+        ref.D.data *= 0
+        npt.assert_equal(tst, ref)
+
+
 
 
 class FiniteDifferenceEngineADIGPU_test(unittest.TestCase):
