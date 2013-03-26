@@ -975,19 +975,33 @@ void _TriBandedOperator::vectorized_scale(SizedArray<double> &vector) {
 
     for (Py_ssize_t row = 0; row < 3; ++row) {
         int o = 1 - row;
-        if (o >= 0) { // upper diags
-            thrust::transform(diags.data + diags.idx(row, 0),
+        if (o > 0) { // upper diags
+            thrust::transform(
+                    diags.data + diags.idx(row, 0),
                     diags.data + diags.idx(row, 0) + operator_rows - o,
                     v.begin(),
                     diags.data + diags.idx(row, 0),
                     thrust::multiplies<REAL_t>());
-        } else { // lower diags
-            thrust::transform(diags.data + diags.idx(row, -o),
+        } else if (o < 0) { // lower diags
+            thrust::transform(
+                    diags.data + diags.idx(row, -o),
                     diags.data + diags.idx(row, 0) + operator_rows,
                     v.begin() + -o,
                     diags.data + diags.idx(row, -o),
                     thrust::multiplies<REAL_t>());
+        } else { // main diagonal
+            int begin = has_low_dirichlet;
+            int end = block_len-1 - has_high_dirichlet;
+            thrust::transform_if(
+                    diags.data + diags.idx(row, 0),
+                    diags.data + diags.idx(row, 0) + operator_rows,
+                    v.begin(),
+                    make_counting_iterator(0),
+                    diags.data + diags.idx(row, 0),
+                    thrust::multiplies<REAL_t>(),
+                    periodic_from_to_mask(begin, end, block_len));
         }
+
     }
 
     /* We check dirichlet to avoid multiplying by 1 */
