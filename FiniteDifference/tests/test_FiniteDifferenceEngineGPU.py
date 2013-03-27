@@ -216,12 +216,17 @@ class HestonOptionConstruction_test(unittest.TestCase):
 
     def test_scale_and_combine_FGG_0(self):
         self.FGG.scale_and_combine_operators(self.F)
+
         ref = self.F.operators[0]
         tst = self.FGG.operators[0].immigrate()
+
         ref.deltas = tst.deltas
         npt.assert_array_almost_equal(tst.D.data, ref.D.data)
         tst.D *= 0
         ref.D *= 0
+        npt.assert_array_almost_equal(tst.R, ref.R)
+        tst.R *= 0
+        ref.R *= 0
         npt.assert_equal(tst, ref)
 
 
