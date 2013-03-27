@@ -75,8 +75,8 @@ for m in cython_modules:
     m.libraries = ['cudart', 'cusparse']
     m.include_dirs += thrust + ["FiniteDifference", numpy_include, CUDA['include']]
     m.runtime_library_dirs = [CUDA['lib64']]
-    both_args = ['-O']
-    embedded_gcc_args = ["-g", "-Wall", "-fPIC"] + both_args
+    both_args = ['-O0']
+    embedded_gcc_args = ["-ggdb", "-Wall", "-fPIC"] + both_args
     m.extra_compile_args = {}
     m.extra_compile_args['gcc'] = ["-Wextra", "-pedantic", "-std=c++0x"] + embedded_gcc_args
     m.extra_compile_args['nvcc'] = ['-arch='+NVCC_ARCH,
