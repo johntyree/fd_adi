@@ -608,21 +608,6 @@ cdef class HestonFiniteDifferenceEngine(FiniteDifferenceEngineADI):
 
         newstrike = self.spots[np.argmin(np.abs(self.spots - option.strike))]
         self.spots[np.argmin(np.abs(self.spots - option.spot))] = option.spot
-        # if newstrike != option.strike:
-            # print "Strike %s -> %s" % (option.strike, newstrike)
-            # option.strike = newstrike
-        # if newspot != option.spot:
-            # print "Spot %s -> %s" % (option.spot, newspot)
-            # option.spot = newspot
-
-        # if flip_idx_var is True: # Need explicit boolean True
-            # flip_idx_var = bisect_left(
-                    # np.round(self.vars, decimals=5),
-                    # np.round(option.variance.mean, decimals=5))
-        # if flip_idx_spot is True: # Need explicit boolean True
-            # flip_idx_spot = bisect_left(
-                    # np.round(self.spots, decimals=5),
-                    # np.round(option.strike, decimals=5))
 
 
         self.grid = grid

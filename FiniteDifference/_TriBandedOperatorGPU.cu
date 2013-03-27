@@ -72,9 +72,9 @@ struct scale_0 {
     template <typename Tuple>
     __host__ __device__
     void operator()(Tuple t) {
-        using thrust::get
+        using thrust::get;
     }
-}
+};
 
 struct first_deriv {
     template <typename Tuple>
