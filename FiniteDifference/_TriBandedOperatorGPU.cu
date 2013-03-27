@@ -1033,7 +1033,7 @@ void _TriBandedOperator::vectorized_scale(SizedArray<double> &vector) {
     if (top_fold_status == CAN_FOLD && !has_low_dirichlet) {
         thrust::transform(
             top_factors.data,
-            top_factors.data+top_factors.size,
+            top_factors.data + top_factors.size,
             u0.begin(),
             top_factors.data,
             thrust::multiplies<REAL_t>());
@@ -1041,7 +1041,7 @@ void _TriBandedOperator::vectorized_scale(SizedArray<double> &vector) {
     if (bottom_fold_status == CAN_FOLD && !has_high_dirichlet) {
         thrust::transform(
             bottom_factors.data,
-            bottom_factors.data+bottom_factors.size,
+            bottom_factors.data + bottom_factors.size,
             u1.begin(),
             bottom_factors.data,
             thrust::multiplies<REAL_t>());
