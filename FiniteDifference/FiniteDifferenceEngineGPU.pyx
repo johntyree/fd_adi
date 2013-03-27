@@ -193,17 +193,6 @@ cdef class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
         Evaluate f with the cartesian product of the elements of
         self.grid.mesh, ordered such that dim is the fastest varying. The
         relative order of the other dimensions remains the same.
-
-        Example (actual implementation is vectorized):
-            mesh = [(1,2,3), (4,5,6), (7,8,9)]
-            dim = 1
-            newmesh = [(4,5,6), (1,2,3), (7,8,9)]
-            [f(4,1,7), f(5,1,7), ..., f(4,2,7), f(5,2,7), ..., f(5,3,9), f(6,3,9)]
-            output = [f(a,b,c)
-                        for b in mesh[1]
-                        for a in mesh[0]
-                        for c in mesh[2]
-                        ]
         """
         gridsize = self.grid.size
         mesh = list(self.grid.mesh)
@@ -219,11 +208,6 @@ cdef class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
         if np.isscalar(ret):
             ret = np.repeat(<float>ret, gridsize)
         return ret
-
-
-    # cdef scale_0(self, SizedArrayPtr v):
-        # _scale_0(
-            # deref(self.spots.p)
 
 
     def scale_and_combine_operators(self, F):
