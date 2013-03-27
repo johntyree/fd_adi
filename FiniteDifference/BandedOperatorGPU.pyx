@@ -423,13 +423,13 @@ cdef class BandedOperator(object):
         if isinstance(val, BandedOperator):
             B.add_operator(val)
         else:
-            B.add_scalar(val)
+            B.add_scalar_from_host(val)
         return B
     def __iadd__(self, val):
         if isinstance(val, BandedOperator):
             self.add_operator(val)
         else:
-            self.add_scalar(val)
+            self.add_scalar_from_host(val)
         return self
 
 
@@ -465,14 +465,25 @@ cdef class BandedOperator(object):
         return
 
 
-    cpdef add_scalar(self, float other):
+    cpdef add_scalar_from_host(self, float other):
         """
         Add a scalar to the main diagonal
         Does not alter self.R, the residual vector.
         """
         if self.thisptr_tri == NULL:
             raise RuntimeError("add_scalar called but C++ tridiag is NULL. CSR? Mixed(%s)" % self.is_mixed_derivative)
-        self.thisptr_tri.add_scalar(other)
+        self.thisptr_tri.add_scalar_from_host(other)
+        return
+
+
+    cpdef add_scalar(self, SizedArrayPtr other, Py_ssize_t index):
+        """
+        Add a scalar to the main diagonal
+        Does not alter self.R, the residual vector.
+        """
+        if self.thisptr_tri == NULL:
+            raise RuntimeError("add_scalar called but C++ tridiag is NULL. CSR? Mixed(%s)" % self.is_mixed_derivative)
+        self.thisptr_tri.add_scalar(other.p.data + other.p.idx(index))
         return
 
 

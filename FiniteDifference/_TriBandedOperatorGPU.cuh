@@ -10,6 +10,10 @@
 #include "common.h"
 #include "VecArray.h"
 
+typedef thrust::device_ptr<double> Dptr;
+typedef thrust::detail::normal_iterator<thrust::device_ptr<double> > DptrIterator;
+
+const double NaN = std::numeric_limits<double>::quiet_NaN();
 
 static const std::string FOLDED = "FOLDED";
 static const std::string CAN_FOLD = "CAN_FOLD";
@@ -30,7 +34,8 @@ class _TriBandedOperator {
         bool is_folded();
         /* void DMVPY(SizedArray<double> &V, char operation, SizedArray<double> &Y, SizedArray<double> &out); */
         void add_operator(_TriBandedOperator &other);
-        void add_scalar(double val);
+        void add_scalar_from_host(double val);
+        void add_scalar(Dptr val);
         void diagonalize();
         void fold_bottom(bool=false);
         void fold_top(bool=false);

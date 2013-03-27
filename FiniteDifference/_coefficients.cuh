@@ -49,5 +49,4 @@ void scale_01(
         , SizedArray<double> &vec
         );
 
-
 #endif /* end of include guard */

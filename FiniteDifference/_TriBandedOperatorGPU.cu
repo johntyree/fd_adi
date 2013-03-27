@@ -40,12 +40,6 @@ using thrust::make_zip_iterator;
 
 using namespace thrust::placeholders;
 
-typedef thrust::device_ptr<double> Dptr;
-
-typedef thrust::detail::normal_iterator<thrust::device_ptr<double> > DptrIterator;
-
-const double NaN = std::numeric_limits<double>::quiet_NaN();
-
 
 template <typename T, typename U>
 int find_index(T haystack, U needle, int max) {
@@ -642,10 +636,7 @@ void _TriBandedOperator::add_operator(_TriBandedOperator &other) {
 }
 
 
-/* Add a scalar to the main diagonal.
-* Does not alter the residual vector.
-*/
-void _TriBandedOperator::add_scalar(double val) {
+void _TriBandedOperator::add_scalar_from_host(double val) {
     FULLTRACE;
 
     int begin = has_low_dirichlet;
@@ -655,6 +646,28 @@ void _TriBandedOperator::add_scalar(double val) {
             diags.data + diags.idx(main_diag, 0),
             diags.data + diags.idx(main_diag, 0) + operator_rows,
             make_constant_iterator(val),
+            make_counting_iterator(0),
+            diags.data + diags.idx(main_diag, 0),
+            thrust::plus<double>(),
+            periodic_from_to_mask(begin, end, block_len));
+    FULLTRACE;
+}
+
+
+
+/* Add a scalar to the main diagonal.
+* Does not alter the residual vector.
+*/
+void _TriBandedOperator::add_scalar(Dptr val) {
+    FULLTRACE;
+
+    int begin = has_low_dirichlet;
+    int end = block_len-1 - has_high_dirichlet;
+
+    thrust::transform_if(
+            diags.data + diags.idx(main_diag, 0),
+            diags.data + diags.idx(main_diag, 0) + operator_rows,
+            make_constant_iterator(*val),
             make_counting_iterator(0),
             diags.data + diags.idx(main_diag, 0),
             thrust::plus<double>(),

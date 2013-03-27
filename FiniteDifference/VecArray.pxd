@@ -39,6 +39,8 @@ cdef extern from "VecArray.h":
         void timeseq(T x) except +
         T get(int i) except +
         T get(int i, int j) except +
+        int idx(int idx) except +
+        int idx(int i, int j) except +
         void reshape(Py_ssize_t h, Py_ssize_t w) except +
         void flatten() except +
         void transpose(int) except +

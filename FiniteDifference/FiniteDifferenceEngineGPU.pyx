@@ -54,6 +54,7 @@ cdef class FiniteDifferenceEngine(object):
         t
         cache
         schemes
+        SizedArrayPtr zero_derivative_coefficient
         SizedArrayPtr gpugridmesh0
         SizedArrayPtr gpugridmesh1
         SizedArrayPtr gpugrid
@@ -76,7 +77,7 @@ cdef class FiniteDifferenceEngine(object):
 
         Ex. (2D grid)
 
-            {(None,): lambda t, x0, x1: 0.06 # 0th derivative
+            {(): lambda t, x0, x1: 0.06 # 0th derivative
               (0,)  : lambda t, x0, x1: 0.5,
               (0,0) : lambda t, x0, x1: x,
               # python magic lets be more general than (2*x1*t)
@@ -271,6 +272,7 @@ cdef class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
                     op.vectorized_scale_(self.scaling_vec)
                 else:
                     assert False, "All ops should be GPU scaled now."
+                    # op.vectorized_scale(self.coefficient_vector(coeffs[d], self.t, dim))
 
 
             if len(set(d)) > 1:
@@ -280,11 +282,13 @@ cdef class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
                 if dim not in self.operators:
                     self.operators[dim] = op
                     # 0th derivative (r * V) is split evenly among each dimension
-                    #TODO: This function is ONLY dependent on time. NOT MESH
                     if () in coeffs:
-                        self.operators[dim] += coeffs[()](self.t) / float(self.grid.ndim)
+                        # self.operators[dim] += coeffs[()](self.t) / float(self.grid.ndim)
+                        assert self.zero_derivative_coefficient.p != NULL, (
+                                "Zero derviative has not been set.")
+                        self.operators[dim].add_scalar(self.zero_derivative_coefficient, self.n)
                 else:
-                        self.operators[dim] += op
+                    self.operators[dim] += op
         return self.scaling_vec
 
 

@@ -5,6 +5,8 @@ from libcpp.string cimport string as cpp_string
 
 from VecArray cimport SizedArray, to_string
 
+from FiniteDifference.thrust.device_ptr cimport device_ptr
+
 
 cdef extern from "_TriBandedOperatorGPU.cuh":
 
@@ -18,7 +20,8 @@ cdef extern from "_TriBandedOperatorGPU.cuh":
         Py_ssize_t operator_rows
 
         void add_operator(_TriBandedOperator &other) except +
-        void add_scalar(double val) except +
+        void add_scalar_from_host(double val) except +
+        void add_scalar(device_ptr[double]) except +
         void apply(SizedArray[double] &) except +
         void diagonalize() except +
         void fold_bottom(cbool unfold) except +
