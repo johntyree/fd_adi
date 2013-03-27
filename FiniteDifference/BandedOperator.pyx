@@ -658,7 +658,7 @@ cdef class BandedOperator(object):
             o = otheroffsets[i]
             to = get_int_index(Boffsets, o)
             if o == 0:
-                # We have to do the main diagonal block_wise becaues of the
+                # We have to do the main diagonal block_wise because of the
                 # dirichlet boundary
                 block_len = B.shape[0] / float(B.blocks)
                 assert block_len == int(block_len)
