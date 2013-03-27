@@ -233,18 +233,10 @@ class HestonOptionConstruction_test(unittest.TestCase):
         tst = tst.immigrate()
 
         ref.deltas = tst.deltas
-        # fp(ref.D.data, 'e')
-        # print
-        # fp(tst.D.data, 'e')
-        # print
-        fp(ref.D.data - tst.D.data, 'e')
-        print (ref.D.data.shape)
-        print
         npt.assert_array_almost_equal(tst.D.data, ref.D.data)
         tst.D *= 0
         ref.D *= 0
         npt.assert_equal(tst, ref)
-        assert False
 
 
     def test_scale_and_combine_FGG_01(self):
