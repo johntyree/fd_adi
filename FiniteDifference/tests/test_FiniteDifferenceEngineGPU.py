@@ -215,7 +215,7 @@ class HestonOptionConstruction_test(unittest.TestCase):
 
 
     def test_scale_and_combine_FGG_0(self):
-        self.FGG.scale_and_combine_operators()
+        self.FGG.scale_and_combine_operators(self.F)
         ref = self.F.operators[0]
         tst = self.FGG.operators[0].immigrate()
         ref.deltas = tst.deltas
@@ -226,18 +226,88 @@ class HestonOptionConstruction_test(unittest.TestCase):
 
 
     def test_scale_and_combine_FGG_1(self):
-        self.FGG.scale_and_combine_operators()
+        def sac(self, F):
+            coeffs = F.coefficients
+            self.operators = {}
+
+            for d, op in sorted(self.simple_operators.items()):
+                print "Scaling op:", d
+                o = op.immigrate()
+                npt.assert_(not np.isnan(o.D.data).any(), msg=str(d))
+                op = op.copy()
+                o = op.immigrate()
+                npt.assert_(not np.isnan(o.D.data).any(), msg=str(d))
+                dim = op.axis
+                if d in coeffs:
+                    op.vectorized_scale(F.coefficient_vector(coeffs[d], self.t, dim))
+                    o = op.immigrate()
+                    npt.assert_(not np.isnan(o.D.data).any(), msg=str(d))
+
+                if len(set(d)) > 1:
+                    self.operators[d] = op
+                else:
+                    # Combine scaled derivatives for this dimension
+                    if dim not in self.operators:
+                        self.operators[dim] = op
+                        o = self.operators[dim].immigrate()
+                        npt.assert_(not np.isnan(o.D.data).any(), msg=str(d))
+                        # 0th derivative (r * V) is split evenly among each dimension
+                        #TODO: This function is ONLY dependent on time. NOT MESH
+                        if () in coeffs:
+                            self.operators[dim] += coeffs[()](self.t) / float(self.grid.ndim)
+                            o = self.operators[dim].immigrate()
+                            npt.assert_(not np.isnan(o.D.data).any(), msg=str(d))
+                            # pass
+                    else:
+                            print dim
+                            o = self.operators[dim].immigrate()
+                            npt.assert_(not np.isnan(o.D.data).any(), msg=str(d))
+
+                            o = op.immigrate()
+                            npt.assert_(not np.isnan(o.D.data).any(), msg=str(d))
+
+                            self.operators[dim] = self.operators[dim] + op
+
+                            o = self.operators[dim].immigrate()
+                            npt.assert_(not np.isnan(o.D.data).any(), msg=str(d))
+
+        self.FGG.scale_and_combine_operators(self.F)
+        # sac(self.FGG, self.F)
+        # self.FG = FDG.FiniteDifferenceEngineADI()
+        # self.FG.from_host_FiniteDifferenceEngine(self.F)
+
         ref = self.F.operators[1]
-        tst = self.FGG.operators[1].immigrate()
+        tst = self.FGG.operators[1]
+        # tst.vectorized_scale(self.F.coefficient_vector(self.F.coefficients[(1,)], 0, 1))
+        # o = tst.immigrate()
+        # npt.assert_(not np.isnan(o.D.data).any(), msg="1")
+        # tst2 = self.FGG.simple_operators[(1,1)]
+        # tst2.vectorized_scale(self.F.coefficient_vector(self.F.coefficients[(1,1)], 0, 1))
+        # o = tst2.immigrate()
+        # npt.assert_(not np.isnan(o.D.data).any(), msg="1,1")
+        # tst = tst + tst2
+        # o = tst.immigrate()
+        # npt.assert_(not np.isnan(o.D.data).any(), msg="1 + 1,1")
+        # tst += self.F.coefficients[()](0) / 2.
+        tst = tst.immigrate()
+
         ref.deltas = tst.deltas
+        # fp(ref.D.data, 'e')
+        # print
+        # fp(tst.D.data, 'e')
+        # print
+        fp(ref.D.data - tst.D.data, 'e')
+        print (ref.D.data.shape)
+        print
         npt.assert_array_almost_equal(tst.D.data, ref.D.data)
         tst.D *= 0
         ref.D *= 0
         npt.assert_equal(tst, ref)
+        assert False
 
 
-    def test_scale_and_combine_FGG_1(self):
-        self.FGG.scale_and_combine_operators()
+    def test_scale_and_combine_FGG_01(self):
+        self.FGG.scale_and_combine_operators(self.F)
         ref = self.F.operators[(0,1)]
         tst = self.FGG.operators[(0,1)].immigrate()
         ref.deltas = tst.deltas
@@ -351,8 +421,9 @@ class HestonOptionConstruction_test(unittest.TestCase):
         ref.vectorized_scale(self.F.coefficient_vector(self.F.coefficients[d],
             self.F.t, d[0]))
         tst = self.FGG.simple_operators[d]
-        tst.vectorized_scale(self.FGG.coefficient_vector(self.FGG.coefficients[d],
-            self.FGG.t, d[0]))
+        tst.vectorized_scale(
+                self.FGG.coefficient_vector(self.F.coefficients[d],
+                    self.FGG.t, d[0]))
         tst = tst.immigrate()
 
         npt.assert_array_almost_equal(ref.D.data, tst.D.data)
@@ -369,9 +440,8 @@ class HestonOptionConstruction_test(unittest.TestCase):
                 self.F.coefficient_vector(self.F.coefficients[d], self.F.t,
                     d[0]))
         tst = self.FGG.simple_operators[d]
-        tst.vectorized_scale(
-                self.FGG.coefficient_vector(self.FGG.coefficients[d],
-                    self.FGG.t, d[0]))
+        tst.vectorized_scale(self.FGG.coefficient_vector(self.F.coefficients[d],
+            self.FGG.t, d[0]))
         tst = tst.immigrate()
 
         npt.assert_array_almost_equal(ref.D.data, tst.D.data)
@@ -387,7 +457,7 @@ class HestonOptionConstruction_test(unittest.TestCase):
         ref.vectorized_scale(self.F.coefficient_vector(self.F.coefficients[d],
             self.F.t, d[0]))
         tst = self.FGG.simple_operators[d]
-        tst.vectorized_scale(self.FGG.coefficient_vector(self.FGG.coefficients[d],
+        tst.vectorized_scale(self.FGG.coefficient_vector(self.F.coefficients[d],
             self.FGG.t, d[0]))
         tst = tst.immigrate()
 
@@ -405,9 +475,8 @@ class HestonOptionConstruction_test(unittest.TestCase):
                 self.F.coefficient_vector(self.F.coefficients[d], self.F.t,
                     d[0]))
         tst = self.FGG.simple_operators[d]
-        tst.vectorized_scale(
-                self.FGG.coefficient_vector(self.FGG.coefficients[d],
-                    self.FGG.t, d[0]))
+        tst.vectorized_scale(self.FGG.coefficient_vector(self.F.coefficients[d],
+            self.FGG.t, d[0]))
         tst = tst.immigrate()
 
         npt.assert_array_almost_equal(ref.D.data, tst.D.data)
@@ -424,9 +493,8 @@ class HestonOptionConstruction_test(unittest.TestCase):
                 self.F.coefficient_vector(self.F.coefficients[d], self.F.t,
                     d[0]))
         tst = self.FGG.simple_operators[d]
-        tst.vectorized_scale(
-                self.FGG.coefficient_vector(self.FGG.coefficients[d],
-                    self.FGG.t, d[0]))
+        tst.vectorized_scale(self.FGG.coefficient_vector(self.F.coefficients[d],
+            self.FGG.t, d[0]))
         tst = tst.immigrate()
 
         npt.assert_array_almost_equal(ref.D.data, tst.D.data)

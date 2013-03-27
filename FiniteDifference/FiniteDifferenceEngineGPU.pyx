@@ -2,6 +2,7 @@
 # cython: annotate=True
 # cython: infer_types=True
 # distutils: language = c++
+# distutils: sources = FiniteDifference/_coefficients.cu FiniteDifference/VecArray.cu
 
 
 import sys
@@ -164,12 +165,52 @@ cdef class FiniteDifferenceEngine(object):
 
 cdef class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
 
+    cdef SizedArrayPtr scaling_vec
+
     def __init__(self):
         FiniteDifferenceEngine.__init__(self)
 
 
-    def scale_and_combine_operators(self):
-        coeffs = self.coefficients
+    def coefficient_vector(self, f, t, dim):
+        """
+        Evaluate f with the cartesian product of the elements of
+        self.grid.mesh, ordered such that dim is the fastest varying. The
+        relative order of the other dimensions remains the same.
+
+        Example (actual implementation is vectorized):
+            mesh = [(1,2,3), (4,5,6), (7,8,9)]
+            dim = 1
+            newmesh = [(4,5,6), (1,2,3), (7,8,9)]
+            [f(4,1,7), f(5,1,7), ..., f(4,2,7), f(5,2,7), ..., f(5,3,9), f(6,3,9)]
+            output = [f(a,b,c)
+                        for b in mesh[1]
+                        for a in mesh[0]
+                        for c in mesh[2]
+                        ]
+        """
+        gridsize = self.grid.size
+        mesh = list(self.grid.mesh)
+        m = mesh.pop(dim)
+        mesh.append(m)
+        # This can be rewritten with repeat and tile, not sure if faster
+        args = np.fromiter(
+            itertools.chain(*itertools.izip(*itertools.product(*mesh))), float)
+        args = np.split(args, self.grid.ndim)
+        m = args.pop()
+        args.insert(dim, m)
+        ret = f(t, *iter(args))
+        if np.isscalar(ret):
+            ret = np.repeat(<float>ret, gridsize)
+        return ret
+
+
+    # cdef scale_0(self, SizedArrayPtr v):
+        # _scale_0(
+            # deref(self.spots.p)
+
+
+    def scale_and_combine_operators(self, F):
+        coeffs = F.coefficients
         self.operators = {}
 
         for d, op in sorted(self.simple_operators.items()):
@@ -177,7 +218,7 @@ cdef class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
             op = op.copy()
             dim = op.axis
             if d in coeffs:
-                op.vectorized_scale(self.coefficient_vector(coeffs[d], self.t, dim))
+                op.vectorized_scale(F.coefficient_vector(coeffs[d], self.t, dim))
 
             if len(set(d)) > 1:
                 self.operators[d] = op
@@ -506,65 +547,6 @@ cdef class HestonFiniteDifferenceEngine(FiniteDifferenceEngineADI):
         assert isinstance(option, Option)
         self.option = option
 
-        if not coefficients:
-            def mu_s(t, *dim):
-                # return option.interest_rate.value - 0.5 * dim[1]
-                return option.interest_rate.value * dim[0]
-            def gamma2_s(t, *dim):
-                # return 0.5 * dim[1]
-                return 0.5 * dim[1] * dim[0]**2
-            def mu_v(t, *dim):
-                if np.isscalar(dim[0]):
-                    if dim[0] == 0:
-                        return 0
-                ret = option.variance.reversion * (option.variance.mean - dim[1])
-                ret[dim[0]==0] = 0
-                return ret
-            def gamma2_v(t, *dim):
-                if np.isscalar(dim[0]):
-                    if dim[0] == 0:
-                        return 0
-                ret = 0.5 * option.variance.volatility**2 * dim[1]
-                ret[dim[0]==0] = 0
-                return ret
-            def cross(t, *dim):
-                # return option.correlation * option.variance.volatility * dim[1]
-                return option.correlation * option.variance.volatility * dim[0] * dim[1]
-
-            coefficients = {()   : lambda t: -option.interest_rate.value,
-                    (0,) : mu_s,
-                    (0,0): gamma2_s,
-                    (1,) : mu_v,
-                    (1,1): gamma2_v,
-                    (0,1): cross,
-                    }
-
-        if not boundaries:
-            boundaries = {
-                            # D: U = 0              VN: dU/dS = 1
-                    # (0,)  : ((0, lambda t, *dim: 0.0), (1, lambda t, *dim: np.exp(dim[0]))),
-                    (0,)  : ((0, lambda t, *dim: 0.0), (1, lambda t, *dim: 1.0)),
-                            # D: U = 0              Free boundary
-                    # (0,0) : ((0, lambda t, *dim: 0.0), (None, lambda t, *dim:  np.exp(dim[0]))),
-                    (0,0) : ((0, lambda t, *dim: 0.0), (None, lambda t, *dim: 1.0)),
-                            # Free boundary at low variance
-                    (1,)  : ((None, lambda t, *dim: None),
-                            # # D intrinsic value at high variance
-                            # (0, lambda t, *dim: np.exp(-option.interest_rate.value * t) * dim[0])
-                            (None, lambda t, *dim: None)
-                            # (0, lambda t, *dim: dim[0])
-                            ),
-                            # We know from the PDE that this will be 0 because
-                            # the vol is 0 at the low boundary
-                    (1,1) : ((1, lambda t, *dim: 0),
-                            # D intrinsic value at high variance
-                            # (0, lambda t, *dim: np.exp(-option.interest_rate.value * t) * np.maximum(0.0, np.exp(dim[0])-option.strike))),
-                            (None, lambda t, *dim: None)
-                            # (0, lambda t, *dim: dim[0])
-                            # (0, lambda t, *dim: 0)
-                            )
-                    }
-
         # if isinstance(option, BarrierOption):
             # if option.top:
                 # if option.top[0]: # Knockin, not sure about implementing this
@@ -611,9 +593,8 @@ cdef class HestonFiniteDifferenceEngine(FiniteDifferenceEngineADI):
 
 
         self.grid = grid
-        self.coefficients = coefficients
-        self.boundaries = boundaries
-        self.schemes = schemes
+        self.spots = SizedArrayPtr(self.spots)
+        self.spots = SizedArrayPtr(self.vars)
 
 
     def make_operator_templates(self):
@@ -631,38 +612,6 @@ cdef class HestonFiniteDifferenceEngine(FiniteDifferenceEngineADI):
         self.simple_operators[(1,1)] = BOG.for_vector(m1, m0.size, 2, 1)
 
         self.simple_operators[(0,1)] = BOG.mixed_for_vector(m0, m1)
-
-
-    def coefficient_vector(self, f, t, dim):
-        """Evaluate f with the cartesian product of the elements of
-        self.grid.mesh, ordered such that dim is the fastest varying. The
-        relative order of the other dimensions remains the same.
-
-        Example (actual implementation is vectorized):
-            mesh = [(1,2,3), (4,5,6), (7,8,9)]
-            dim = 1
-            newmesh = [(4,5,6), (1,2,3), (7,8,9)]
-            [f(4,1,7), f(5,1,7), ..., f(4,2,7), f(5,2,7), ..., f(5,3,9), f(6,3,9)]
-            output = [f(a,b,c)
-                        for b in mesh[1]
-                        for a in mesh[0]
-                        for c in mesh[2]
-                        ]
-        """
-        gridsize = self.grid.size
-        mesh = list(self.grid.mesh)
-        m = mesh.pop(dim)
-        mesh.append(m)
-        # This can be rewritten with repeat and tile, not sure if faster
-        args = np.fromiter(
-            itertools.chain(*itertools.izip(*itertools.product(*mesh))), float)
-        args = np.split(args, self.grid.ndim)
-        m = args.pop()
-        args.insert(dim, m)
-        ret = f(t, *iter(args))
-        if np.isscalar(ret):
-            ret = np.repeat(<float>ret, gridsize)
-        return ret
 
 
     @property

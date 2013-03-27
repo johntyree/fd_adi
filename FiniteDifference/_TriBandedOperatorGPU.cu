@@ -68,14 +68,6 @@ int find_index(T haystack, U needle, int max) {
     return idx;
 }
 
-struct scale_0 {
-    template <typename Tuple>
-    __host__ __device__
-    void operator()(Tuple t) {
-        using thrust::get;
-    }
-};
-
 struct first_deriv {
     template <typename Tuple>
     __host__ __device__
@@ -602,7 +594,7 @@ void _TriBandedOperator::add_operator(_TriBandedOperator &other) {
             thrust::plus<double>());
     }
 
-    if (other.bottom_fold_status == "CAN_FOLD") {
+    if (other.bottom_fold_status == CAN_FOLD) {
         int them = other.bottom_factors.size;
         int us = bottom_factors.size;
         if (them != us) {

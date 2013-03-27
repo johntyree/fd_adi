@@ -41,6 +41,7 @@ cdef class BandedOperator(object):
     cdef _TriBandedOperator *thisptr_tri
     cdef _CSRBandedOperator *thisptr_csr
 
+    # cdef void (*coefficient_scale)(double *, Py_ssize_t, double *, Py_ssize_t)
 
     cdef  emigrate_csr(self, other, tag=*)
     cdef  emigrate_tri(self, other, tag=*)
