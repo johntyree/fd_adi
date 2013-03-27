@@ -54,9 +54,11 @@ cdef class FiniteDifferenceEngine(object):
         t
         cache
         schemes
+        SizedArrayPtr gpugridmesh0
+        SizedArrayPtr gpugridmesh1
+        SizedArrayPtr gpugrid
+        SizedArrayPtr scaling_vec
 
-
-    cdef SizedArrayPtr gpugrid
 
 
     def __init__(self):
@@ -145,6 +147,14 @@ cdef class FiniteDifferenceEngine(object):
         self.t = 0
         self.default_scheme = 'center'
         self.default_order = 2
+        self.scaling_vec = SizedArrayPtr(tag="scaling_vec")
+
+    def fill_gpugridmesh_from_grid(self):
+        i = self.grid.ndim
+        if i > 0:
+            self.gpugridmesh0 = SizedArrayPtr(self.grid.mesh[0])
+        if i > 1:
+            self.gpugridmesh1 = SizedArrayPtr(self.grid.mesh[1])
 
 
     def from_host_FiniteDifferenceEngine(self, other):
@@ -156,6 +166,8 @@ cdef class FiniteDifferenceEngine(object):
                 setattr(self, attr, None)
         self.grid = other.grid.copy()
         self.gpugrid = SizedArrayPtr(self.grid.domain[-1], "FDEGPU.grid")
+        self.fill_gpugridmesh_from_grid()
+        self.scaling_vec.alloc(self.gpugrid.size, self.scaling_vec.tag)
         self.shape = self.grid.shape
         self.ndim = self.grid.ndim
         self.coefficients = other.coefficients
@@ -171,8 +183,6 @@ cdef class FiniteDifferenceEngine(object):
 
 
 cdef class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
-
-    cdef SizedArrayPtr scaling_vec
 
     def __init__(self):
         FiniteDifferenceEngine.__init__(self)
@@ -653,8 +663,9 @@ cdef class HestonFiniteDifferenceEngine(FiniteDifferenceEngineADI):
 
 
         self.grid = grid
-        self.spots = SizedArrayPtr(self.spots)
-        self.spots = SizedArrayPtr(self.vars)
+        self.gpugrid = SizedArrayPtr(self.grid.domain[-1], "FDEGPU.grid")
+        self.fill_gpugridmesh_from_grid()
+        self.scaling_vec.alloc(self.gpugrid.size, self.scaling_vec.tag)
 
 
     def make_operator_templates(self):
