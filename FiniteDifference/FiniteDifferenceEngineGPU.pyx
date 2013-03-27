@@ -417,8 +417,8 @@ cdef class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
 
 
     cpdef solve_hundsdorferverwer_(self, n, dt, SizedArrayPtr V, theta=0.5):
-        self.operators = {}
-        self.scale_and_combine_operators()
+        # self.operators = {}
+        # self.scale_and_combine_operators()
         withdt = {k: (o * dt) for k,o in self.operators.iteritems()}
 
         Firsts = withdt.values()
