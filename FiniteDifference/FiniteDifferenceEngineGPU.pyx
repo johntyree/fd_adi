@@ -2,7 +2,7 @@
 # cython: annotate=True
 # cython: infer_types=True
 # distutils: language = c++
-# distutils: sources = FiniteDifference/_coefficients.cu FiniteDifference/VecArray.cu
+# distutils: sources = FiniteDifference/_coefficients.cu FiniteDifference/VecArray.cu FiniteDifference/backtrace.c FiniteDifference/filter.c
 
 
 import sys
@@ -13,6 +13,9 @@ import numpy as np
 cimport numpy as np
 
 from bisect import bisect_left
+
+cimport cython
+from cython.operator import dereference as deref
 
 import FiniteDifference.utils as utils
 
@@ -28,6 +31,10 @@ from FiniteDifference.SizedArrayPtr cimport SizedArrayPtr
 
 from FiniteDifference.Option import Option, BarrierOption
 from FiniteDifference.Grid import Grid
+
+cimport coefficients
+
+from VecArray cimport to_string
 
 
 cdef class FiniteDifferenceEngine(object):
@@ -218,7 +225,59 @@ cdef class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
             op = op.copy()
             dim = op.axis
             if d in coeffs:
-                op.vectorized_scale(F.coefficient_vector(coeffs[d], self.t, dim))
+                if d == (0,):
+                    print "Using scaling_vec with", d
+                    coefficients.scale_0(self.t,
+                            self.option.interest_rate.value,
+                            deref(self.gpugridmesh0.p),
+                            deref(self.gpugridmesh1.p),
+                            deref(self.scaling_vec.p)
+                    )
+                    op.vectorized_scale_(self.scaling_vec)
+                elif d == (0,0):
+                    print "Using scaling_vec with", d
+                    coefficients.scale_00(self.t,
+                            self.option.interest_rate.value,
+                            deref(self.gpugridmesh0.p),
+                            deref(self.gpugridmesh1.p),
+                            deref(self.scaling_vec.p)
+                    )
+                    op.vectorized_scale_(self.scaling_vec)
+                elif d == (1,):
+                    print "Using scaling_vec with", d
+                    coefficients.scale_1(self.t,
+                            self.option.interest_rate.value,
+                            deref(self.gpugridmesh0.p),
+                            deref(self.gpugridmesh1.p),
+                            self.option.variance.reversion,
+                            self.option.variance.mean,
+                            deref(self.scaling_vec.p)
+                    )
+                    op.vectorized_scale_(self.scaling_vec)
+                elif d == (1,1):
+                    print "Using scaling_vec with", d
+                    coefficients.scale_11(self.t,
+                            self.option.interest_rate.value,
+                            deref(self.gpugridmesh0.p),
+                            deref(self.gpugridmesh1.p),
+                            self.option.variance.volatility,
+                            deref(self.scaling_vec.p)
+                    )
+                    op.vectorized_scale_(self.scaling_vec)
+                elif d == (0,1):
+                    print "Using scaling_vec with", d
+                    coefficients.scale_01(self.t,
+                            self.option.interest_rate.value,
+                            deref(self.gpugridmesh0.p),
+                            deref(self.gpugridmesh1.p),
+                            self.option.variance.volatility,
+                            self.option.correlation,
+                            deref(self.scaling_vec.p)
+                    )
+                    op.vectorized_scale_(self.scaling_vec)
+                else:
+                    assert False, "All ops should be GPU scaled now."
+
 
             if len(set(d)) > 1:
                 self.operators[d] = op
@@ -232,6 +291,7 @@ cdef class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
                         self.operators[dim] += coeffs[()](self.t) / float(self.grid.ndim)
                 else:
                         self.operators[dim] += op
+        return self.scaling_vec
 
 
     def cross_term(self, V, numpy=True):
