@@ -571,19 +571,19 @@ void _TriBandedOperator::add_operator(_TriBandedOperator &other) {
         o = 1-i;
         if (o == 0) {
             thrust::transform_if(
-                    &diags.data[diags.idx(to, 0)],
-                    &diags.data[diags.idx(to, 0)] + operator_rows,
-                    &other.diags.data[diags.idx(fro, 0)],
+                    diags.data + diags.idx(to, 0),
+                    diags.data + diags.idx(to, 0) + operator_rows,
+                    other.diags.data + diags.idx(fro, 0),
                     make_counting_iterator(0),
-                    &diags.data[diags.idx(to, 0)],
+                    diags.data + diags.idx(to, 0),
                     thrust::plus<double>(),
                     periodic_from_to_mask(begin, end, block_len));
         } else {
             thrust::transform(
-                    &other.diags.data[diags.idx(fro, 0)],
-                    &other.diags.data[diags.idx(fro, 0)] + other.diags.shape[1],
-                    &diags.data[diags.idx(to, 0)],
-                    &diags.data[diags.idx(to, 0)],
+                    other.diags.data + diags.idx(fro, 0),
+                    other.diags.data + diags.idx(fro, 0) + other.diags.shape[1],
+                    diags.data + diags.idx(to, 0),
+                    diags.data + diags.idx(to, 0),
                     thrust::plus<double>());
         }
     }
@@ -636,11 +636,11 @@ void _TriBandedOperator::add_scalar(double val) {
     int end = block_len-1 - has_high_dirichlet;
 
     thrust::transform_if(
-            &diags.data[diags.idx(main_diag, 0)],
-            &diags.data[diags.idx(main_diag, 0)] + operator_rows,
+            diags.data + diags.idx(main_diag, 0),
+            diags.data + diags.idx(main_diag, 0) + operator_rows,
             make_constant_iterator(val),
             make_counting_iterator(0),
-            &diags.data[diags.idx(main_diag, 0)],
+            diags.data + diags.idx(main_diag, 0),
             thrust::plus<double>(),
             periodic_from_to_mask(begin, end, block_len));
     FULLTRACE;
