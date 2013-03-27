@@ -1063,13 +1063,13 @@ _TriBandedOperator *for_vector(SizedArray<double> &V, Py_ssize_t blocks,
     int blksz = V.size;
     int operator_rows = blocks * blksz;
 
-    SizedArray<double> data(operator_rows * 3, "data");
-    SizedArray<double> R(operator_rows, "R");
-    SizedArray<double> high_dirichlet(blocks, "high_dirichlet");
-    SizedArray<double> low_dirichlet(blocks, "low_dirichlet");
-    SizedArray<double> top_factors(blocks, "top_factors");
-    SizedArray<double> bottom_factors(blocks, "bottom_factors");
-    SizedArray<double> deltas(blksz, "deltas");
+    SizedArray<double> data(operator_rows * 3, NaN, "data");
+    SizedArray<double> R(operator_rows, 0, "R");
+    SizedArray<double> high_dirichlet(blocks, NaN, "high_dirichlet");
+    SizedArray<double> low_dirichlet(blocks, NaN, "low_dirichlet");
+    SizedArray<double> top_factors(blocks, NaN, "top_factors");
+    SizedArray<double> bottom_factors(blocks, NaN, "bottom_factors");
+    SizedArray<double> deltas(blksz, NaN, "deltas");
 
     data.shape[0] = 3;
     data.shape[1] = operator_rows;
@@ -1081,7 +1081,6 @@ _TriBandedOperator *for_vector(SizedArray<double> &V, Py_ssize_t blocks,
     mid = sup + operator_rows;
     sub = mid + operator_rows;
 
-    thrust::fill(R.data, R.data + R.size, 0);
     thrust::adjacent_difference(V.data, V.data + V.size, deltas.data);
     // XXX
     deltas.data[0] = NaN;
