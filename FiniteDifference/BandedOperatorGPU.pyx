@@ -453,7 +453,7 @@ cdef class BandedOperator(object):
         elif self.is_folded():
             raise NotImplementedError("No add to diagonalized operator.")
         elif other.is_folded():
-            raise NotImplementedError("No add diagonalized operator to this one.")
+            raise NotImplementedError("No add diagonalized operator.")
 
         # Copy the data from the other operator over
         self.thisptr_tri.add_operator(deref(other.thisptr_tri))

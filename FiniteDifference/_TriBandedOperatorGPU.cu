@@ -592,7 +592,7 @@ void _TriBandedOperator::add_operator(_TriBandedOperator &other) {
         int them = other.top_factors.size;
         int us = top_factors.size;
         if (them != us) {
-            DIE("Bottom_factors are different sizes:" << us << ", " << them);
+            DIE("Top_factors are different sizes:" << us << ", " << them);
         }
         thrust::transform(
             top_factors.data,
