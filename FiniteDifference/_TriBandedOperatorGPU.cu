@@ -630,6 +630,7 @@ void _TriBandedOperator::add_operator(_TriBandedOperator &other) {
                 );
             bottom_fold_status = other.bottom_fold_status;
         }
+    }
 
     thrust::transform(
             R.data,
