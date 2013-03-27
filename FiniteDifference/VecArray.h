@@ -250,6 +250,19 @@ struct SizedArray {
     }
 
 
+    SizedArray(Py_ssize_t size, T default_val, std::string name)
+        : owner(true),
+          data(device_malloc<T>(size)),
+          tempspace(device_malloc<T>(size)),
+          ndim(1),
+          size(size),
+          name(name) {
+        thrust::fill(data, data+size, default_val);
+        shape[0] = size;
+        sanity_check();
+    }
+
+
     SizedArray(SizedArray<T> const &S, bool deep)
         : owner(deep),
           data(owner ? device_malloc<T>(S.size) : S.data),
