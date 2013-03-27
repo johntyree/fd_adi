@@ -581,32 +581,55 @@ void _TriBandedOperator::add_operator(_TriBandedOperator &other) {
     }
 
     if (other.top_fold_status == CAN_FOLD) {
-        int them = other.top_factors.size;
-        int us = top_factors.size;
-        if (them != us) {
-            DIE("Top_factors are different sizes:" << us << ", " << them);
+        if (top_fold_status == CAN_FOLD) {
+            int them = other.top_factors.size;
+            int us = top_factors.size;
+            if (them != us) {
+                DIE("Top_factors are different sizes:" << us << ", " << them);
+            }
+            thrust::transform(
+                top_factors.data,
+                top_factors.data + top_factors.size,
+                other.top_factors.data,
+                top_factors.data,
+                thrust::plus<double>());
+        } else {
+            if (top_fold_status != CANNOT_FOLD) {
+                DIE("top_fold_status("<<top_fold_status<<") expected to be CANNOT_FOLD");
+            }
+            thrust::copy(
+                other.top_factors.data,
+                other.top_factors.data + other.top_factors.size,
+                top_factors.data
+                );
+            top_fold_status = other.top_fold_status;
         }
-        thrust::transform(
-            top_factors.data,
-            top_factors.data + top_factors.size,
-            other.top_factors.data,
-            top_factors.data,
-            thrust::plus<double>());
     }
 
     if (other.bottom_fold_status == CAN_FOLD) {
-        int them = other.bottom_factors.size;
-        int us = bottom_factors.size;
-        if (them != us) {
-            DIE("Bottom_factors are different sizes:" << us << ", " << them);
+        if (bottom_fold_status == CAN_FOLD) {
+            int them = other.bottom_factors.size;
+            int us = bottom_factors.size;
+            if (them != us) {
+                DIE("Top_factors are different sizes:" << us << ", " << them);
+            }
+            thrust::transform(
+                bottom_factors.data,
+                bottom_factors.data + bottom_factors.size,
+                other.bottom_factors.data,
+                bottom_factors.data,
+                thrust::plus<double>());
+        } else {
+            if (bottom_fold_status != CANNOT_FOLD) {
+                DIE("bottom_fold_status("<<bottom_fold_status<<") expected to be CANNOT_FOLD");
+            }
+            thrust::copy(
+                other.bottom_factors.data,
+                other.bottom_factors.data + other.bottom_factors.size,
+                bottom_factors.data
+                );
+            bottom_fold_status = other.bottom_fold_status;
         }
-        thrust::transform(
-            bottom_factors.data,
-            bottom_factors.data + bottom_factors.size,
-            other.bottom_factors.data,
-            bottom_factors.data,
-            thrust::plus<double>());
-    }
 
     thrust::transform(
             R.data,
