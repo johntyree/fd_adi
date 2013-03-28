@@ -214,85 +214,104 @@ cdef class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
         return ret
 
 
-    def scale_and_combine_operators(self):
-        self.operators = {}
+    def scale_operators(self, operators):
+        scaledops = {}
         coeffs = self.coefficients
+        on_gpu = type(coeffs) == list
 
-        for d, op in sorted(self.simple_operators.items()):
-            print "Scaling op:", d
+        for d, op in sorted(operators.items()):
             op = op.copy()
             dim = op.axis
-            if d in coeffs:
-                if d == (0,):
-                    print "Using scaling_vec with", d
-                    coefficients.scale_0(self.t,
-                            self.option.interest_rate.value,
-                            deref(self.gpugridmesh0.p),
-                            deref(self.gpugridmesh1.p),
-                            deref(self.scaling_vec.p)
-                    )
-                    op.vectorized_scale_(self.scaling_vec)
-                elif d == (0,0):
-                    print "Using scaling_vec with", d
-                    coefficients.scale_00(self.t,
-                            self.option.interest_rate.value,
-                            deref(self.gpugridmesh0.p),
-                            deref(self.gpugridmesh1.p),
-                            deref(self.scaling_vec.p)
-                    )
-                    op.vectorized_scale_(self.scaling_vec)
-                elif d == (1,):
-                    print "Using scaling_vec with", d
-                    coefficients.scale_1(self.t,
-                            self.option.interest_rate.value,
-                            deref(self.gpugridmesh0.p),
-                            deref(self.gpugridmesh1.p),
-                            self.option.variance.reversion,
-                            self.option.variance.mean,
-                            deref(self.scaling_vec.p)
-                    )
-                    op.vectorized_scale_(self.scaling_vec)
-                elif d == (1,1):
-                    print "Using scaling_vec with", d
-                    coefficients.scale_11(self.t,
-                            self.option.interest_rate.value,
-                            deref(self.gpugridmesh0.p),
-                            deref(self.gpugridmesh1.p),
-                            self.option.variance.volatility,
-                            deref(self.scaling_vec.p)
-                    )
-                    op.vectorized_scale_(self.scaling_vec)
-                elif d == (0,1):
-                    print "Using scaling_vec with", d
-                    coefficients.scale_01(self.t,
-                            self.option.interest_rate.value,
-                            deref(self.gpugridmesh0.p),
-                            deref(self.gpugridmesh1.p),
-                            self.option.variance.volatility,
-                            self.option.correlation,
-                            deref(self.scaling_vec.p)
-                    )
-                    op.vectorized_scale_(self.scaling_vec)
-                else:
-                    assert False, "All ops should be GPU scaled now."
-                    # op.vectorized_scale(self.coefficient_vector(coeffs[d], self.t, dim))
+            if not on_gpu:
+                op.vectorized_scale(self.coefficient_vector(coeffs[d], self.t, dim))
+            else:
+                if d in coeffs:
+                    if d == (0,):
+                        coefficients.scale_0(self.t,
+                                self.option.interest_rate.value,
+                                deref(self.gpugridmesh0.p),
+                                deref(self.gpugridmesh1.p),
+                                deref(self.scaling_vec.p)
+                        )
+                        op.vectorized_scale_(self.scaling_vec)
+                    elif d == (0,0):
+                        coefficients.scale_00(self.t,
+                                self.option.interest_rate.value,
+                                deref(self.gpugridmesh0.p),
+                                deref(self.gpugridmesh1.p),
+                                deref(self.scaling_vec.p)
+                        )
+                        op.vectorized_scale_(self.scaling_vec)
+                    elif d == (1,):
+                        coefficients.scale_1(self.t,
+                                self.option.interest_rate.value,
+                                deref(self.gpugridmesh0.p),
+                                deref(self.gpugridmesh1.p),
+                                self.option.variance.reversion,
+                                self.option.variance.mean,
+                                deref(self.scaling_vec.p)
+                        )
+                        op.vectorized_scale_(self.scaling_vec)
+                    elif d == (1,1):
+                        coefficients.scale_11(self.t,
+                                self.option.interest_rate.value,
+                                deref(self.gpugridmesh0.p),
+                                deref(self.gpugridmesh1.p),
+                                self.option.variance.volatility,
+                                deref(self.scaling_vec.p)
+                        )
+                        op.vectorized_scale_(self.scaling_vec)
+                    elif d == (0,1):
+                        coefficients.scale_01(self.t,
+                                self.option.interest_rate.value,
+                                deref(self.gpugridmesh0.p),
+                                deref(self.gpugridmesh1.p),
+                                self.option.variance.volatility,
+                                self.option.correlation,
+                                deref(self.scaling_vec.p)
+                        )
+                        op.vectorized_scale_(self.scaling_vec)
+                    else:
+                        assert False, "All ops should be GPU scaled now."
+            scaledops[d] = op
+        operators.clear()
+        operators.update(scaledops)
 
 
+    def combine_operators(self, operators):
+        combinedops = {}
+        coeffs = self.coefficients
+        on_gpu = type(coeffs) == list
+
+        for d, op in sorted(operators.items()):
+            dim = op.axis
             if len(set(d)) > 1:
-                self.operators[d] = op
+                combinedops[d] = op
             else:
                 # Combine scaled derivatives for this dimension
-                if dim not in self.operators:
-                    self.operators[dim] = op
+                if dim not in combinedops:
+                    combinedops[dim] = op
                     # 0th derivative (r * V) is split evenly among each dimension
                     if () in coeffs:
-                        # self.operators[dim] += coeffs[()](self.t) / float(self.grid.ndim)
-                        if (self.zero_derivative_coefficient.p == NULL):
+                        if not on_gpu:
+                            combinedops[dim] += coeffs[()](self.t) / float(self.grid.ndim)
+                        elif (self.zero_derivative_coefficient.p == NULL):
                             assert False, ("Zero derviative has not been set.")
-                        self.operators[dim].add_scalar(self.zero_derivative_coefficient, self.n)
+                        else:
+                            # combinedops[dim].add_scalar(self.zero_derivative_coefficient, self.n)
+                            pass
                 else:
-                    self.operators[dim] += op
-        return self.scaling_vec
+                    combinedops[dim] += op
+        operators.clear()
+        operators.update(combinedops)
+
+
+    def scale_and_combine_operators(self, operators):
+        if not operators:
+            operators.update({k: o.copy() for k,o in self.simple_operators.items()})
+        self.scale_operators(operators)
+        self.combine_operators(operators)
+        return operators
 
 
     def cross_term(self, V, numpy=True):
@@ -494,6 +513,39 @@ cdef class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
         for L in itertools.chain(Les, Lis):
             L.enable_residual(False)
 
+
+    cpdef solve_hundsdorferverwer_(self, n, dt, SizedArrayPtr V, theta=0.5):
+
+        # Don't touch this if it doesn't exist
+        if self.zero_derivative_coefficient.p != NULL:
+            self.zero_derivative_coefficient.timeseq_scalar(dt)
+
+        withdt = {k: (o * dt) for k,o in self.simple_operators.iteritems()}
+
+        self.scale_and_combine_operators(withdt)
+
+        # Don't touch this if it doesn't exist
+        if self.zero_derivative_coefficient.p != NULL:
+            for d, o in withdt.iteritems():
+                if np.isscalar(d):
+                    print "adding zero deriv"
+                    o.add_scalar(self.zero_derivative_coefficient, self.n)
+
+
+        Firsts = withdt.values()
+
+        Les = [(o * theta)
+            for d, o in sorted(withdt.iteritems())
+            if type(d) != tuple]
+        Lis = [(o * -theta).add(1, inplace=True)
+            for d, o in sorted(withdt.iteritems())
+            if type(d) != tuple]
+
+        del withdt
+
+        for L in itertools.chain(Les, Lis):
+            L.enable_residual(False)
+
         tags = dict()
         for L in itertools.chain(Les, Lis, Firsts):
             if L.is_foldable():
@@ -538,19 +590,17 @@ cdef class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
                 V.minuseq(X)
                 L.enable_residual(True)
 
+            # del Firsts
+
             for Le, Li in zip(Les, Lis):
                 X.copy_from(Z)
                 Le.apply_(X, overwrite=True)
                 V.minuseq(X)
                 Li.solve_(V, overwrite=True)
 
-        utils.toc(':  \t')
+            # del Les, Lis
 
-        for i in tags:
-            for L in itertools.chain(Les, Lis, Firsts):
-                if id(L) == i:
-                    L.undiagonalize()
-                    break
+        utils.toc(':  \t')
 
 
     def solve_smooth(self, n, dt, initial=None, callback=None, smoothing_steps=2,

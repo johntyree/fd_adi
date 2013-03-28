@@ -108,7 +108,7 @@ class HestonOption_test(unittest.TestCase):
                                                    nspots=self.F.grid.shape[0],
                                                    nvols=self.F.grid.shape[1])
         self.FG.make_operator_templates()
-        self.FG.scale_and_combine_operators()
+        self.FG.operators = self.FG.scale_and_combine_operators({})
 
 
     def test_implicit(self):
@@ -212,7 +212,7 @@ class HestonOptionConstruction_test(unittest.TestCase):
 
 
     def test_scale_and_combine_FGG_0(self):
-        self.FGG.scale_and_combine_operators()
+        self.FGG.operators = self.FGG.scale_and_combine_operators({})
 
         ref = self.F.operators[0]
         tst = self.FGG.operators[0].immigrate()
@@ -228,7 +228,7 @@ class HestonOptionConstruction_test(unittest.TestCase):
 
 
     def test_scale_and_combine_FGG_1(self):
-        self.FGG.scale_and_combine_operators()
+        self.FGG.operators = self.FGG.scale_and_combine_operators({})
 
         ref = self.F.operators[1]
         tst = self.FGG.operators[1]
@@ -242,7 +242,7 @@ class HestonOptionConstruction_test(unittest.TestCase):
 
 
     def test_scale_and_combine_FGG_01(self):
-        self.FGG.scale_and_combine_operators()
+        self.FGG.operators = self.FGG.scale_and_combine_operators({})
         ref = self.F.operators[(0,1)]
         tst = self.FGG.operators[(0,1)].immigrate()
         ref.deltas = tst.deltas
