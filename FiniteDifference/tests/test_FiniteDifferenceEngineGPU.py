@@ -110,8 +110,11 @@ class HestonOption_test(unittest.TestCase):
                                          # force_exact=False)
         self.F.init()
         self.F.operators[1].diagonalize()
-        self.FG = FDG.FiniteDifferenceEngineADI()
-        self.FG.from_host_FiniteDifferenceEngine(self.F)
+        self.FG = FDG.HestonFiniteDifferenceEngine(option,
+                                                   nspots=self.F.grid.shape[0],
+                                                   nvols=self.F.grid.shape[1])
+        self.FG.make_operator_templates()
+        self.FG.scale_and_combine_operators()
 
 
     def test_implicit(self):
