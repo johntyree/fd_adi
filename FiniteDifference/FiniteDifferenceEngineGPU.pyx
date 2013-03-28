@@ -147,9 +147,11 @@ cdef class FiniteDifferenceEngine(object):
         self.simple_operators = {}
         self.operators = {}
         self.t = 0
+        self.n = 0
         self.default_scheme = 'center'
         self.default_order = 2
         self.scaling_vec = SizedArrayPtr(tag="scaling_vec")
+        self.zero_derivative_coefficient = SizedArrayPtr(tag="zero_derivative_coefficient")
 
     def fill_gpugridmesh_from_grid(self):
         i = self.grid.ndim
@@ -285,8 +287,8 @@ cdef class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
                     # 0th derivative (r * V) is split evenly among each dimension
                     if () in coeffs:
                         # self.operators[dim] += coeffs[()](self.t) / float(self.grid.ndim)
-                        assert self.zero_derivative_coefficient.p != NULL, (
-                                "Zero derviative has not been set.")
+                        if (self.zero_derivative_coefficient.p == NULL):
+                            assert False, ("Zero derviative has not been set.")
                         self.operators[dim].add_scalar(self.zero_derivative_coefficient, self.n)
                 else:
                     self.operators[dim] += op
@@ -660,6 +662,9 @@ cdef class HestonFiniteDifferenceEngine(FiniteDifferenceEngineADI):
     def make_operator_templates(self):
         m0 = self.grid.mesh[0]
         m1 = self.grid.mesh[1]
+        self.zero_derivative_coefficient = SizedArrayPtr(
+            np.array(-self.option.interest_rate.value / self.grid.ndim)
+        )
 
         self.simple_operators[(0,)] = BOG.for_vector(m0, m1.size, 1, 0)
         self.simple_operators[(0,)].has_low_dirichlet = True
