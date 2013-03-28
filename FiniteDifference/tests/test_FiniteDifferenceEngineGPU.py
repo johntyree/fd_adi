@@ -102,12 +102,6 @@ class HestonOption_test(unittest.TestCase):
                                                    flip_idx_var=False)
 
 
-        # self.F = HestonFiniteDifferenceEngine(H, nspots=100,
-                                         # nvols=100, spotdensity=10, varexp=4,
-                                         # var_max=12, flip_idx_spot=False,
-                                         # flip_idx_var=False, verbose=False,
-                                         # force_bandwidth=None,
-                                         # force_exact=False)
         self.F.init()
         self.F.operators[1].diagonalize()
         self.FG = FDG.HestonFiniteDifferenceEngine(option,
