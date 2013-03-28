@@ -76,7 +76,7 @@ void _CSRBandedOperator::apply(SizedArray<double> &V) {
     FULLTRACE;
 
     if (V.size != operator_rows) {
-        DIE(V.name << ": Dimension mismatch. V(" <<V.size<<") vs "<<operator_rows);
+        DIE(V.name << ": Dimension mismatch. Got V(" <<V.size<<") Expected "<<operator_rows);
     }
 
     cusparseMatDescr_t mat_description;
