@@ -214,8 +214,10 @@ cdef class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
         return ret
 
 
-    def scale_operators(self, operators):
-        scaledops = {}
+    def scale_and_combine_operators(self, operators=None):
+        if operators is None:
+            operators = self.simple_operators
+        self.operators = {}
         coeffs = self.coefficients
         on_gpu = type(coeffs) == list
 
@@ -273,45 +275,26 @@ cdef class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
                         op.vectorized_scale_(self.scaling_vec)
                     else:
                         assert False, "All ops should be GPU scaled now."
-            scaledops[d] = op
-        operators.clear()
-        operators.update(scaledops)
 
 
-    def combine_operators(self, operators):
-        combinedops = {}
-        coeffs = self.coefficients
-        on_gpu = type(coeffs) == list
-
-        for d, op in sorted(operators.items()):
-            dim = op.axis
             if len(set(d)) > 1:
-                combinedops[d] = op
+                self.operators[d] = op
             else:
                 # Combine scaled derivatives for this dimension
-                if dim not in combinedops:
-                    combinedops[dim] = op
+                if dim not in self.operators:
+                    self.operators[dim] = op
                     # 0th derivative (r * V) is split evenly among each dimension
                     if () in coeffs:
                         if not on_gpu:
-                            combinedops[dim] += coeffs[()](self.t) / float(self.grid.ndim)
+                            self.operators[dim] += coeffs[()](self.t) / float(self.grid.ndim)
                         elif (self.zero_derivative_coefficient.p == NULL):
                             assert False, ("Zero derviative has not been set.")
                         else:
-                            # combinedops[dim].add_scalar(self.zero_derivative_coefficient, self.n)
+                            # self.operators[dim].add_scalar(self.zero_derivative_coefficient, self.n)
                             pass
                 else:
-                    combinedops[dim] += op
-        operators.clear()
-        operators.update(combinedops)
-
-
-    def scale_and_combine_operators(self, operators):
-        if not operators:
-            operators.update({k: o.copy() for k,o in self.simple_operators.items()})
-        self.scale_operators(operators)
-        self.combine_operators(operators)
-        return operators
+                    self.operators[dim] += op
+        return self.scaling_vec
 
 
     def cross_term(self, V, numpy=True):
@@ -496,41 +479,17 @@ cdef class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
         return ret
 
 
-    cpdef solve_hundsdorferverwer_(self, n, dt, SizedArrayPtr V, theta=0.5):
-        # self.operators = {}
-        # self.scale_and_combine_operators()
+    cpdef preprocess_operators(self, dt, theta=0.5):
+
+        self.scale_and_combine_operators()
+
         withdt = {k: (o * dt) for k,o in self.operators.iteritems()}
-
-        Firsts = withdt.values()
-
-        Les = [(o * theta)
-               for d, o in sorted(withdt.iteritems())
-               if type(d) != tuple]
-        Lis = [(o * -theta).add(1, inplace=True)
-               for d, o in sorted(withdt.iteritems())
-               if type(d) != tuple]
-
-        for L in itertools.chain(Les, Lis):
-            L.enable_residual(False)
-
-
-    cpdef solve_hundsdorferverwer_(self, n, dt, SizedArrayPtr V, theta=0.5):
-
-        # Don't touch this if it doesn't exist
-        if self.zero_derivative_coefficient.p != NULL:
-            self.zero_derivative_coefficient.timeseq_scalar(dt)
-
-        withdt = {k: (o * dt) for k,o in self.simple_operators.iteritems()}
-
-        self.scale_and_combine_operators(withdt)
 
         # Don't touch this if it doesn't exist
         if self.zero_derivative_coefficient.p != NULL:
             for d, o in withdt.iteritems():
                 if np.isscalar(d):
-                    print "adding zero deriv"
                     o.add_scalar(self.zero_derivative_coefficient, self.n)
-
 
         Firsts = withdt.values()
 
@@ -545,6 +504,42 @@ cdef class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
 
         for L in itertools.chain(Les, Lis):
             L.enable_residual(False)
+
+        return Firsts, Les, Lis
+
+
+    cpdef solve_hundsdorferverwer_(self, n, dt, SizedArrayPtr V, theta=0.5):
+
+        # Don't touch this if it doesn't exist
+        if self.zero_derivative_coefficient.p != NULL:
+            self.zero_derivative_coefficient.timeseq_scalar(dt)
+
+
+        Firsts, Les, Lis = self.preprocess_operators(dt, theta)
+
+        # self.scale_and_combine_operators()
+
+        # withdt = {k: (o * dt) for k,o in self.operators.iteritems()}
+
+        # # Don't touch this if it doesn't exist
+        # if self.zero_derivative_coefficient.p != NULL:
+            # for d, o in withdt.iteritems():
+                # if np.isscalar(d):
+                    # o.add_scalar(self.zero_derivative_coefficient, self.n)
+
+        # Firsts = withdt.values()
+
+        # Les = [(o * theta)
+            # for d, o in sorted(withdt.iteritems())
+            # if type(d) != tuple]
+        # Lis = [(o * -theta).add(1, inplace=True)
+            # for d, o in sorted(withdt.iteritems())
+            # if type(d) != tuple]
+
+        # del withdt
+
+        # for L in itertools.chain(Les, Lis):
+            # L.enable_residual(False)
 
         tags = dict()
         for L in itertools.chain(Les, Lis, Firsts):
