@@ -51,7 +51,8 @@ cdef class FiniteDifferenceEngine(object):
         simple_operators
         operators
         option
-        t
+        t # Current time
+        n # Current step t / dt
         cache
         schemes
         SizedArrayPtr zero_derivative_coefficient
