@@ -218,7 +218,7 @@ class HestonOptionConstruction_test(unittest.TestCase):
 
 
     def test_scale_and_combine_FGG_0(self):
-        self.FGG.scale_and_combine_operators(self.F)
+        self.FGG.scale_and_combine_operators()
 
         ref = self.F.operators[0]
         tst = self.FGG.operators[0].immigrate()
@@ -234,7 +234,7 @@ class HestonOptionConstruction_test(unittest.TestCase):
 
 
     def test_scale_and_combine_FGG_1(self):
-        self.FGG.scale_and_combine_operators(self.F)
+        self.FGG.scale_and_combine_operators()
 
         ref = self.F.operators[1]
         tst = self.FGG.operators[1]
@@ -248,7 +248,7 @@ class HestonOptionConstruction_test(unittest.TestCase):
 
 
     def test_scale_and_combine_FGG_01(self):
-        self.FGG.scale_and_combine_operators(self.F)
+        self.FGG.scale_and_combine_operators()
         ref = self.F.operators[(0,1)]
         tst = self.FGG.operators[(0,1)].immigrate()
         ref.deltas = tst.deltas
