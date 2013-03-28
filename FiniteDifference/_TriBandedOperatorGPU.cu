@@ -1097,7 +1097,7 @@ _TriBandedOperator *for_vector(SizedArray<double> &V, Py_ssize_t blocks,
 
     thrust::adjacent_difference(V.data, V.data + V.size, deltas.data);
     // XXX
-    deltas.data[0] = NaN;
+    /* deltas.data[0] = NaN; */
     tiled_range<DptrIterator> delta_rep(deltas.data, deltas.data + deltas.size, blocks);
 
     if (derivative == 1) {
