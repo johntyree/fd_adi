@@ -411,6 +411,12 @@ cdef class BandedOperator(object):
         self.vectorized_scale(np.ones(self.shape[0]) * val)
         return self
 
+    def mul_gpu_scalar(self, SizedArrayPtr val):
+        if self.is_mixed_derivative:
+            self.thisptr_csr.mul_gpu_scalar(deref(val.p))
+        else:
+            self.thisptr_tri.mul_gpu_scalar(deref(val.p))
+
 
     cpdef add(self, val, inplace=False):
         if inplace:
