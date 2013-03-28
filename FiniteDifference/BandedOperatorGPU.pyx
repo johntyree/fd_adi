@@ -94,7 +94,7 @@ cdef class BandedOperator(object):
             try:
                 if attr in kwargs:
                     setattr(self, attr, kwargs[attr])
-                elif attr in ('deltas', 'top_factors', 'bottom_factors'):
+                elif attr in ('top_factors', 'bottom_factors'):
                         setattr(self, attr, getattr(other, attr).copy())
                 else:
                     setattr(self, attr, getattr(other, attr))
