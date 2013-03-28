@@ -119,11 +119,12 @@ def run(dt, F=None, func=None, initial=None):
 def read_args():
     parser = argparse.ArgumentParser(description="Run a benchmark")
     parser.add_argument('-s', '--scheme', metavar='scheme', choices="i,d,hv,s".split(','), default='hv')
-    parser.add_argument('-n', default=252, metavar='int', dest='n', type=int, help="Number of time steps")
+    parser.add_argument('-n', '--steps', default=252, metavar='int', dest='n', type=int, help="Number of time steps")
     parser.add_argument('-ns', '--nspots', default=200, metavar='int', type=int, help="Number of spots")
     parser.add_argument('-nv', '--nvols', default=200, metavar='int', type=int, help="Number of volatilities")
     parser.add_argument('-gpu', action='store_const', dest='gpu', default=False, const=True)
     parser.add_argument('-cpu', action='store_const', dest='cpu', default=False, const=True)
+    parser.add_argument('--no-run', action='store_const', dest='run', default=True, const=False)
     parser.add_argument('-mc', '--monte-carlo', metavar='int', type=int, dest='npaths', default=0)
     return parser.parse_args()
 
@@ -135,18 +136,24 @@ def main():
 
     print
     if opt.cpu:
+        utils.tic("CPU Create:")
         F = create_cpu(nspots=opt.nspots, nvols=opt.nvols)
+        utils.toc()
         idx = F.idx
-        if opt.npaths:
+        if opt.run and opt.npaths:
             mc = F.option.monte_carlo()
             print mc
-        print run(1.0/opt.n, F, opt.scheme)[idx]
+        if opt.run:
+            print run(1.0/opt.n, F, opt.scheme)[idx]
         F.grid.reset()
     if opt.gpu:
+        utils.tic("GPU Create 1:")
         FG = create_gpu(nspots=opt.nspots, nvols=opt.nvols)
+        utils.toc()
         idx = FG.idx
-        print run(1.0/opt.n, FG, opt.scheme, F.grid.domain[0])[idx],
-        print
+        if opt.run:
+            print run(1.0/opt.n, FG, opt.scheme, F.grid.domain[0])[idx],
+            print
 
 if __name__ == '__main__':
     main()
