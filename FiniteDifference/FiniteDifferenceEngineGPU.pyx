@@ -214,9 +214,9 @@ cdef class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
         return ret
 
 
-    def scale_and_combine_operators(self, F):
-        coeffs = F.coefficients
+    def scale_and_combine_operators(self):
         self.operators = {}
+        coeffs = self.coefficients
 
         for d, op in sorted(self.simple_operators.items()):
             print "Scaling op:", d
@@ -604,6 +604,7 @@ cdef class HestonFiniteDifferenceEngine(FiniteDifferenceEngineADI):
         if schemes is not None or flip_idx_var or flip_idx_spot:
             raise NotImplementedError, "Only central differencing supported on GPU"
 
+        self.coefficients = [(0,), (0,0), (1,), (1,1), (0,1), ()]
         self.cache = cache
         assert isinstance(option, Option)
         self.option = option
