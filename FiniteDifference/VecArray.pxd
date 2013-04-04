@@ -34,6 +34,9 @@ cdef extern from "VecArray.h":
         void minuseq(SizedArray[T] &x) except +
         void minuseq_over2(SizedArray[T] &x) except +
         void timeseq(SizedArray[T] &x) except +
+        void pluseq(SizedArray[T] &x, int i) except +
+        void minuseq(SizedArray[T] &x, int i) except +
+        void timeseq(SizedArray[T] &x, int i) except +
         void pluseq(T x) except +
         void minuseq(T x) except +
         void timeseq(T x) except +

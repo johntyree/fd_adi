@@ -27,9 +27,12 @@ cdef class SizedArrayPtr(object):
     cpdef minuseq(self, SizedArrayPtr other)
     cpdef minuseq_over2(self, SizedArrayPtr other)
     cpdef timeseq(self, SizedArrayPtr other)
-    cpdef pluseq_scalar(self, double other)
-    cpdef minuseq_scalar(self, double other)
-    cpdef timeseq_scalar(self, double other)
+    cpdef pluseq_scalar(self, SizedArrayPtr other, int i)
+    cpdef minuseq_scalar(self, SizedArrayPtr other, int i)
+    cpdef timeseq_scalar(self, SizedArrayPtr other, int i)
+    cpdef pluseq_scalar_from_host(self, double other)
+    cpdef minuseq_scalar_from_host(self, double other)
+    cpdef timeseq_scalar_from_host(self, double other)
 
 
 cdef class SizedArrayPtr_i(object):
@@ -47,9 +50,12 @@ cdef class SizedArrayPtr_i(object):
     cpdef pluseq(self, SizedArrayPtr_i other)
     cpdef minuseq(self, SizedArrayPtr_i other)
     cpdef timeseq(self, SizedArrayPtr_i other)
-    cpdef pluseq_scalar(self, int other)
-    cpdef minuseq_scalar(self, int other)
-    cpdef timeseq_scalar(self, int other)
+    cpdef pluseq_scalar(self, SizedArrayPtr_i other, int i)
+    cpdef minuseq_scalar(self, SizedArrayPtr_i other, int i)
+    cpdef timeseq_scalar(self, SizedArrayPtr_i other, int i)
+    cpdef pluseq_scalar_from_host(self, int other)
+    cpdef minuseq_scalar_from_host(self, int other)
+    cpdef timeseq_scalar_from_host(self, int other)
 
 
 cdef from_SizedArray(SizedArray[double] &v)

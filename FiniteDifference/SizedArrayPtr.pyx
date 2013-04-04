@@ -91,16 +91,36 @@ cdef class SizedArrayPtr(object):
         self.p.timeseq(deref(other.p))
 
 
-    cpdef pluseq_scalar(self, double other):
+    cpdef pluseq_scalar(self, SizedArrayPtr other, int i):
+        self.p.pluseq(deref(other.p), i)
+
+
+    cpdef minuseq_scalar(self, SizedArrayPtr other, int i):
+        self.p.minuseq(deref(other.p), i)
+
+
+    cpdef timeseq_scalar(self, SizedArrayPtr other, int i):
+        self.p.timeseq(deref(other.p), i)
+
+
+    cpdef pluseq_scalar_from_host(self, double other):
         self.p.pluseq(other)
 
 
-    cpdef minuseq_scalar(self, double other):
+    cpdef minuseq_scalar_from_host(self, double other):
         self.p.minuseq(other)
 
 
-    cpdef timeseq_scalar(self, double other):
+    cpdef timeseq_scalar_from_host(self, double other):
         self.p.timeseq(other)
+
+
+    def __neg__(self):
+        other = SizedArrayPtr()
+        other.alloc(1)
+        other.copy_from(self)
+        other.timeseq_scalar_from_host(-1)
+        return other
 
 
     def __dealloc__(self):
@@ -177,20 +197,40 @@ cdef class SizedArrayPtr_i(object):
         self.p.timeseq(deref(other.p))
 
 
-    cpdef pluseq_scalar(self, int other):
+    cpdef pluseq_scalar(self, SizedArrayPtr_i other, int i):
+        self.p.pluseq(deref(other.p), i)
+
+
+    cpdef minuseq_scalar(self, SizedArrayPtr_i other, int i):
+        self.p.minuseq(deref(other.p), i)
+
+
+    cpdef timeseq_scalar(self, SizedArrayPtr_i other, int i):
+        self.p.timeseq(deref(other.p), i)
+
+
+    cpdef pluseq_scalar_from_host(self, int other):
         self.p.pluseq(other)
 
 
-    cpdef minuseq_scalar(self, int other):
+    cpdef minuseq_scalar_from_host(self, int other):
         self.p.minuseq(other)
 
 
-    cpdef timeseq_scalar(self, int other):
+    cpdef timeseq_scalar_from_host(self, int other):
         self.p.timeseq(other)
 
 
+    def __neg__(self):
+        other = SizedArrayPtr_i()
+        other.alloc(1)
+        other.copy_from(self)
+        other.timeseq_scalar_from_host(-1)
+        return other
+
+
     def __dealloc__(self):
-        if self.p:
+        if self.p != NULL:
             # print "Freeing %s:" % (self.tag,), to_string(self.p)
             del self.p
 

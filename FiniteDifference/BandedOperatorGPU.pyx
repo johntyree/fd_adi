@@ -397,26 +397,20 @@ cdef class BandedOperator(object):
         self.bottom_fold_status == CAN_FOLD if unfold else FOLDED
 
 
-    cpdef mul(self, val, inplace=False):
+    cpdef mul_scalar_from_host(self, double v, bool inplace=False):
+        val = SizedArrayPtr(np.atleast_1d(v))
         if inplace:
             self *= val
             return self
         else:
             return self * val
-    def __mul__(self, val):
+    def __mul__(self, SizedArrayPtr val):
         B = self.copy()
         B.__imul__(val)
         return B
-    def __imul__(self, val):
-        self.vectorized_scale(np.ones(self.shape[0]) * val)
+    def __imul__(self, SizedArrayPtr val):
+        self.vectorized_scale(val)
         return self
-
-    def mul_gpu_scalar(self, SizedArrayPtr val):
-        if self.is_mixed_derivative:
-            self.thisptr_csr.mul_gpu_scalar(deref(val.p))
-        else:
-            self.thisptr_tri.mul_gpu_scalar(deref(val.p))
-
 
     cpdef add(self, val, inplace=False):
         if inplace:
@@ -493,7 +487,7 @@ cdef class BandedOperator(object):
         return
 
 
-    cpdef vectorized_scale_(self, SizedArrayPtr vector):
+    cpdef vectorized_scale(self, SizedArrayPtr vector):
         """
         @vector@ is the correpsonding mesh vector of the current dimension.
 
@@ -507,9 +501,9 @@ cdef class BandedOperator(object):
             self.thisptr_csr.vectorized_scale(deref(vector.p))
 
 
-    cpdef vectorized_scale(self, np.ndarray vector):
+    cpdef vectorized_scale_from_host(self, np.ndarray vector):
         cdef SizedArrayPtr v = SizedArrayPtr(vector, "Vectorized scale v")
-        self.vectorized_scale_(v)
+        self.vectorized_scale(v)
         del v
         return
 

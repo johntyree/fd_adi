@@ -225,7 +225,7 @@ cdef class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
             op = op.copy()
             dim = op.axis
             if not on_gpu:
-                op.vectorized_scale(self.coefficient_vector(coeffs[d], self.t, dim))
+                op.vectorized_scale_from_host(self.coefficient_vector(coeffs[d], self.t, dim))
             else:
                 if d in coeffs:
                     if d == (0,):
@@ -235,7 +235,6 @@ cdef class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
                                 deref(self.gpugridmesh1.p),
                                 deref(self.scaling_vec.p)
                         )
-                        op.vectorized_scale_(self.scaling_vec)
                     elif d == (0,0):
                         coefficients.scale_00(self.t,
                                 self.option.interest_rate.value,
@@ -243,7 +242,6 @@ cdef class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
                                 deref(self.gpugridmesh1.p),
                                 deref(self.scaling_vec.p)
                         )
-                        op.vectorized_scale_(self.scaling_vec)
                     elif d == (1,):
                         coefficients.scale_1(self.t,
                                 self.option.interest_rate.value,
@@ -253,7 +251,6 @@ cdef class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
                                 self.option.variance.mean,
                                 deref(self.scaling_vec.p)
                         )
-                        op.vectorized_scale_(self.scaling_vec)
                     elif d == (1,1):
                         coefficients.scale_11(self.t,
                                 self.option.interest_rate.value,
@@ -262,7 +259,6 @@ cdef class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
                                 self.option.variance.volatility,
                                 deref(self.scaling_vec.p)
                         )
-                        op.vectorized_scale_(self.scaling_vec)
                     elif d == (0,1):
                         coefficients.scale_01(self.t,
                                 self.option.interest_rate.value,
@@ -272,10 +268,9 @@ cdef class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
                                 self.option.correlation,
                                 deref(self.scaling_vec.p)
                         )
-                        op.vectorized_scale_(self.scaling_vec)
                     else:
                         assert False, "All ops should be GPU scaled now."
-
+                    op.vectorized_scale(self.scaling_vec)
 
             if len(set(d)) > 1:
                 self.operators[d] = op
@@ -290,8 +285,7 @@ cdef class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
                         elif (self.zero_derivative_coefficient.p == NULL):
                             assert False, ("Zero derviative has not been set.")
                         else:
-                            # self.operators[dim].add_scalar(self.zero_derivative_coefficient, self.n)
-                            pass
+                            self.operators[dim].add_scalar(self.zero_derivative_coefficient, self.n)
                 else:
                     self.operators[dim] += op
         return self.scaling_vec
@@ -313,12 +307,12 @@ cdef class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
         initial = np.arange(self.shape[0] * self.shape[1], dtype=float)
         initial = initial.reshape(self.shape[0], self.shape[1])
 
-        Firsts = [(o * dt) for d, o in self.operators.items()]
+        Firsts = [o.mul_scalar_from_host(dt) for d, o in self.operators.items()]
 
-        Les = [(o * theta * dt)
+        Les = [o.mul_scalar_from_host(theta * dt)
                for d, o in sorted(self.operators.iteritems())
                if type(d) != tuple]
-        Lis = [(o * (theta * -dt)).add(1, inplace=True)
+        Lis = [o.mul_scalar_from_host(-dt*theta).add(1, inplace=True)
                for d, o in sorted(self.operators.iteritems())
                if type(d) != tuple]
 
@@ -368,18 +362,22 @@ cdef class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
     def solve_implicit(self, n, dt, np.ndarray initial):
         n = int(n)
         cdef SizedArrayPtr V = SizedArrayPtr(initial)
-        self.solve_implicit_(n, dt, V)
+        cdef SizedArrayPtr dt_ = SizedArrayPtr(np.atleast_1d(dt))
+        self.solve_implicit_(n, dt_, V)
         ret = V.to_numpy()
         del V
         return ret
 
 
-    cpdef solve_implicit_(self, n, dt, SizedArrayPtr V, callback=None, numpy=False):
+    cpdef solve_implicit_(self, n, SizedArrayPtr dt, SizedArrayPtr V, callback=None, numpy=False):
         if callback or numpy:
             raise NotImplementedError("Callbacks and Numpy not available for GPU solver.")
-        Lis = [(o * -dt).add(1, inplace=True)
+
+        dt.timeseq_scalar_from_host(-1)
+        Lis = [(o * dt).add(1, inplace=True)
                for d, o in sorted(self.operators.iteritems())
                if type(d) != tuple]
+        dt.timeseq_scalar_from_host(-1)
 
         Lis = np.roll(Lis, -1)
 
@@ -423,12 +421,12 @@ cdef class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
 
     cpdef solve_douglas_(self, int n, double dt, SizedArrayPtr V, double theta=0.5):
 
-        Firsts = [(o * dt) for d, o in self.operators.items()]
+        Firsts = [o.mul_scalar_from_host(dt) for d, o in self.operators.items()]
 
-        Les = [(o * theta * dt)
+        Les = [o.mul_scalar_from_host(theta * dt)
                for d, o in sorted(self.operators.iteritems())
                if type(d) != tuple]
-        Lis = [(o * (theta * -dt)).add(1, inplace=True)
+        Lis = [o.mul_scalar_from_host(theta * -dt).add(1, inplace=True)
                for d, o in sorted(self.operators.iteritems())
                if type(d) != tuple]
 
@@ -473,17 +471,18 @@ cdef class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
             raise NotImplementedError("Callbacks and Numpy not available for GPU solver.")
         n = int(n)
         cdef SizedArrayPtr V = SizedArrayPtr(initial)
-        self.solve_hundsdorferverwer_(n, dt, V, theta)
+        cdef SizedArrayPtr dt_ = SizedArrayPtr(dt)
+        self.solve_hundsdorferverwer_(n, dt_, V, theta)
         ret = V.to_numpy()
         del V
         return ret
 
 
-    cpdef preprocess_operators(self, dt, theta=0.5):
+    cpdef preprocess_operators(self, SizedArrayPtr gpu_dt, SizedArrayPtr gpu_theta):
 
         self.scale_and_combine_operators()
 
-        withdt = {k: (o * dt) for k,o in self.operators.iteritems()}
+        withdt = {k: (o * gpu_dt) for k,o in self.operators.iteritems()}
 
         # Don't touch this if it doesn't exist
         if self.zero_derivative_coefficient.p != NULL:
@@ -493,10 +492,10 @@ cdef class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
 
         Firsts = withdt.values()
 
-        Les = [(o * theta)
+        Les = [(o * gpu_theta)
             for d, o in sorted(withdt.iteritems())
             if type(d) != tuple]
-        Lis = [(o * -theta).add(1, inplace=True)
+        Lis = [(o * -gpu_theta).add(1, inplace=True)
             for d, o in sorted(withdt.iteritems())
             if type(d) != tuple]
 
@@ -508,38 +507,14 @@ cdef class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
         return Firsts, Les, Lis
 
 
-    cpdef solve_hundsdorferverwer_(self, n, dt, SizedArrayPtr V, theta=0.5):
+    cpdef solve_hundsdorferverwer_(self, n, SizedArrayPtr dt, SizedArrayPtr V, SizedArrayPtr theta):
 
         # Don't touch this if it doesn't exist
         if self.zero_derivative_coefficient.p != NULL:
-            self.zero_derivative_coefficient.timeseq_scalar(dt)
+            self.zero_derivative_coefficient.timeseq(dt)
 
 
         Firsts, Les, Lis = self.preprocess_operators(dt, theta)
-
-        # self.scale_and_combine_operators()
-
-        # withdt = {k: (o * dt) for k,o in self.operators.iteritems()}
-
-        # # Don't touch this if it doesn't exist
-        # if self.zero_derivative_coefficient.p != NULL:
-            # for d, o in withdt.iteritems():
-                # if np.isscalar(d):
-                    # o.add_scalar(self.zero_derivative_coefficient, self.n)
-
-        # Firsts = withdt.values()
-
-        # Les = [(o * theta)
-            # for d, o in sorted(withdt.iteritems())
-            # if type(d) != tuple]
-        # Lis = [(o * -theta).add(1, inplace=True)
-            # for d, o in sorted(withdt.iteritems())
-            # if type(d) != tuple]
-
-        # del withdt
-
-        # for L in itertools.chain(Les, Lis):
-            # L.enable_residual(False)
 
         tags = dict()
         for L in itertools.chain(Les, Lis, Firsts):
@@ -604,15 +579,21 @@ cdef class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
             raise NotImplementedError("Changing smoothing schemes not supported on GPU.")
         n = int(n)
         cdef SizedArrayPtr V = SizedArrayPtr(initial)
-        self.solve_smooth_(n, dt, V, smoothing_steps)
+        cdef SizedArrayPtr dt_ = SizedArrayPtr(np.atleast_1d(dt))
+        self.solve_smooth_(n, dt_, V, smoothing_steps)
         ret = V.to_numpy()
         del V
         return ret
 
 
-    cpdef solve_smooth_(self, n, dt, SizedArrayPtr V, smoothing_steps=2):
-        self.solve_implicit_(smoothing_steps*2, dt*0.5, V)
-        self.solve_hundsdorferverwer_(n-smoothing_steps, dt, V, theta=0.60)
+    cpdef solve_smooth_(self, n, SizedArrayPtr dt, SizedArrayPtr V, smoothing_steps=2):
+        halfdt = SizedArrayPtr()
+        halfdt.alloc(1)
+        halfdt.copy_from(dt)
+        halfdt.timeseq_scalar_from_host(0.5)
+        theta = SizedArrayPtr(np.atleast_1d(0.6))
+        self.solve_implicit_(smoothing_steps*2, halfdt, V)
+        self.solve_hundsdorferverwer_(n-smoothing_steps, dt, V, theta)
 
 
 cdef class HestonFiniteDifferenceEngine(FiniteDifferenceEngineADI):

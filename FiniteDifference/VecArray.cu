@@ -4,6 +4,7 @@
 #include <cassert>
 
 #include <thrust/device_free.h>
+#include <thrust/device_reference.h>
 #include <thrust/device_malloc.h>
 #include <thrust/device_vector.h>
 #include <thrust/functional.h>
@@ -118,7 +119,7 @@ namespace impl {
     void pluseq(
         thrust::device_ptr<double> &data,
         Py_ssize_t size,
-        double x) {
+        thrust::device_reference<double> x) {
         thrust::transform(
                 data, data+size,
                 thrust::make_constant_iterator(x),
@@ -130,7 +131,7 @@ namespace impl {
     void minuseq(
         thrust::device_ptr<double> &data,
         Py_ssize_t size,
-        double x) {
+        thrust::device_reference<double> x) {
         thrust::transform(
                 data, data+size,
                 thrust::make_constant_iterator(x),
@@ -142,7 +143,7 @@ namespace impl {
     void timeseq(
         thrust::device_ptr<double> &data,
         Py_ssize_t size,
-        double x) {
+        thrust::device_reference<double> x) {
         thrust::transform(
                 data, data+size,
                 thrust::make_constant_iterator(x),
@@ -157,7 +158,7 @@ namespace impl {
     void pluseq(
         thrust::device_ptr<int> &data,
         Py_ssize_t size,
-        int x) {
+        thrust::device_reference<int> x) {
         thrust::transform(
                 data, data+size,
                 thrust::make_constant_iterator(x),
@@ -169,7 +170,7 @@ namespace impl {
     void minuseq(
         thrust::device_ptr<int> &data,
         Py_ssize_t size,
-        int x) {
+        thrust::device_reference<int> x) {
         thrust::transform(
                 data, data+size,
                 thrust::make_constant_iterator(x),
@@ -181,7 +182,7 @@ namespace impl {
     void timeseq(
         thrust::device_ptr<int> &data,
         Py_ssize_t size,
-        int x) {
+        thrust::device_reference<int> x) {
         thrust::transform(
                 data, data+size,
                 thrust::make_constant_iterator(x),

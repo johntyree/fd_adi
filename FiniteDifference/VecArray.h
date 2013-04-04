@@ -7,6 +7,7 @@
 #include <cassert>
 
 #include <thrust/device_free.h>
+#include <thrust/device_reference.h>
 #include <thrust/device_malloc.h>
 #include <thrust/device_vector.h>
 #include <thrust/functional.h>
@@ -76,19 +77,19 @@ namespace impl {
     void minuseq(
         thrust::device_ptr<double> &data,
         Py_ssize_t size,
-        double x);
+        thrust::device_reference<double> x);
 
 
     void timeseq(
         thrust::device_ptr<double> &data,
         Py_ssize_t size,
-        double x);
+        thrust::device_reference<double> x);
 
 
     void pluseq(
         thrust::device_ptr<double> &data,
         Py_ssize_t size,
-        double x);
+        thrust::device_reference<double> x);
 
 
 
@@ -97,19 +98,19 @@ namespace impl {
     void minuseq(
         thrust::device_ptr<int> &data,
         Py_ssize_t size,
-        int x);
+        thrust::device_reference<int> x);
 
 
     void timeseq(
         thrust::device_ptr<int> &data,
         Py_ssize_t size,
-        int x);
+        thrust::device_reference<int> x);
 
 
     void pluseq(
         thrust::device_ptr<int> &data,
         Py_ssize_t size,
-        int x);
+        thrust::device_reference<int> x);
 
 
 } // namespace impl
@@ -492,6 +493,27 @@ struct SizedArray {
     }
 
 
+    void pluseq(SizedArray<int> &x, int i) {
+        if (x.size >= i) {
+            DIE("Index too large. x.size("<<x.size<<")"
+                " i("<<i<<")");
+        }
+        impl::pluseq(data, size, x.data[i]);
+        return;
+    }
+
+
+    void pluseq(SizedArray<double> &x, int i) {
+        if (x.size >= i) {
+            DIE("Index too large. x.size("<<x.size<<")"
+                " i("<<i<<")");
+        }
+        impl::pluseq(data, size, x.data[i]);
+        return;
+    }
+
+
+
     void minuseq(SizedArray<double> &x) {
         if (x.size != size) {
             DIE("Dimention mismatch.");
@@ -510,11 +532,51 @@ struct SizedArray {
     }
 
 
+    void minuseq(SizedArray<double> &x, int i) {
+        if (x.size >= i) {
+            DIE("Index too large. x.size("<<x.size<<")"
+                " i("<<i<<")");
+        }
+        impl::minuseq(data, size, x.data[i]);
+        return;
+    }
+
+
+    void minuseq(SizedArray<int> &x, int i) {
+        if (x.size >= i) {
+            DIE("Index too large. x.size("<<x.size<<")"
+                " i("<<i<<")");
+        }
+        impl::minuseq(data, size, x.data[i]);
+        return;
+    }
+
+
     void timeseq(SizedArray<double> &x) {
         if (x.size != size) {
             DIE("Dimention mismatch.");
         }
         impl::timeseq(data, x.data, size);
+        return;
+    }
+
+
+    void timeseq(SizedArray<double> &x, int i) {
+        if (x.size >= i) {
+            DIE("Index too large. x.size("<<x.size<<")"
+                " i("<<i<<")");
+        }
+        impl::timeseq(data, size, x.data[i]);
+        return;
+    }
+
+
+    void timeseq(SizedArray<int> &x, int i) {
+        if (x.size >= i) {
+            DIE("Index too large. x.size("<<x.size<<")"
+                " i("<<i<<")");
+        }
+        impl::timeseq(data, size, x.data[i]);
         return;
     }
 
@@ -537,38 +599,62 @@ struct SizedArray {
     }
 
 
-
     void pluseq(double x) {
-        impl::pluseq(data, size, x);
+        thrust::device_ptr<double> val;
+        val = thrust::device_malloc<double>(1);
+        *val = x;
+        impl::pluseq(data, size, *val);
+        thrust::device_free(val);
         return;
     }
 
 
     void minuseq(double x) {
-        impl::minuseq(data, size, x);
+        thrust::device_ptr<double> val;
+        val = thrust::device_malloc<double>(1);
+        *val = x;
+        impl::minuseq(data, size, *val);
+        thrust::device_free(val);
         return;
     }
 
 
     void timeseq(double x) {
-        impl::timeseq(data, size, x);
+        thrust::device_ptr<double> val;
+        val = thrust::device_malloc<double>(1);
+        *val = x;
+        impl::timeseq(data, size, *val);
+        thrust::device_free(val);
         return;
     }
 
 
     void pluseq(int x) {
-        impl::pluseq(data, size, x);
+        thrust::device_ptr<int> val;
+        val = thrust::device_malloc<int>(1);
+        *val = x;
+        impl::pluseq(data, size, *val);
+        thrust::device_free(val);
         return;
     }
 
 
     void minuseq(int x) {
-        impl::minuseq(data, size, x);
+        thrust::device_ptr<int> val;
+        val = thrust::device_malloc<int>(1);
+        *val = x;
+        impl::minuseq(data, size, *val);
+        thrust::device_free(val);
         return;
     }
 
+
     void timeseq(int x) {
-        impl::timeseq(data, size, x);
+        thrust::device_ptr<int> val;
+        val = thrust::device_malloc<int>(1);
+        *val = x;
+        impl::timeseq(data, size, *val);
+        thrust::device_free(val);
         return;
     }
 
