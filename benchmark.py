@@ -152,7 +152,7 @@ def main():
         utils.toc()
         idx = FG.idx
         if opt.run:
-            print run(1.0/opt.n, FG, opt.scheme, F.grid.domain[0])[idx],
+            print run(1.0/opt.n, FG, opt.scheme, FG.grid.domain[0])[idx],
             print
 
 if __name__ == '__main__':
