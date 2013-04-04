@@ -356,7 +356,7 @@ class HestonOptionConstruction_test(unittest.TestCase):
         ref.vectorized_scale(self.F.coefficient_vector(self.F.coefficients[d],
             self.F.t, d[0]))
         tst = self.FGG.simple_operators[d]
-        tst.vectorized_scale(
+        tst.vectorized_scale_from_host(
                 self.FGG.coefficient_vector(self.F.coefficients[d],
                     self.FGG.t, d[0]))
         tst = tst.immigrate()
@@ -375,7 +375,7 @@ class HestonOptionConstruction_test(unittest.TestCase):
                 self.F.coefficient_vector(self.F.coefficients[d], self.F.t,
                     d[0]))
         tst = self.FGG.simple_operators[d]
-        tst.vectorized_scale(self.FGG.coefficient_vector(self.F.coefficients[d],
+        tst.vectorized_scale_from_host(self.FGG.coefficient_vector(self.F.coefficients[d],
             self.FGG.t, d[0]))
         tst = tst.immigrate()
 
@@ -392,7 +392,7 @@ class HestonOptionConstruction_test(unittest.TestCase):
         ref.vectorized_scale(self.F.coefficient_vector(self.F.coefficients[d],
             self.F.t, d[0]))
         tst = self.FGG.simple_operators[d]
-        tst.vectorized_scale(self.FGG.coefficient_vector(self.F.coefficients[d],
+        tst.vectorized_scale_from_host(self.FGG.coefficient_vector(self.F.coefficients[d],
             self.FGG.t, d[0]))
         tst = tst.immigrate()
 
@@ -410,7 +410,7 @@ class HestonOptionConstruction_test(unittest.TestCase):
                 self.F.coefficient_vector(self.F.coefficients[d], self.F.t,
                     d[0]))
         tst = self.FGG.simple_operators[d]
-        tst.vectorized_scale(self.FGG.coefficient_vector(self.F.coefficients[d],
+        tst.vectorized_scale_from_host(self.FGG.coefficient_vector(self.F.coefficients[d],
             self.FGG.t, d[0]))
         tst = tst.immigrate()
 
@@ -428,7 +428,7 @@ class HestonOptionConstruction_test(unittest.TestCase):
                 self.F.coefficient_vector(self.F.coefficients[d], self.F.t,
                     d[0]))
         tst = self.FGG.simple_operators[d]
-        tst.vectorized_scale(self.FGG.coefficient_vector(self.F.coefficients[d],
+        tst.vectorized_scale_from_host(self.FGG.coefficient_vector(self.F.coefficients[d],
             self.FGG.t, d[0]))
         tst = tst.immigrate()
 
@@ -608,7 +608,7 @@ class FiniteDifferenceEngineADIGPU_test(unittest.TestCase):
 
         scale = np.random.random()
         crossOp *= scale
-        crossOpGPU *= scale
+        crossOpGPU.mul_scalar_from_host(scale, inplace=True)
 
         d2gdxdy_scaled = crossOp.apply(g)
         d2gdxdyGPU_scaled = crossOp.apply(g)

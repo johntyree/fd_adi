@@ -150,7 +150,7 @@ class Operations_test(unittest.TestCase):
         B01  = self.F.operators[(0,1)]
         B01G = BOG.BandedOperator(B01)
         B01 *= 0.023934
-        B01G *= 0.023934
+        B01G.mul_scalar_from_host(0.023934, inplace=True)
         ref = B01.apply(self.v2)
         tst = B01G.apply(self.v2.copy())
         # fp(ref - tst, 'e')
@@ -182,7 +182,7 @@ class Operations_test(unittest.TestCase):
         ref = np.arange(B.D.shape[0], dtype=float).repeat(B.D.shape[1])
         ref.resize(B.D.shape)
         B = BOG.BandedOperator(B)
-        B.vectorized_scale(np.arange(B.operator_rows, dtype=float))
+        B.vectorized_scale_from_host(np.arange(B.operator_rows, dtype=float))
         B = B.immigrate()
         # fp(ref)
         # print
@@ -202,7 +202,7 @@ class Operations_test(unittest.TestCase):
         ref = np.ones(B.D.shape[0], dtype=float).repeat(B.D.shape[1]) * scalar
         ref.resize(B.D.shape)
         B = BOG.BandedOperator(B)
-        B *= scalar
+        B.mul_scalar_from_host(scalar, inplace=True)
         B = B.immigrate()
         # fp(ref)
         # print
