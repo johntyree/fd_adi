@@ -8,6 +8,8 @@ import sys
 import os
 # import itertools as it
 
+from bisect import bisect_left
+
 import pylab
 import numpy as np
 import pickle
@@ -49,6 +51,12 @@ DefaultHeston = HestonOption(spot=100
                  )
 H = DefaultHeston
 
+
+def idx(F):
+    self = F
+    ids = bisect_left(np.round(self.grid.mesh[0], decimals=4), np.round(self.option.spot, decimals=4))
+    idv = bisect_left(np.round(self.grid.mesh[1], decimals=4), np.round(self.option.variance.value, decimals=4))
+    return (ids, idv)
 
 def error_surface2d(V, F, errors, label="", trim=True):
     a = F.grid_analytical
@@ -183,6 +191,9 @@ class ConvergenceTester(object):
         'smooth': "Smoothed HV"
     }
 
+    def selfreference(self, V, F):
+        return error2d(V, F, self.reference_solution)
+
     def __init__(self, option, engine, engine_kwargs={}, **kwargs):
         self.option = option
         self.engine = engine
@@ -224,6 +235,8 @@ class ConvergenceTester(object):
             mesh=np.array(F.grid.mesh).copy(),
             state='INIT',
             result={'dt':{'sequence':null.copy(), 'error':null.copy()}})
+        dt = self.kwargs['update_kwargs'](self, max_i)
+        self.reference_solution = self.schemes[self.kwargs['scheme']](F, dt)
         for i in range(min_i, max_i):
             F.grid.reset()
             dt = self.kwargs['update_kwargs'](self, i)
@@ -260,6 +273,10 @@ class ConvergenceTester(object):
             state='INIT',
             mode='dx',
             result={'dx':{'sequence':null.copy(), 'error':null.copy()}})
+        dx = self.kwargs['update_kwargs'](self, max_i)
+        V = self.schemes[self.kwargs['scheme']](F, self.kwargs["dt"])
+        self.reference_solution = V[idx(F)]
+        print self.reference_solution
         for i in range(min_i, max_i):
             dx = self.kwargs['update_kwargs'](self, i)
             self.F = self.new()
@@ -267,7 +284,8 @@ class ConvergenceTester(object):
             dx = self.kwargs['update_kwargs'](self, i)
             V = self.schemes[self.kwargs['scheme']](F, self.kwargs["dt"])
             ct.result['dx']['sequence'][i - min_i] = dx
-            err = self.kwargs["error_func"](V, F)
+            # err = self.kwargs["error_func"](V, F)
+            err = V[idx(F)] - self.reference_solution
             print "dx:", dx, "err:", err
             ct.result['dx']['error'][i - min_i] = err
             # self.kwargs['display'](V, F, self.errors, label=self.kwargs["label"])
@@ -304,14 +322,16 @@ def trim1d(V, F):
     a = tr(F.grid_analytical)
     return res, a, xs
 
-def trim2d(V, F):
+def trim2d(V, F, analytical=None):
+    if analytical is None:
+        analytical = F.grid_analytical
     xs = F.grid.mesh[0]
     ys = F.grid.mesh[1]
     trimx = (0.0 * F.option.spot <= xs) & (xs <= 2.0*F.option.spot)
     trimy = ys <= 1.0
     tr = lambda x: x[trimx, :][:, trimy]
     res = tr(V)
-    a = tr(F.grid_analytical)
+    a = tr(analytical)
     return res, a, xs[trimx], ys[trimy]
 
 def error1d(V, F):
@@ -321,8 +341,8 @@ def error1d(V, F):
     meanerr = pylab.mean(abs(res - a).flat)
     return meanerr
 
-def error2d(V, F):
-    res, a, xs, ys = trim2d(V, F)
+def error2d(V, F, analytical):
+    res, a, xs, ys = trim2d(V, F, analytical)
     inf_norm = max(abs(res-a).flat)
     norm2 = pylab.sqrt(sum(((res-a)**2).flat))
     meanerr = pylab.mean(abs(res - a).flat)

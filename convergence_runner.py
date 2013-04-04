@@ -22,7 +22,9 @@ figure_dir = "/scratch/tyree/cudafd/src/fd_pricer/py_adi/data_convergence/figure
 fname = "temp"
 
 def engineGPU(*args, **kwargs):
-    F = FDEGPU(FD.heston.HestonFiniteDifferenceEngine(*args, **kwargs))
+    F = FDEGPU()
+    g = FD.heston.HestonFiniteDifferenceEngine(*args, **kwargs)
+    F.from_host_FiniteDifferenceEngine(g)
     return F
 
 def engineCPU(*args, **kwargs):
@@ -57,8 +59,9 @@ def rundx(option, engine, dt, min_i, max_i, scheme):
 
     ct = cv.ConvergenceTester(option, engine,
             {'force_exact': False, 'spotdensity': 10, 'varexp': 4},
-            dt=dt, min_i=4, max_i=9, scheme=scheme, error_func=cv.error2d,
+            dt=dt, min_i=4, max_i=9, scheme=scheme,
             update_kwargs=update_kwargs)
+    ct.kwargs['error_func'] = ct.selfreference
     return ct.dx()
 
 
@@ -69,7 +72,7 @@ def read_args():
     parser.add_argument('-s', '--scheme', metavar='scheme', choices="i,d,hv,s".split(','))
     parser.add_argument('-k', '--strike', metavar='strike', type=float)
     parser.add_argument('--min_i', default=2, metavar='int', type=int, help="Min iteration value (2**i)")
-    parser.add_argument('--max_i', default=8, metavar='int', type=int, help="Max iteration value (2**i)")
+    parser.add_argument('--max_i', default=10, metavar='int', type=int, help="Max iteration value (2**i)")
     mode_group.add_argument('-dx', metavar='nspots/vols', nargs=2, type=int)
     mode_group.add_argument('-dt', metavar='timesteps', type=int)
     backend_group.add_argument('--gpu', action='store_const', dest='engine', const=engineGPU)
@@ -80,16 +83,17 @@ def read_args():
 def main():
     opt = read_args()
 
-    option = FD.heston.HestonOption(tenor=1, strike=opt.strike, volatility=0.2,
-                                    mean_reversion=1, vol_of_variance=0.2,
-                                    correlation=-0.7)
-    # option = FD.heston.HestonBarrierOption(tenor=1, strike=strike, volatility=0.2,
-                                        # mean_reversion=1, vol_of_variance=0.2,
-                                        # correlation=-0.7, top=(False, 120.0))
+    # option = FD.heston.HestonOption(tenor=1, strike=opt.strike, volatility=0.2,
+                                    # mean_reversion=1, vol_of_variance=0.2,
+                                    # correlation=-0.7)
+    option = FD.heston.HestonBarrierOption(tenor=1, strike=opt.strike, volatility=0.2,
+                                        mean_reversion=1, vol_of_variance=0.2,
+                                        correlation=-0.7, top=(False, 120.0))
     ctest = None
     if opt.dx is not None:
         ctester = cv.ConvergenceTester(option, opt.engine, {'nspots': opt.dx[0], 'nvols': opt.dx[1]},
-                                    scheme=opt.scheme, max_i=10, error_func=cv.error2d)
+                                    scheme=opt.scheme, max_i=10)
+        ctester.kwargs['error_func'] = ctester.selfreference
         ctest = ctester.dt()
     else:
         ctest = rundx(option, opt.engine, 1./opt.dt, opt.min_i, opt.max_i, opt.scheme)
