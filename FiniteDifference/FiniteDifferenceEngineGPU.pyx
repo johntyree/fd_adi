@@ -177,6 +177,14 @@ cdef class FiniteDifferenceEngine(object):
         self.coefficients = other.coefficients
 
         # Setup
+        try:
+            if self.option.correlation == 0:
+                other.operators.pop((0,1))
+                other.simple_operators.pop((0,1))
+        except KeyError:
+            pass
+        except AttributeError:
+            pass
         self.operators = {k:BOG.BandedOperator(v) for k,v in other.operators.items()}
         self.simple_operators = {k:BOG.BandedOperator(v) for k,v in other.simple_operators.items()}
 
@@ -704,7 +712,11 @@ cdef class HestonFiniteDifferenceEngine(FiniteDifferenceEngineADI):
 
         self.simple_operators[(1,1)] = BOG.for_vector(m1, m0.size, 2, 1)
 
-        self.simple_operators[(0,1)] = BOG.mixed_for_vector(m0, m1)
+        try:
+            if self.option.correlation != 0:
+                self.simple_operators[(0,1)] = BOG.mixed_for_vector(m0, m1)
+        except AttributeError:
+            pass
 
 
     @property
