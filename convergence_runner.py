@@ -13,7 +13,8 @@ import argparse
 
 import convergence as cv
 import FiniteDifference as FD
-from FiniteDifference.FiniteDifferenceEngineGPU import FiniteDifferenceEngineADI as FDEGPU
+# from FiniteDifference.FiniteDifferenceEngineGPU import FiniteDifferenceEngineADI as FDEGPU
+from FiniteDifference.FiniteDifferenceEngineGPU import HestonFiniteDifferenceEngine as FDEGPU
 import FiniteDifference.visualize as vis
 # figure_dir = "/home/john/Filing_Cabinet/thesis/thesis_cudafd/tex/figures/archive"
 figure_dir = "/scratch/tyree/cudafd/src/fd_pricer/py_adi/data_convergence/figures"
@@ -21,14 +22,14 @@ figure_dir = "/scratch/tyree/cudafd/src/fd_pricer/py_adi/data_convergence/figure
 
 fname = "temp"
 
-def engineGPU(*args, **kwargs):
-    F = FDEGPU()
-    g = FD.heston.HestonFiniteDifferenceEngine(*args, **kwargs)
-    F.from_host_FiniteDifferenceEngine(g)
-    return F
-
 def engineCPU(*args, **kwargs):
     F = FD.heston.HestonFiniteDifferenceEngine(*args, **kwargs)
+    return F
+
+def engineGPU(*args, **kwargs):
+    F = FDEGPU(*args, **kwargs)
+    # g = engineCPU(*args, **kwargs)
+    # F.from_host_FiniteDifferenceEngine(g)
     return F
 
 def save(*args, **kwargs):
@@ -67,31 +68,100 @@ def rundx(option, engine, dt, min_i, max_i, scheme):
 
 def read_args():
     parser = argparse.ArgumentParser(description="Run a convergence test")
-    mode_group = parser.add_mutually_exclusive_group(required=True)
-    backend_group = parser.add_mutually_exclusive_group(required=True)
-    parser.add_argument('-s', '--scheme', metavar='scheme', choices="i,d,hv,s".split(','))
-    parser.add_argument('-k', '--strike', metavar='strike', type=float)
-    parser.add_argument('--min_i', default=2, metavar='int', type=int, help="Min iteration value (2**i)")
-    parser.add_argument('--max_i', default=10, metavar='int', type=int, help="Max iteration value (2**i)")
-    mode_group.add_argument('-dx', metavar='nspots/vols', nargs=2, type=int)
-    mode_group.add_argument('-dt', metavar='timesteps', type=int)
-    backend_group.add_argument('--gpu', action='store_const', dest='engine', const=engineGPU)
-    backend_group.add_argument('--cpu', action='store_const', dest='engine', const=engineCPU)
-    return parser.parse_args()
+    parser.add_argument('--scheme', help='scheme', choices="i,d,hv,s".split(','))
+    parser.add_argument('-s','--spot', metavar='FLOAT', type=float, default=100.0)
+    parser.add_argument('-k', '--strike', metavar='FLOAT', help='strike', type=float, default=99.0)
+    parser.add_argument('-t', '--tenor', metavar='FLOAT', help='tenor', type=float, default=1.0)
+    parser.add_argument('-r', '--interest-rate', metavar='FLOAT', type=float, default=0.06)
+    parser.add_argument('--mean-reversion', metavar='FLOAT', type=float, default=1.0)
+    parser.add_argument('--variance', metavar='FLOAT', type=float, default=0.04)
+    parser.add_argument('-o', '--vol-of-var', metavar='FLOAT', type=float, default=0.001)
+    parser.add_argument('--mean-variance', metavar='FLOAT', type=float, default=-1.0)
+    parser.add_argument('-p', '--correlation', metavar='FLOAT', help='Correlation', type=float, default=0.0)
+    parser.add_argument('--min_i', default=2, metavar='INT', type=int, help="Min iteration value (2**i)")
+    parser.add_argument('--max_i', default=10, metavar='INT', type=int, help="Max iteration value (2**i)")
+    parser.add_argument('--top', type=float, default=None)
+    parser.add_argument('--barrier', action='store_const', dest='option', const=FD.heston.HestonBarrierOption, default=FD.heston.HestonOption)
+    parser.add_argument('-nx', required=True, metavar='int', help='nspots/vols', nargs=2, type=int)
+    parser.add_argument('-nt', required=True, metavar='int', help='timesteps', type=int)
+    parser.add_argument('-v', action='count', dest='verbose')
+    parser.add_argument('--gpu', action='store_const', default=False, const=engineGPU)
+    parser.add_argument('--cpu', action='store_const', default=False, const=engineCPU)
+    opt = parser.parse_args()
+    if opt.mean_variance == -1:
+        opt.mean_variance = opt.variance
+    if opt.verbose:
+        print "Verbosity:", opt.verbose
+    return opt
 
+
+def new_engine(opt):
+    option = opt.option(
+        spot=opt.spot,
+        strike=opt.strike,
+        interest_rate=opt.interest_rate,
+        variance=opt.variance,
+        tenor=opt.tenor,
+        mean_reversion=opt.mean_reversion,
+        vol_of_variance=opt.vol_of_var,
+        correlation=opt.correlation)
+    if opt.top:
+        option.top = (False, opt.top)
+
+    if opt.verbose:
+        print option
+        print
+
+    engine = opt.engine(option,
+        grid=None,
+        spot_max=1500.0,
+        spot_min=0.0,
+        spots=None,
+        vars=None,
+        var_max=10.0,
+        nspots=opt.nx[0],
+        nvols=opt.nx[1],
+        spotdensity=7.0,
+        varexp=4.0,
+        force_exact=True,
+        flip_idx_var=False,
+        flip_idx_spot=False,
+        schemes=None,
+        coefficients=None,
+        boundaries=None,
+        cache=True,
+        verbose=opt.verbose,
+        force_bandwidth=None
+        )
+
+    return engine
+
+def run(opt):
+    e = new_engine(opt)
+    e.solve_smooth(opt.nt, opt.tenor / opt.nt)
+    s = np.searchsorted(e.grid.mesh[0], e.option.spot)
+    v = np.searchsorted(e.grid.mesh[1], e.option.variance.value)
+    try:
+        e.grid.domain[-1] = e.gpugrid.to_numpy()
+    except AttributeError:
+        pass
+    print e.grid.domain[-1][s,v]
 
 def main():
     opt = read_args()
+    if opt.cpu:
+        opt.engine = opt.cpu
+        run(opt)
+    if opt.gpu:
+        opt.engine = opt.gpu
+        run(opt)
 
-    # option = FD.heston.HestonOption(tenor=1, strike=opt.strike, volatility=0.2,
-                                    # mean_reversion=1, vol_of_variance=0.2,
-                                    # correlation=-0.7)
-    option = FD.heston.HestonBarrierOption(tenor=1, strike=opt.strike, volatility=0.2,
-                                        mean_reversion=1, vol_of_variance=0.2,
-                                        correlation=-0.7, top=(False, 120.0))
+def oldmain():
+    opt = read_args()
+
     ctest = None
-    if opt.dx is not None:
-        ctester = cv.ConvergenceTester(option, opt.engine, {'nspots': opt.dx[0], 'nvols': opt.dx[1]},
+    if opt.nx is not None:
+        ctester = cv.ConvergenceTester(option, opt.engine, {'nspots': opt.nx[0], 'nvols': opt.nx[1]},
                                     scheme=opt.scheme, max_i=10)
         ctester.kwargs['error_func'] = ctester.selfreference
         ctest = ctester.dt()
