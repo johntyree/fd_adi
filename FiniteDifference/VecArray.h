@@ -494,7 +494,7 @@ struct SizedArray {
 
 
     void pluseq(SizedArray<int> &x, int i) {
-        if (x.size >= i) {
+        if (x.size <= i) {
             DIE("Index too large. x.size("<<x.size<<")"
                 " i("<<i<<")");
         }
@@ -504,7 +504,7 @@ struct SizedArray {
 
 
     void pluseq(SizedArray<double> &x, int i) {
-        if (x.size >= i) {
+        if (x.size <= i) {
             DIE("Index too large. x.size("<<x.size<<")"
                 " i("<<i<<")");
         }
@@ -533,7 +533,7 @@ struct SizedArray {
 
 
     void minuseq(SizedArray<double> &x, int i) {
-        if (x.size >= i) {
+        if (x.size <= i) {
             DIE("Index too large. x.size("<<x.size<<")"
                 " i("<<i<<")");
         }
@@ -543,7 +543,7 @@ struct SizedArray {
 
 
     void minuseq(SizedArray<int> &x, int i) {
-        if (x.size >= i) {
+        if (x.size <= i) {
             DIE("Index too large. x.size("<<x.size<<")"
                 " i("<<i<<")");
         }
@@ -562,17 +562,17 @@ struct SizedArray {
 
 
     void timeseq(SizedArray<double> &x, int i) {
-        if (x.size >= i) {
+        if (x.size <= i) {
             DIE("Index too large. x.size("<<x.size<<")"
                 " i("<<i<<")");
         }
-        impl::timeseq(data, size, x.data[i]);
+        impl::timeseq(data, size, *(x.data+i));
         return;
     }
 
 
     void timeseq(SizedArray<int> &x, int i) {
-        if (x.size >= i) {
+        if (x.size <= i) {
             DIE("Index too large. x.size("<<x.size<<")"
                 " i("<<i<<")");
         }
