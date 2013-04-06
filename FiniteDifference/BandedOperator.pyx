@@ -644,7 +644,7 @@ cdef class BandedOperator(object):
             newdata = np.zeros((Boffsets.shape[0], self.shape[1]))
             # And make a new operator with the appropriate shape
             # Remember to carry the residual with us.
-            B = BandedOperator((newdata, Boffsets), self.R)
+            B = BandedOperator((newdata, Boffsets), self.R.copy())
             # Copy our data into the new operator since carefully, since we
             # may have resized.
             for i in range(selfoffsets.shape[0]):
