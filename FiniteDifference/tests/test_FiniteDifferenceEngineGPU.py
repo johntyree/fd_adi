@@ -81,7 +81,7 @@ class HestonOption_test(unittest.TestCase):
     def setUp(self):
         DefaultHeston = HestonOption(spot=100
                         , strike=100
-                        , interest_rate=0.03
+                        , interest_rate=0.06
                         , volatility = 0.2
                         , tenor=1.0
                         , mean_reversion = 1
@@ -179,7 +179,7 @@ class HestonOptionConstruction_test(unittest.TestCase):
     def setUp(self):
         DefaultHeston = HestonOption(spot=100
                         , strike=100
-                        , interest_rate=0.03
+                        , interest_rate=0.03125
                         , volatility = 0.2
                         , tenor=1.0
                         , mean_reversion = 1
@@ -193,7 +193,7 @@ class HestonOptionConstruction_test(unittest.TestCase):
                                         # vol_of_variance=0.6, correlation=-0.7)
 
 
-        self.dt = 1.0/150.0
+        self.dt = 1.0/2.0
         self.F = HestonFiniteDifferenceEngine(option, nspots=5,
                                                    nvols=5,
                                                    force_bandwidth=None,
