@@ -223,20 +223,21 @@ cdef class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
         return ret
 
 
-    cpdef preprocess_operators(self, SizedArrayPtr gpu_dt, SizedArrayPtr gpu_theta):
+    cpdef preprocess_operators(self, SizedArrayPtr dt, SizedArrayPtr theta):
 
         if self.zero_derivative_coefficient.p == NULL:
-            self.set_zero_derivative(gpu_dt)
+            self.set_zero_derivative(dt)
+
         self.scale_and_combine_operators()
 
-        withdt = {k: (o * gpu_dt) for k,o in self.operators.iteritems()}
+        withdt = {k: (o * dt) for k,o in self.operators.iteritems()}
 
         Firsts = withdt.values()
 
-        Les = [(o * gpu_theta)
+        Les = [(o * theta)
             for d, o in sorted(withdt.iteritems())
             if type(d) != tuple]
-        Lis = [(o * -gpu_theta).add(1, inplace=True)
+        Lis = [(o * -theta).add(1, inplace=True)
             for d, o in sorted(withdt.iteritems())
             if type(d) != tuple]
 
