@@ -224,6 +224,10 @@ cdef class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
 
     def scale_and_combine_operators(self, operators=None):
         if operators is None:
+            try:
+                self.make_operator_templates()
+            except AttributeError:
+                pass
             operators = self.simple_operators
         self.operators = {}
         coeffs = self.coefficients
@@ -380,6 +384,8 @@ cdef class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
     cpdef solve_implicit_(self, n, SizedArrayPtr dt, SizedArrayPtr V, callback=None, numpy=False):
         if callback or numpy:
             raise NotImplementedError("Callbacks and Numpy not available for GPU solver.")
+
+        self.scale_and_combine_operators()
 
         dt.timeseq_scalar_from_host(-1)
         Lis = [(o * dt).add(1, inplace=True)
