@@ -103,6 +103,7 @@ def new_engine(opt):
         variance=opt.variance,
         tenor=opt.tenor,
         mean_reversion=opt.mean_reversion,
+        mean_variance=opt.mean_variance,
         vol_of_variance=opt.vol_of_var,
         correlation=opt.correlation)
     if opt.top:
