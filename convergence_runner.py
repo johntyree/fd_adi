@@ -140,8 +140,12 @@ def new_engine(opt):
 def run(opt):
     e = new_engine(opt)
     e.solve_smooth(opt.nt, opt.tenor / opt.nt)
-    s = np.searchsorted(e.grid.mesh[0], e.option.spot)
-    v = np.searchsorted(e.grid.mesh[1], e.option.variance.value)
+    s = np.searchsorted(np.round(e.grid.mesh[0], decimals=4), e.option.spot)
+    v = np.searchsorted(np.round(e.grid.mesh[1], decimals=4), e.option.variance.value)
+    wanted, found = (opt.spot, opt.variance), (e.grid.mesh[0][s], e.grid.mesh[1][v])
+    np.testing.assert_almost_equal(wanted, found,
+                                   decimal=10,
+                                   err_msg="We have the wrong indices! %s %s" % (wanted, found))
     try:
         e.grid.domain[-1] = e.gpugrid.to_numpy()
     except AttributeError:
