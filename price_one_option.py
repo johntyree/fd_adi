@@ -25,12 +25,14 @@ fname = "temp"
 def engineCPU(*args, **kwargs):
     F = FD.heston.HestonFiniteDifferenceEngine(*args, **kwargs)
     return F
+engineCPU.__repr__ = lambda: "engineCPU"
 
 def engineGPU(*args, **kwargs):
     F = FDEGPU(*args, **kwargs)
     # g = engineCPU(*args, **kwargs)
     # F.from_host_FiniteDifferenceEngine(g)
     return F
+engineGPU.__str__ = lambda: "engineGPU"
 
 def save(*args, **kwargs):
     args = list(args)
@@ -110,7 +112,7 @@ def new_engine(opt):
         option.top = (False, opt.top)
 
     if opt.verbose:
-        print option
+        print repr(option)
         print
 
     engine = opt.engine(option,
@@ -158,15 +160,19 @@ def run(opt):
     except AttributeError:
         pass
     print
+    return e
 
 def main():
     opt = read_args()
+    print repr(opt)
     if opt.cpu:
         opt.engine = opt.cpu
-        run(opt)
+        res = run(opt)
+        print res
     if opt.gpu:
         opt.engine = opt.gpu
-        run(opt)
+        res = run(opt)
+        print res
 
 def oldmain():
     opt = read_args()
