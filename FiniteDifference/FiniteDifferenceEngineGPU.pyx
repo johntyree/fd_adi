@@ -259,9 +259,7 @@ cdef class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
         coeffs = self.coefficients
         on_gpu = type(coeffs) == list
 
-        self.zero_derivative_coefficient = SizedArrayPtr(
-            self.zero_derivative_coefficient_host)
-
+        # TODO: Thrust fails here. We need concurrency really badly.
         for d, op in sorted(operators.items()):
             op = op.copy()
             dim = op.axis
@@ -435,14 +433,18 @@ cdef class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
     cpdef solve_implicit_(self, n, SizedArrayPtr dt, SizedArrayPtr V, callback=None, numpy=False):
         if callback or numpy:
             raise NotImplementedError("Callbacks and Numpy not available for GPU solver.")
+        cdef SizedArrayPtr theta = SizedArrayPtr(np.atleast_1d(1.0))
 
+        self.set_zero_derivative(dt)
+        self.make_operator_templates()
         self.scale_and_combine_operators()
 
-        dt.timeseq_scalar_from_host(-1)
-        Lis = [(o * dt).add(1, inplace=True)
+        Lis = [(o * -dt).add(1, inplace=True)
                for d, o in sorted(self.operators.iteritems())
                if type(d) != tuple]
-        dt.timeseq_scalar_from_host(-1)
+
+        for L in itertools.chain(Lis):
+            L.enable_residual(True)
 
         Lis = np.roll(Lis, -1)
 
@@ -723,12 +725,13 @@ cdef class HestonFiniteDifferenceEngine(FiniteDifferenceEngineADI):
         self.fill_gpugridmesh_from_grid()
         self.scaling_vec.alloc(self.gpugrid.size, self.scaling_vec.tag)
 
+        self.zero_derivative_coefficient_host = np.atleast_1d(
+            -self.option.interest_rate.value / self.grid.ndim)
+
 
     def make_operator_templates(self):
         m0 = self.grid.mesh[0]
         m1 = self.grid.mesh[1]
-        self.zero_derivative_coefficient_host = np.atleast_1d(
-            -self.option.interest_rate.value / self.grid.ndim)
 
         self.simple_operators[(0,)] = BOG.for_vector(m0, m1.size, 1, 0)
         self.simple_operators[(0,)].has_low_dirichlet = True
