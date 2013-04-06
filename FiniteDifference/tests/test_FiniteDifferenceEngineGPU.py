@@ -108,6 +108,7 @@ class HestonOption_test(unittest.TestCase):
                                                    nspots=self.F.grid.shape[0],
                                                    nvols=self.F.grid.shape[1])
         self.FG.make_operator_templates()
+        self.FG.set_zero_derivative()
         self.FG.scale_and_combine_operators()
 
 
@@ -208,6 +209,7 @@ class HestonOptionConstruction_test(unittest.TestCase):
                                          # force_exact=False)
         self.F.init()
         self.FGG = FDG.HestonFiniteDifferenceEngine(option, nspots=self.F.grid.shape[0], nvols=self.F.grid.shape[1])
+        self.FGG.set_zero_derivative()
         self.FGG.make_operator_templates()
 
 

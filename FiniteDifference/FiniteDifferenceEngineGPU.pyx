@@ -226,7 +226,7 @@ cdef class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
     cpdef preprocess_operators(self, SizedArrayPtr dt, SizedArrayPtr theta):
 
         if self.zero_derivative_coefficient.p == NULL:
-            self.set_zero_derivative(dt)
+            self.set_zero_derivative()
 
         self.scale_and_combine_operators()
 
@@ -260,8 +260,8 @@ cdef class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
         coeffs = self.coefficients
         on_gpu = type(coeffs) == list
 
-        self.zero_derivative_coefficient = SizedArrayPtr(
-            self.zero_derivative_coefficient_host)
+        # self.zero_derivative_coefficient = SizedArrayPtr(
+            # self.zero_derivative_coefficient_host)
 
         for d, op in sorted(operators.items()):
             op = op.copy()
@@ -401,7 +401,7 @@ cdef class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
         return Firsts, Les, Lis, Orig.to_numpy(), Y.to_numpy(), V.to_numpy()
 
 
-    cpdef set_zero_derivative(self, SizedArrayPtr dt):
+    cpdef set_zero_derivative(self):
         if self.zero_derivative_coefficient_host is None:
             if () in self.coefficients:
                 try:
@@ -417,7 +417,6 @@ cdef class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
                 except AttributeError:
                     raise RuntimeError("Zero derivative coefficient has not been set.")
         self.zero_derivative_coefficient = SizedArrayPtr(self.zero_derivative_coefficient_host)
-        self.zero_derivative_coefficient.timeseq_scalar(dt, 0)
         print self.zero_derivative_coefficient.to_numpy()
 
 
@@ -435,13 +434,10 @@ cdef class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
         if callback or numpy:
             raise NotImplementedError("Callbacks and Numpy not available for GPU solver.")
 
-        self.scale_and_combine_operators()
+        theta = SizedArrayPtr(np.atleast_1d(1.0))
 
-        dt.timeseq_scalar_from_host(-1)
-        Lis = [(o * dt).add(1, inplace=True)
-               for d, o in sorted(self.operators.iteritems())
-               if type(d) != tuple]
-        dt.timeseq_scalar_from_host(-1)
+        f, l, Lis = self.preprocess_operators(dt, theta)
+        del f, l
 
         Lis = np.roll(Lis, -1)
 
@@ -544,8 +540,6 @@ cdef class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
 
 
     cpdef solve_hundsdorferverwer_(self, n, SizedArrayPtr dt, SizedArrayPtr V, SizedArrayPtr theta):
-
-        self.set_zero_derivative(dt)
 
         Firsts, Les, Lis = self.preprocess_operators(dt, theta)
 
@@ -721,6 +715,8 @@ cdef class HestonFiniteDifferenceEngine(FiniteDifferenceEngineADI):
         self.gpugrid = SizedArrayPtr(self.grid.domain[-1], "FDEGPU.grid")
         self.fill_gpugridmesh_from_grid()
         self.scaling_vec.alloc(self.gpugrid.size, self.scaling_vec.tag)
+        self.zero_derivative_coefficient_host = np.atleast_1d(
+                -self.option.interest_rate.value / self.grid.ndim)
 
 
     def make_operator_templates(self):
