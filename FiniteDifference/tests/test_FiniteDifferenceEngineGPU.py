@@ -43,9 +43,6 @@ class BlackScholesOption_test(unittest.TestCase):
         self.F.init()
         self.FG = FDG.FiniteDifferenceEngineADI()
         self.FG.from_host_FiniteDifferenceEngine(self.F)
-        self.FG.zero_derivative_coefficient_host = np.atleast_1d(
-            -self.FG.option.interest_rate.value / self.FG.grid.ndim)
-
 
 
     def test_implicit(self):
@@ -111,8 +108,7 @@ class HestonOption_test(unittest.TestCase):
                                                    nspots=self.F.grid.shape[0],
                                                    nvols=self.F.grid.shape[1])
         self.FG.make_operator_templates()
-        self.FG.zero_derivative_coefficient_host = np.atleast_1d(
-            -self.FG.option.interest_rate.value / self.FG.grid.ndim)
+        self.FG.scale_and_combine_operators()
 
 
     def test_implicit(self):
@@ -213,8 +209,6 @@ class HestonOptionConstruction_test(unittest.TestCase):
         self.F.init()
         self.FGG = FDG.HestonFiniteDifferenceEngine(option, nspots=self.F.grid.shape[0], nvols=self.F.grid.shape[1])
         self.FGG.make_operator_templates()
-        self.FGG.zero_derivative_coefficient_host = np.atleast_1d(
-            -self.FGG.option.interest_rate.value / self.FGG.grid.ndim)
 
 
     def test_scale_and_combine_FGG_0(self):
