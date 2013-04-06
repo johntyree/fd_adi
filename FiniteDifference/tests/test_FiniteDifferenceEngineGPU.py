@@ -212,16 +212,15 @@ class HestonOptionConstruction_test(unittest.TestCase):
 
 
     def test_scale_and_combine_FGG_0(self):
-        self.FGG.scale_and_combine_operators()
+        self.FGG.scale_and_combine_operators(self.FGG.simple_operators)
 
         ref = self.F.operators[0]
         tst = self.FGG.operators[0].immigrate()
 
-        ref.deltas = tst.deltas
-        npt.assert_array_almost_equal(tst.D.data, ref.D.data)
+        npt.assert_array_almost_equal(tst.D.data, ref.D.data, decimal=14)
         tst.D *= 0
         ref.D *= 0
-        npt.assert_array_almost_equal(tst.R, ref.R)
+        npt.assert_array_almost_equal(tst.R, ref.R, decimal=12)
         tst.R *= 0
         ref.R *= 0
         npt.assert_equal(tst, ref)
@@ -235,7 +234,7 @@ class HestonOptionConstruction_test(unittest.TestCase):
         tst = tst.immigrate()
 
         ref.deltas = tst.deltas
-        npt.assert_array_almost_equal(tst.D.data, ref.D.data)
+        npt.assert_array_almost_equal(tst.D.data, ref.D.data, decimal=14)
         tst.D *= 0
         ref.D *= 0
         npt.assert_equal(tst, ref)
@@ -246,7 +245,7 @@ class HestonOptionConstruction_test(unittest.TestCase):
         ref = self.F.operators[(0,1)]
         tst = self.FGG.operators[(0,1)].immigrate()
         ref.deltas = tst.deltas
-        npt.assert_array_almost_equal(tst.D.data, ref.D.data)
+        npt.assert_array_almost_equal(tst.D.data, ref.D.data, decimal=14)
         tst.D *= 0
         ref.D *= 0
         npt.assert_equal(tst, ref)
@@ -294,18 +293,13 @@ class HestonOptionConstruction_test(unittest.TestCase):
     def test_verify_simple_operators_11_FGG(self):
         ref = self.F.simple_operators[(1,1)].copy()
         tst = self.FGG.simple_operators[(1,1)].copy()
-        tst = tst.immigrate()
-        tst.deltas = ref.deltas
-        npt.assert_array_almost_equal(tst.D.data, ref.D.data, decimal=12)
-        ref = self.F.simple_operators[(1,1)].copy()
-        tst = self.FGG.simple_operators[(1,1)].copy()
         ref.diagonalize(), tst.diagonalize()
         tst = tst.immigrate()
         tst.deltas = ref.deltas
         npt.assert_array_almost_equal(ref.bottom_factors, tst.bottom_factors)
         tst.bottom_factors *= 0
         ref.bottom_factors *= 0
-        npt.assert_array_almost_equal(tst.D.data, ref.D.data)
+        npt.assert_array_almost_equal(tst.D.data, ref.D.data, decimal=14)
         tst.D *= 0
         ref.D *= 0
         npt.assert_equal(tst, ref)
@@ -327,10 +321,9 @@ class HestonOptionConstruction_test(unittest.TestCase):
         tst = (snd + fst) + 0.5
         tst = tst.immigrate()
         tst.derivative = ref.derivative
-        npt.assert_array_almost_equal(ref.D.data, tst.D.data)
+        npt.assert_array_almost_equal(ref.D.data, tst.D.data, decimal=12)
         tst.D.data *= 0
         ref.D.data *= 0
-        ref.deltas = tst.deltas
         npt.assert_equal(tst, ref)
 
 
