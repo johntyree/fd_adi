@@ -582,16 +582,18 @@ cdef class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
                 # Combine scaled derivatives for this dimension
                 if dim not in self.operators:
                     self.operators[dim] = op
-                    # 0th derivative (r * V) is split evenly among each dimension
-                    #TODO: This function is ONLY dependent on time. NOT MESH
-                    if () in coeffs:
-                        self.operators[dim] += coeffs[()](self.t) / float(self.grid.ndim)
                 else:
                     if tuple(self.operators[dim].D.offsets) == tuple(op.D.offsets):
                         self.operators[dim] += op
                     else:
                         # print col, dim, combined_ops[dim].axis, self.simple_operators[dim].axis
                         self.operators[dim] = self.operators[dim] + op
+
+            if () in coeffs:
+                # 0th derivative (r * V) is split evenly among each dimension
+                for dim in [x for x in self.operators if np.isscalar(x)]:
+                    x = coeffs[()](self.t) / float(self.grid.ndim)
+                    self.operators[dim] += x
 
 
     def cross_term(self, V, numpy=True):
