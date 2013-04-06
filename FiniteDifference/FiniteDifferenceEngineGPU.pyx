@@ -294,17 +294,19 @@ cdef class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
                 # Combine scaled derivatives for this dimension
                 if dim not in self.operators:
                     self.operators[dim] = op
-                    # 0th derivative (r * V) is split evenly among each dimension
-                    if () in coeffs:
-                        if not on_gpu:
-                            self.operators[dim] += coeffs[()](self.t) / float(self.grid.ndim)
-                        elif (self.zero_derivative_coefficient.p == NULL):
-                            assert False, ("Zero derviative has not been set.")
-                        else:
-                            self.operators[dim].add_scalar(self.zero_derivative_coefficient, self.n)
                 else:
                     self.operators[dim] += op
-        return self.scaling_vec
+
+            if () in coeffs:
+                # 0th derivative (r * V) is split evenly among each dimension
+                for dim in [x for x in self.operators if np.isscalar(x)]:
+                    if not on_gpu:
+                        self.operators[dim].add_scalar_from_host(coeffs[()](self.t) / float(self.grid.ndim))
+                    elif (self.zero_derivative_coefficient.p == NULL):
+                        assert False, ("Zero derviative has not been set.")
+                    else:
+                        self.operators[dim].add_scalar(self.zero_derivative_coefficient, self.n)
+        return
 
 
     def cross_term(self, V, numpy=True):
