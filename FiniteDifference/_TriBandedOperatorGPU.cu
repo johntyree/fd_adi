@@ -68,9 +68,10 @@ struct first_deriv {
     /* (sup, mid, sub, deltas+1, deltas+2) */
     void operator()(Tuple t) {
         using thrust::get;
-        get<0>(t) = get<3>(t)                / (get<4>(t) * (get<3>(t) + get<4>(t)));
+        const double x = get<3>(t) + get<4>(t);
+        get<0>(t) = get<3>(t)                / (get<4>(t) * x);
         get<1>(t) = (-get<3>(t) + get<4>(t)) / (get<3>(t) * get<4>(t));
-        get<2>(t) = -get<4>(t)               / (get<3>(t) * (get<3>(t) + get<4>(t)));
+        get<2>(t) = -get<4>(t)               / (get<3>(t) * x);
     }
 };
 
@@ -82,11 +83,8 @@ struct second_deriv {
         using thrust::get;
         const double x = get<3>(t) + get<4>(t);
         get<0>(t) =  2. / (get<4>(t) * x);
-        get<1>(t) = -2. / (get<4>(t)*get<3>(t));
+        get<1>(t) = -2. / (get<4>(t) * get<3>(t));
         get<2>(t) =  2. / (get<3>(t) * x);
-        /* get<0>(t) =  2.; */
-        /* get<1>(t) = -2.; */
-        /* get<2>(t) =  2.; */
     }
 };
 
@@ -159,7 +157,7 @@ struct free_boundary_second_with_first_derivative_one {
         get<0>(t) =  2 / x;
         get<1>(t) = -2 / x;
         get<2>(t) = 0;
-        get<4>(t) = -fst_deriv*2 / get<3>(t);
+        get<4>(t) = ((-fst_deriv)*2) / get<3>(t);
     }
     /* Bdata[m-1, 1] =  2 / d[1]**2 */
     /* Bdata[m,   0] = -2 / d[1]**2 */

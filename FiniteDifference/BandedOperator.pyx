@@ -443,9 +443,10 @@ cdef class BandedOperator(object):
                 # print "%s %s Assuming first derivative is %s for second." % (B.axis, B.derivative, lower_val,)
                 fst_deriv = lower_val
                 assert m-1 >= 0, "First derivative tried to reach diag %s" % (m-1)
-                Bdata[m-1, 1] =  2 / d[1]**2
-                Bdata[m,   0] = -2 / d[1]**2
-                R[0]         =  -fst_deriv * 2 / d[1]
+                x = d[1] * d[1]
+                Bdata[m-1, 1] =  2 / x
+                Bdata[m,   0] = -2 / x
+                R[0]          =  -fst_deriv * 2 / d[1]
             # Otherwise just compute it with forward differencing
             else:
                 # print "%s %s Computing second derivative directly." % (B.axis, B.derivative,)
@@ -485,10 +486,11 @@ cdef class BandedOperator(object):
             # assuming the first stays constant.
             if upper_val is not None:
                 fst_deriv = upper_val
+                x = d[-1] * d[-1]
                 assert m+1 < B.D.data.shape[0], "Second Derivative tried to reach diag %s" % (m+1)
-                Bdata[m,   -1] = -2 / d[-1]**2
-                Bdata[m+1, -2] =  2 / d[-1]**2
-                R[-1]          =  fst_deriv * 2 / d[-1]
+                Bdata[m,   -1] = -2 / x
+                Bdata[m+1, -2] =  2 / x
+                R[-1]          =  (fst_deriv * 2) / d[-1]
             # Otherwise just compute it with backward differencing
             else:
                 assert m+2 < B.D.data.shape[0], "Second Derivative tried to reach diag %s" % (m-2)
@@ -967,9 +969,10 @@ cpdef centercoeffs(deltas, derivative=1, order=2, force_bandwidth=None):
         assert m-1 >= 0
         assert m+1 < data.shape[0]
         for i in range(1,len(d)-1):
-            data[m-1,i+1] =            d[i]  / (d[i+1]*(d[i]+d[i+1]))
-            data[m  ,i  ] = (-d[i] + d[i+1]) /         (d[i]*d[i+1])
-            data[m+1,i-1] =         -d[i+1]  / (d[i  ]*(d[i]+d[i+1]))
+            x = d[i] + d[i+1]
+            data[m-1,i+1] =            d[i]  / (d[i+1]*x)
+            data[m  ,i  ] = (-d[i] + d[i+1]) / (d[i  ]*d[i+1])
+            data[m+1,i-1] =         -d[i+1]  / (d[i  ]*x)
     elif derivative == 2:
         if force_bandwidth is not None:
             l, u = [int(o) for o in force_bandwidth]
@@ -984,9 +987,10 @@ cpdef centercoeffs(deltas, derivative=1, order=2, force_bandwidth=None):
         m = offsets.index(0)
         # Inner rows
         for i in range(1,len(d)-1):
-            data[m-1,i+1] =  2 / (d[i+1]*(d[i]+d[i+1]))
-            data[m  ,i  ] = -2 /       (d[i]*d[i+1])
-            data[m+1,i-1] =  2 / (d[i  ]*(d[i]+d[i+1]))
+            x = d[i] + d[i+1]
+            data[m-1,i+1] =  2 / (d[i+1]*x)
+            data[m  ,i  ] = -2 / (d[i  ]*d[i+1])
+            data[m+1,i-1] =  2 / (d[i  ]*x)
     else:
         raise NotImplementedError("Derivative must be 1 or 2")
 
@@ -1015,9 +1019,10 @@ cpdef backwardcoeffs(deltas, derivative=1, order=2, force_bandwidth=None):
             data[m+1, i-1] = (-d[i-1] - d[i]) / (d[i-1]*d[i]);
             data[m+2, i-2] = d[i]             / (d[i-1]*(d[i-1]+d[i]));
         # Use centered approximation for the first (inner) row.
-        data[m-1,2] =          d[1]  / (d[2]*(d[1]+d[2]))
-        data[m,  1] = (-d[1] + d[2]) /       (d[1]*d[2])
-        data[m+1,0] =         -d[2]  / (d[1]*(d[1]+d[2]))
+        x = d[1] + d[2]
+        data[m-1,2] =          d[1]  / (d[2]*x)
+        data[m,  1] = (-d[1] + d[2]) / (d[1]*d[2])
+        data[m+1,0] =         -d[2]  / (d[1]*x)
     elif derivative == 2:
         if force_bandwidth is not None:
             l, u = [int(o) for o in force_bandwidth]
