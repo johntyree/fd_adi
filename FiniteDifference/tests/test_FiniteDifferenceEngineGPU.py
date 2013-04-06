@@ -114,7 +114,7 @@ class HestonOption_test(unittest.TestCase):
 
     def test_implicit(self):
         t, dt = self.F.option.tenor, self.dt
-        dt = 1/600.0
+        dt = 1/350.0
         for d, o in self.F.operators.items():
             if type(d) != tuple:
                 assert o.is_tridiagonal(), "%s, %s" % (d, o.D.offsets)
@@ -124,17 +124,17 @@ class HestonOption_test(unittest.TestCase):
         op = self.F.operators[(0,1)]
         opG = self.FG.operators[(0,1)].immigrate()
 
-        dom = np.arange(self.F.grid.size, dtype=float)
+        dom = np.random.random(self.F.grid.size)
         dom = dom.reshape(self.F.grid.shape)
         ref = op.apply(dom)
         tst = self.FG.operators[(0,1)].apply(dom)
-        npt.assert_array_almost_equal(tst, ref, decimal=10)
+        npt.assert_array_almost_equal(tst, ref, decimal=12)
 
         ans = self.F.option.analytical
         npt.assert_array_almost_equal(op.D.data, opG.D.data)
         # print "Spot:", self.F.option.spot
         # print "Price:", V2, V, ans, V - ans
-        npt.assert_allclose(V, V2)
+        npt.assert_array_almost_equal(V, V2, decimal=6)
         npt.assert_allclose(V, ans, rtol=0.001)
 
 
