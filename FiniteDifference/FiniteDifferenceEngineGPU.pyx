@@ -593,7 +593,11 @@ cdef class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
         if scheme:
             raise NotImplementedError("Changing smoothing schemes not supported on GPU.")
         n = int(n)
-        cdef SizedArrayPtr V = SizedArrayPtr(initial)
+        cdef SizedArrayPtr V
+        if initial is not None:
+            V = SizedArrayPtr(initial)
+        else:
+            V = self.gpugrid
         cdef SizedArrayPtr dt_ = SizedArrayPtr(np.atleast_1d(dt))
         self.solve_smooth_(n, dt_, V, smoothing_steps)
         ret = V.to_numpy()
