@@ -626,12 +626,17 @@ void _TriBandedOperator::add_operator(_TriBandedOperator &other) {
         }
     }
 
-    thrust::transform(
-            R.data,
-            R.data + R.size,
-            other.R.data,
-            R.data,
-            thrust::plus<double>());
+    if (has_residual && other.has_residual) {
+        thrust::transform(
+                R.data,
+                R.data + R.size,
+                other.R.data,
+                R.data,
+                thrust::plus<double>());
+    } else if (other.has_residual) {
+        R = SizedArray<double>(other.R);
+        has_residual = true;
+    }
     FULLTRACE;
 }
 
