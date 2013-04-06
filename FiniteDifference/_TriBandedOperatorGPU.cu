@@ -339,6 +339,7 @@ int var_second(Dptr &sup, Dptr &mid, Dptr &sub, T deltas,
 _TriBandedOperator::_TriBandedOperator(
         SizedArray<double> &data,
         SizedArray<double> &R,
+        SizedArray<double> &deltas,
         SizedArray<double> &high_dirichlet,
         SizedArray<double> &low_dirichlet,
         SizedArray<double> &top_factors,
@@ -354,6 +355,7 @@ _TriBandedOperator::_TriBandedOperator(
         ) :
     diags(data, true),
     R(R, true),
+    deltas(deltas, true),
     high_dirichlet(high_dirichlet, true),
     low_dirichlet(low_dirichlet, true),
     top_factors(top_factors, true),
@@ -1126,8 +1128,9 @@ _TriBandedOperator *for_vector(SizedArray<double> &V, Py_ssize_t blocks,
     std::string bottom_fold_status = axis == 1 && derivative == 2 ? "CAN_FOLD" : "CANNOT_FOLD";
     bool has_residual = axis == 0;
 
-    return new _TriBandedOperator(
-            data, R, high_dirichlet, low_dirichlet, top_factors, bottom_factors,
+    _TriBandedOperator * ret =  new _TriBandedOperator(
+            data, R, deltas, high_dirichlet, low_dirichlet, top_factors, bottom_factors,
             axis, operator_rows, blocks, has_high_dirichlet, has_low_dirichlet,
             top_fold_status, bottom_fold_status, has_residual);
+    return ret;
 }

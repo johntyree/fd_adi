@@ -24,6 +24,7 @@ class _TriBandedOperator {
     public:
         SizedArray<double> diags;
         SizedArray<double> R;
+        SizedArray<double> deltas;
         SizedArray<double> high_dirichlet;
         SizedArray<double> low_dirichlet;
         SizedArray<double> top_factors;
@@ -57,6 +58,7 @@ class _TriBandedOperator {
         _TriBandedOperator(
             SizedArray<double> &data,
             SizedArray<double> &R,
+            SizedArray<double> &deltas,
             SizedArray<double> &high_dirichlet,
             SizedArray<double> &low_dirichlet,
             SizedArray<double> &top_factors,

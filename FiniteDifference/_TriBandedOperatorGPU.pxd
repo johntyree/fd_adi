@@ -36,6 +36,7 @@ cdef extern from "_TriBandedOperatorGPU.cuh":
         SizedArray[double] low_dirichlet,
         SizedArray[double] diags
         SizedArray[double] R
+        SizedArray[double] deltas
         cbool has_high_dirichlet,
         cbool has_low_dirichlet,
 
@@ -43,6 +44,7 @@ cdef extern from "_TriBandedOperatorGPU.cuh":
         _TriBandedOperator(
             SizedArray[double] data,
             SizedArray[double] R,
+            SizedArray[double] deltas,
             SizedArray[double] high_dirichlet,
             SizedArray[double] low_dirichlet,
             SizedArray[double] top_factors,

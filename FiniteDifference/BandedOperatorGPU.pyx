@@ -122,6 +122,7 @@ cdef class BandedOperator(object):
             B.thisptr_tri = new _TriBandedOperator(
                       self.thisptr_tri.diags
                     , self.thisptr_tri.R
+                    , self.thisptr_tri.deltas
                     , self.thisptr_tri.high_dirichlet
                     , self.thisptr_tri.low_dirichlet
                     , self.thisptr_tri.top_factors
@@ -223,6 +224,7 @@ cdef class BandedOperator(object):
         cdef:
             SizedArrayPtr diags = SizedArrayPtr(other.D.data, "data")
             SizedArrayPtr R = SizedArrayPtr(other.R, "R")
+            SizedArrayPtr deltas = SizedArrayPtr(other.deltas, "deltas")
             SizedArrayPtr low_dirichlet = SizedArrayPtr(np.atleast_1d(other.dirichlet[0] or [0.0]), "low_dirichlet")
             SizedArrayPtr high_dirichlet = SizedArrayPtr(np.atleast_1d(other.dirichlet[1] or [0.0]), "high_dirichlet")
             SizedArrayPtr top_factors = SizedArrayPtr(tops, "top_factors")
@@ -231,6 +233,7 @@ cdef class BandedOperator(object):
         self.thisptr_tri = new _TriBandedOperator(
                   deref(diags.p)
                 , deref(R.p)
+                , deref(deltas.p)
                 , deref(high_dirichlet.p)
                 , deref(low_dirichlet.p)
                 , deref(top_factors.p)
@@ -245,7 +248,7 @@ cdef class BandedOperator(object):
                 , other.R is not None
                 )
 
-        del diags, R, high_dirichlet, low_dirichlet, top_factors, bottom_factors
+        del diags, R, deltas, high_dirichlet, low_dirichlet, top_factors, bottom_factors
 
         if diad:
             self.undiagonalize()
@@ -286,8 +289,10 @@ cdef class BandedOperator(object):
         else:
             R = np.zeros(self.thisptr_tri.operator_rows)
 
+        deltas = from_SizedArray(self.thisptr_tri.deltas)
+
         B = BO((data, offsets), residual=R, inplace=False,
-            deltas=self.deltas,
+            deltas=deltas,
             derivative=self.derivative,
             order=self.order,
             axis=self.axis)
