@@ -150,7 +150,14 @@ def run(opt):
         e.grid.domain[-1] = e.gpugrid.to_numpy()
     except AttributeError:
         pass
-    print e.grid.domain[-1][s,v]
+    print e.grid.domain[-1][s,v],
+    try:
+        print e.option.analytical,
+    except NotImplementedError:
+        pass
+    except AttributeError:
+        pass
+    print
 
 def main():
     opt = read_args()
