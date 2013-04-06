@@ -11,13 +11,16 @@ import time
 import numpy as np
 import argparse
 
+import cPickle
+
 import convergence as cv
 import FiniteDifference as FD
 # from FiniteDifference.FiniteDifferenceEngineGPU import FiniteDifferenceEngineADI as FDEGPU
 from FiniteDifference.FiniteDifferenceEngineGPU import HestonFiniteDifferenceEngine as FDEGPU
 import FiniteDifference.visualize as vis
 # figure_dir = "/home/john/Filing_Cabinet/thesis/thesis_cudafd/tex/figures/archive"
-figure_dir = "/scratch/tyree/cudafd/src/fd_pricer/py_adi/data_convergence/figures"
+data_dir = os.path.expanduser("~/cudafd/src/fd_pricer/py_adi/data_convergence/")
+figure_dir = os.path.join(data_dir, "figures")
 
 
 fname = "temp"
@@ -142,8 +145,8 @@ def new_engine(opt):
 def run(opt):
     e = new_engine(opt)
     e.solve_smooth(opt.nt, opt.tenor / opt.nt)
-    s = np.searchsorted(np.round(e.grid.mesh[0], decimals=4), e.option.spot)
-    v = np.searchsorted(np.round(e.grid.mesh[1], decimals=4), e.option.variance.value)
+    s = np.searchsorted(np.round(e.grid.mesh[0], decimals=6), e.option.spot)
+    v = np.searchsorted(np.round(e.grid.mesh[1], decimals=6), e.option.variance.value)
     wanted, found = (opt.spot, opt.variance), (e.grid.mesh[0][s], e.grid.mesh[1][v])
     np.testing.assert_almost_equal(wanted, found,
                                    decimal=10,
@@ -162,17 +165,49 @@ def run(opt):
     print
     return e
 
+def filestring(opt, e):
+    moneyness = opt.spot / opt.strike
+    ir = opt.interest_rate
+    var = opt.variance
+    volofvar = opt.vol_of_var
+    corr = opt.correlation
+    rev = opt.mean_reversion
+    tenor = opt.tenor
+    nspot, nvols = opt.nx
+    idxs, idxv = e.idx
+    ntime = opt.nt
+    gpu = "gpu" if opt.gpu == engineGPU else "cpu"
+    fn = os.path.join(data_dir, "_".join(map(str, [
+        gpu,
+        "moneyness", moneyness,
+        "tenor", tenor,
+        "ir", ir,
+        "var", var,
+        "volofvar", volofvar,
+        "corr", corr,
+        "rev", rev,
+        "nspot", nspot,
+        "nvols", nvols,
+        "idxs", idxs,
+        "idxv", idxv,
+        "ntime", ntime
+    ])))
+    fn += ".txt"
+    return fn
+
 def main():
     opt = read_args()
     print repr(opt)
     if opt.cpu:
         opt.engine = opt.cpu
         res = run(opt)
-        print res
+        with open(filestring(opt, res), 'w') as fn:
+            cPickle.dump([res.grid.mesh, res.grid.domain[-1]], fn, -1)
     if opt.gpu:
         opt.engine = opt.gpu
         res = run(opt)
-        print res
+        with open(filestring(opt, res), 'w') as fn:
+            cPickle.dump([res.grid.mesh, res.grid.domain[-1]], fn, -1)
 
 def oldmain():
     opt = read_args()
