@@ -56,6 +56,7 @@ cdef class FiniteDifferenceEngine(object):
         cache
         schemes
         SizedArrayPtr zero_derivative_coefficient
+        np.ndarray zero_derivative_coefficient_host
         SizedArrayPtr gpugridmesh0
         SizedArrayPtr gpugridmesh1
         SizedArrayPtr gpugrid
@@ -232,6 +233,9 @@ cdef class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
         self.operators = {}
         coeffs = self.coefficients
         on_gpu = type(coeffs) == list
+
+        self.zero_derivative_coefficient = SizedArrayPtr(
+            self.zero_derivative_coefficient_host)
 
         for d, op in sorted(operators.items()):
             op = op.copy()
@@ -499,12 +503,6 @@ cdef class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
 
         withdt = {k: (o * gpu_dt) for k,o in self.operators.iteritems()}
 
-        # Don't touch this if it doesn't exist
-        if self.zero_derivative_coefficient.p != NULL:
-            for d, o in withdt.iteritems():
-                if np.isscalar(d):
-                    o.add_scalar(self.zero_derivative_coefficient, self.n)
-
         Firsts = withdt.values()
 
         Les = [(o * gpu_theta)
@@ -708,9 +706,8 @@ cdef class HestonFiniteDifferenceEngine(FiniteDifferenceEngineADI):
     def make_operator_templates(self):
         m0 = self.grid.mesh[0]
         m1 = self.grid.mesh[1]
-        self.zero_derivative_coefficient = SizedArrayPtr(
-            np.array(-self.option.interest_rate.value / self.grid.ndim)
-        )
+        self.zero_derivative_coefficient_host = np.atleast_1d(
+            -self.option.interest_rate.value / self.grid.ndim)
 
         self.simple_operators[(0,)] = BOG.for_vector(m0, m1.size, 1, 0)
         self.simple_operators[(0,)].has_low_dirichlet = True
