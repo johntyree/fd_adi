@@ -500,10 +500,10 @@ cdef class BandedOperator(object):
 
         See FiniteDifferenceEngine.coefficients.
         """
-        if self.thisptr_tri:
-            self.thisptr_tri.vectorized_scale(deref(vector.p))
-        elif self.thisptr_csr:
+        if self.is_mixed_derivative:
             self.thisptr_csr.vectorized_scale(deref(vector.p))
+        else:
+            self.thisptr_tri.vectorized_scale(deref(vector.p))
 
 
     cpdef vectorized_scale_from_host(self, np.ndarray vector):
