@@ -417,7 +417,6 @@ cdef class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
                 except AttributeError:
                     raise RuntimeError("Zero derivative coefficient has not been set.")
         self.zero_derivative_coefficient = SizedArrayPtr(self.zero_derivative_coefficient_host)
-        print self.zero_derivative_coefficient.to_numpy()
 
 
     def solve_implicit(self, n, dt, np.ndarray initial):
