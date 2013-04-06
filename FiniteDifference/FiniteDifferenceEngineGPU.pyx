@@ -223,7 +223,32 @@ cdef class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
         return ret
 
 
-    def scale_and_combine_operators(self, operators=None):
+    cpdef preprocess_operators(self, SizedArrayPtr gpu_dt, SizedArrayPtr gpu_theta):
+
+        if self.zero_derivative_coefficient.p == NULL:
+            self.set_zero_derivative(gpu_dt)
+        self.scale_and_combine_operators()
+
+        withdt = {k: (o * gpu_dt) for k,o in self.operators.iteritems()}
+
+        Firsts = withdt.values()
+
+        Les = [(o * gpu_theta)
+            for d, o in sorted(withdt.iteritems())
+            if type(d) != tuple]
+        Lis = [(o * -gpu_theta).add(1, inplace=True)
+            for d, o in sorted(withdt.iteritems())
+            if type(d) != tuple]
+
+        del withdt
+
+        for L in itertools.chain(Les, Lis):
+            L.enable_residual(False)
+
+        return Firsts, Les, Lis
+
+
+    cpdef scale_and_combine_operators(self, operators=None):
         if operators is None:
             try:
                 self.make_operator_templates()
@@ -377,6 +402,26 @@ cdef class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
         return Firsts, Les, Lis, Orig.to_numpy(), Y.to_numpy(), V.to_numpy()
 
 
+    cpdef set_zero_derivative(self, SizedArrayPtr dt):
+        if self.zero_derivative_coefficient_host is None:
+            if () in self.coefficients:
+                try:
+                    self.zero_derivative_coefficient_host = np.atleast_1d(
+                        self.coefficients[()](self.t) / float(self.grid.ndim))
+                except TypeError:
+                    raise RuntimeError("Zero derivative coefficient has not been set.")
+            else:
+                try:
+                    self.zero_derivative_coefficient_host = np.atleast_1d(
+                        -self.option.interest_rate.value / self.grid.ndim)
+                    print "Zero Derivative not set. Taking (-r / ndim)."
+                except AttributeError:
+                    raise RuntimeError("Zero derivative coefficient has not been set.")
+        self.zero_derivative_coefficient = SizedArrayPtr(self.zero_derivative_coefficient_host)
+        self.zero_derivative_coefficient.timeseq_scalar(dt, 0)
+        print self.zero_derivative_coefficient.to_numpy()
+
+
     def solve_implicit(self, n, dt, np.ndarray initial):
         n = int(n)
         cdef SizedArrayPtr V = SizedArrayPtr(initial)
@@ -499,35 +544,9 @@ cdef class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
         return ret
 
 
-    cpdef preprocess_operators(self, SizedArrayPtr gpu_dt, SizedArrayPtr gpu_theta):
-
-        self.scale_and_combine_operators()
-
-        withdt = {k: (o * gpu_dt) for k,o in self.operators.iteritems()}
-
-        Firsts = withdt.values()
-
-        Les = [(o * gpu_theta)
-            for d, o in sorted(withdt.iteritems())
-            if type(d) != tuple]
-        Lis = [(o * -gpu_theta).add(1, inplace=True)
-            for d, o in sorted(withdt.iteritems())
-            if type(d) != tuple]
-
-        del withdt
-
-        for L in itertools.chain(Les, Lis):
-            L.enable_residual(False)
-
-        return Firsts, Les, Lis
-
-
     cpdef solve_hundsdorferverwer_(self, n, SizedArrayPtr dt, SizedArrayPtr V, SizedArrayPtr theta):
 
-        # Don't touch this if it doesn't exist
-        if self.zero_derivative_coefficient.p != NULL:
-            self.zero_derivative_coefficient.timeseq(dt)
-
+        self.set_zero_derivative(dt)
 
         Firsts, Les, Lis = self.preprocess_operators(dt, theta)
 
