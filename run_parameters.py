@@ -9,6 +9,9 @@ import os
 import itertools as it
 import subprocess
 
+from price_one_option import data_dir
+
+os.chdir(os.path.join(data_dir, '..'))
 
 moneyness = [0.93, 1, 1.06]
 ir = [0.01, 0.1]
