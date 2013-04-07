@@ -114,7 +114,7 @@ class HestonOption_test(unittest.TestCase):
 
     def test_implicit(self):
         t, dt = self.F.option.tenor, self.dt
-        dt = 1/350.0
+        dt = 1/450.0
         for d, o in self.F.operators.items():
             if type(d) != tuple:
                 assert o.is_tridiagonal(), "%s, %s" % (d, o.D.offsets)
