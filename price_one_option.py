@@ -19,7 +19,7 @@ import FiniteDifference as FD
 from FiniteDifference.FiniteDifferenceEngineGPU import HestonFiniteDifferenceEngine as FDEGPU
 import FiniteDifference.visualize as vis
 # figure_dir = "/home/john/Filing_Cabinet/thesis/thesis_cudafd/tex/figures/archive"
-data_dir = "/scratch/tyree/cudafd/src/fd_pricer/py_adi/data_convergence/"
+data_dir = os.path.expanduser("~/cudafd/src/fd_pricer/py_adi/data_convergence/")
 figure_dir = os.path.join(data_dir, "figures")
 
 
