@@ -5,9 +5,10 @@ onmodify () {
     shift
     remove_ids
     build && run "${@}";
-    while inotifywait -qq -r -e close_write,moved_to,move_self $TARGET; do
-        sleep 0.5;
+    while inotifywait -qq -r --exclude .* -e close_write,moved_to,move_self $TARGET; do
+        sleep 1.0;
         build && run "${@}";
+        sleep 0.5;
     done
 }
 
