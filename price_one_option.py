@@ -144,7 +144,12 @@ def new_engine(opt):
 
 def run(opt):
     e = new_engine(opt)
-    e.solve_smooth(opt.nt, opt.tenor / opt.nt)
+    switch = {'i' : e.solve_implicit,
+     'd' : e.solve_douglas,
+     'hv': e.solve_hundsdorferverwer,
+     's' : e.solve_smooth
+    }
+    switch[opt.scheme](opt.nt, opt.tenor / opt.nt)
     s = np.searchsorted(np.round(e.grid.mesh[0], decimals=6), e.option.spot)
     v = np.searchsorted(np.round(e.grid.mesh[1], decimals=6), e.option.variance.value)
     wanted, found = (opt.spot, opt.variance), (e.grid.mesh[0][s], e.grid.mesh[1][v])
