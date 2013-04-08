@@ -18,7 +18,7 @@ os.chdir(os.path.join(data_dir, '..'))
 moneyness = [0.93, 1, 1.06]
 ir = [0.01, 0.1]
 
-vol = [0.05, 0.5]
+vol = [0.015, 0.35]
 volvol = [0.001, 0.4]
 
 corr = [-0.5, 0, 0.3]

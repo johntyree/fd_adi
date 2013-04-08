@@ -90,8 +90,8 @@ def read_args():
     parser.add_argument('-nx', required=True, metavar='int', help='nspots/vols', nargs=2, type=int)
     parser.add_argument('-nt', required=True, metavar='int', help='timesteps', type=int)
     parser.add_argument('-v', action='count', dest='verbose')
-    parser.add_argument('--gpu', action='store_const', default=False, const=engineGPU)
-    parser.add_argument('--cpu', action='store_const', default=False, const=engineCPU)
+    parser.add_argument('--gpu', action='store_const', default=None, const=engineGPU)
+    parser.add_argument('--cpu', action='store_const', default=None, const=engineCPU)
     opt = parser.parse_args()
     if opt.mean_variance == -1:
         opt.mean_variance = opt.variance
@@ -144,7 +144,12 @@ def new_engine(opt):
 
 def run(opt):
     e = new_engine(opt)
-    e.solve_smooth(opt.nt, opt.tenor / opt.nt)
+    switch = {'i' : e.solve_implicit,
+     'd' : e.solve_douglas,
+     'hv': e.solve_hundsdorferverwer,
+     's' : e.solve_smooth
+    }
+    switch[opt.scheme](opt.nt, opt.tenor / opt.nt)
     s = np.searchsorted(np.round(e.grid.mesh[0], decimals=6), e.option.spot)
     v = np.searchsorted(np.round(e.grid.mesh[1], decimals=6), e.option.variance.value)
     wanted, found = (opt.spot, opt.variance), (e.grid.mesh[0][s], e.grid.mesh[1][v])

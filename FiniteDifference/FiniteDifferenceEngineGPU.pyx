@@ -419,9 +419,13 @@ cdef class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
         self.zero_derivative_coefficient = SizedArrayPtr(self.zero_derivative_coefficient_host)
 
 
-    def solve_implicit(self, n, dt, np.ndarray initial):
+    def solve_implicit(self, n, dt, initial=None):
         n = int(n)
-        cdef SizedArrayPtr V = SizedArrayPtr(initial)
+        cdef SizedArrayPtr V
+        if initial is not None:
+            V = SizedArrayPtr(initial)
+        else:
+            V = self.gpugrid
         cdef SizedArrayPtr dt_ = SizedArrayPtr(np.atleast_1d(dt))
         self.solve_implicit_(n, dt_, V)
         ret = V.to_numpy()
@@ -467,11 +471,15 @@ cdef class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
         utils.toc(':  \t')
 
 
-    def solve_douglas(self, n, dt, np.ndarray initial, theta=0.5, callback=None, numpy=False):
+    def solve_douglas(self, n, dt, initial=None, theta=0.5, callback=None, numpy=False):
         if callback or numpy:
             raise NotImplementedError("Callbacks and Numpy not available for GPU solver.")
         n = int(n)
-        cdef SizedArrayPtr V = SizedArrayPtr(initial)
+        cdef SizedArrayPtr V
+        if initial is not None:
+            V = SizedArrayPtr(initial)
+        else:
+            V = self.gpugrid
         self.solve_douglas_(n, dt, V, theta)
         ret = V.to_numpy()
         del V
@@ -529,7 +537,11 @@ cdef class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
         if callback or numpy:
             raise NotImplementedError("Callbacks and Numpy not available for GPU solver.")
         n = int(n)
-        cdef SizedArrayPtr V = SizedArrayPtr(initial)
+        cdef SizedArrayPtr V
+        if initial is not None:
+            V = SizedArrayPtr(initial)
+        else:
+            V = self.gpugrid
         cdef SizedArrayPtr dt_ = SizedArrayPtr(np.atleast_1d(dt))
         cdef SizedArrayPtr theta_ = SizedArrayPtr(np.atleast_1d(theta))
         self.solve_hundsdorferverwer_(n, dt_, V, theta_)

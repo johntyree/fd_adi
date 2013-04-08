@@ -630,8 +630,9 @@ cdef class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
 
         Lis = np.roll(Lis, -1)
 
+        crossop = None
         if (0,1) in self.operators:
-            self.operators[(0,1)] *= dt
+            crossop = self.operators[(0,1)].copy() * dt
 
         print_step = max(1, int(n / 10))
         to_percent = 100.0 / n
@@ -645,8 +646,8 @@ cdef class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
                 sys.stdout.flush()
             if callback is not None:
                 callback(V, ((n - k) * dt))
-            if (0,1) in self.operators:
-                V += self.operators[(0,1)].apply(V)
+            if crossop:
+                V += crossop.apply(V)
             for L in Lis:
                 V = L.solve(V)
         utils.toc(':  \t')
