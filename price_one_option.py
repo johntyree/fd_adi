@@ -73,7 +73,7 @@ def rundx(option, engine, dt, min_i, max_i, scheme):
 
 def read_args():
     parser = argparse.ArgumentParser(description="Run a convergence test")
-    parser.add_argument('--scheme', help='scheme', choices="i,d,hv,s".split(','))
+    parser.add_argument('--scheme', help='scheme', default='hv', choices="i,d,hv,s".split(','))
     parser.add_argument('-s','--spot', metavar='FLOAT', type=float, default=100.0)
     parser.add_argument('-k', '--strike', metavar='FLOAT', help='strike', type=float, default=99.0)
     parser.add_argument('-t', '--tenor', metavar='FLOAT', help='tenor', type=float, default=1.0)
