@@ -195,7 +195,7 @@ struct free_boundary_second {
 
 template <typename T>
 int spot_first(Dptr &sup, Dptr &mid, Dptr &sub, T deltas,
-        Dptr &low_dirichlet, Dptr &residual, int sz, int blksz) {
+        Dptr &low_dirichlet, Dptr &high_dirichlet, Dptr &residual, int sz, int blksz, bool barrier) {
     thrust::for_each(
             thrust::make_zip_iterator(thrust::make_tuple(sup+1, mid+1, sub+1, deltas+1, deltas+2)),
             thrust::make_zip_iterator(thrust::make_tuple(sup+sz-1, mid+sz-1, sub+sz-1, deltas+sz-1, deltas+sz)),
@@ -213,6 +213,7 @@ int spot_first(Dptr &sup, Dptr &mid, Dptr &sub, T deltas,
     strided_range<DptrIterator> botmid(mid+blksz-1, mid+sz, blksz);
     strided_range<DptrIterator> botsub(sub+blksz-1, sub+sz, blksz);
     strided_range<DptrIterator> botresidual(residual+blksz-1, residual+sz, blksz);
+    if (!barrier) {
     thrust::for_each(
             thrust::make_zip_iterator(thrust::make_tuple(botsup.begin(),
                     botmid.begin(), botsub.begin(), botresidual.begin())),
@@ -220,12 +221,20 @@ int spot_first(Dptr &sup, Dptr &mid, Dptr &sub, T deltas,
                     botmid.end(), botsub.end(), botresidual.end())),
             von_neumann_boundary(1)
             );
+    } else {
+        thrust::for_each(
+                thrust::make_zip_iterator(thrust::make_tuple(botsup.begin(), botmid.begin(), botsub.begin(), high_dirichlet)),
+                thrust::make_zip_iterator(thrust::make_tuple(botsup.end(), botmid.end(), botsub.end(), high_dirichlet+1)),
+                dirichlet_boundary(0)
+                );
+    }
     return 0;
 }
 
 template <typename T>
 int spot_second(Dptr &sup, Dptr &mid, Dptr &sub, T deltas,
-        Dptr &low_dirichlet, Dptr &residual, int sz, int blksz) {
+        Dptr &low_dirichlet, Dptr &high_dirichlet, Dptr &residual, int sz,
+        int blksz, bool barrier) {
     thrust::for_each(
             thrust::make_zip_iterator(thrust::make_tuple(sup+1, mid+1, sub+1, deltas+1, deltas+2)),
             thrust::make_zip_iterator(thrust::make_tuple(sup+sz-1, mid+sz-1, sub+sz-1, deltas+sz-1, deltas+sz)),
@@ -247,15 +256,23 @@ int spot_second(Dptr &sup, Dptr &mid, Dptr &sub, T deltas,
             make_transform_iterator(deltas+sz, thrust::negate<double>()),
             blksz);
     strided_range<DptrIterator> botresidual(residual+blksz-1, residual+sz, blksz);
-    thrust::for_each(
-            thrust::make_zip_iterator(thrust::make_tuple(
-                    botsub.begin(), botmid.begin(), botsup.begin(),
-                    botdel.begin(), botresidual.begin())),
-            thrust::make_zip_iterator(thrust::make_tuple(
-                    botsub.end(), botmid.end(), botsup.end(),
-                    botdel.end(), botresidual.end())),
-            free_boundary_second_with_first_derivative_one()
-            );
+    if (!barrier) {
+        thrust::for_each(
+                thrust::make_zip_iterator(thrust::make_tuple(
+                        botsub.begin(), botmid.begin(), botsup.begin(),
+                        botdel.begin(), botresidual.begin())),
+                thrust::make_zip_iterator(thrust::make_tuple(
+                        botsub.end(), botmid.end(), botsup.end(),
+                        botdel.end(), botresidual.end())),
+                free_boundary_second_with_first_derivative_one()
+                );
+    } else {
+        thrust::for_each(
+                thrust::make_zip_iterator(thrust::make_tuple(botsup.begin(), botmid.begin(), botsub.begin(), high_dirichlet)),
+                thrust::make_zip_iterator(thrust::make_tuple(botsup.end(), botmid.end(), botsub.end(), high_dirichlet+1)),
+                dirichlet_boundary(0)
+                );
+    }
     return 0;
 }
 
@@ -1077,7 +1094,7 @@ void _TriBandedOperator::vectorized_scale(SizedArray<double> &vector) {
 }
 
 _TriBandedOperator *for_vector(SizedArray<double> &V, Py_ssize_t blocks,
-        Py_ssize_t derivative, Py_ssize_t axis) {
+        Py_ssize_t derivative, Py_ssize_t axis, bool barrier) {
 
     int blksz = V.size;
     int operator_rows = blocks * blksz;
@@ -1108,7 +1125,8 @@ _TriBandedOperator *for_vector(SizedArray<double> &V, Py_ssize_t blocks,
     if (derivative == 1) {
         if (axis == 0) {
             spot_first(sup, mid, sub, delta_rep.begin(),
-                    low_dirichlet.data, R.data, operator_rows, blksz);
+                    low_dirichlet.data, high_dirichlet.data, R.data,
+                    operator_rows, blksz, barrier);
         } else if (axis == 1) {
             var_first(sup, mid, sub, delta_rep.begin(),
                     operator_rows, blksz);
@@ -1118,7 +1136,8 @@ _TriBandedOperator *for_vector(SizedArray<double> &V, Py_ssize_t blocks,
     } else if (derivative == 2) {
         if (axis == 0) {
             spot_second(sup, mid, sub, delta_rep.begin(),
-                low_dirichlet.data, R.data, operator_rows, blksz);
+                low_dirichlet.data, high_dirichlet.data, R.data, operator_rows,
+                blksz, barrier);
         } else if (axis == 1) {
             var_second(sup, mid, sub, delta_rep.begin(),
                 R.data, bottom_factors.data, operator_rows, blksz);

@@ -82,6 +82,7 @@ class _TriBandedOperator {
 };
 
 _TriBandedOperator * for_vector(SizedArray<double> &,
-        Py_ssize_t blocks, Py_ssize_t derivative, Py_ssize_t axis);
+        Py_ssize_t blocks, Py_ssize_t derivative, Py_ssize_t axis,
+        bool barrier);
 
 #endif

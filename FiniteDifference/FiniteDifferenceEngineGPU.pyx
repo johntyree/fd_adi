@@ -55,6 +55,7 @@ cdef class FiniteDifferenceEngine(object):
         n # Current step t / dt
         cache
         schemes
+        barrier
         SizedArrayPtr zero_derivative_coefficient
         np.ndarray zero_derivative_coefficient_host
         SizedArrayPtr gpugridmesh0
@@ -149,6 +150,7 @@ cdef class FiniteDifferenceEngine(object):
         self.operators = {}
         self.t = 0
         self.n = 0
+        self.barrier = 0
         self.default_scheme = 'center'
         self.default_order = 2
         self.scaling_vec = SizedArrayPtr(tag="scaling_vec")
@@ -712,6 +714,8 @@ cdef class HestonFiniteDifferenceEngine(FiniteDifferenceEngineADI):
                         p = 3
                         spots = np.linspace(0, spot_max**p, nspots)**(1.0/p)
                         print "Barrier spots"
+                        self.barrier = self.option.top[1]
+                        print "Barrier @", self.barrier
                 else:
                     spots = utils.sinh_space(option.strike-spot_min, spot_max-spot_min, spotdensity, nspots, force_exact=force_exact) + spot_min
             self.spots = spots
@@ -736,15 +740,15 @@ cdef class HestonFiniteDifferenceEngine(FiniteDifferenceEngineADI):
         self.zero_derivative_coefficient_host = np.atleast_1d(
             -self.option.interest_rate.value / self.grid.ndim)
 
-        self.simple_operators[(0,)] = BOG.for_vector(m0, m1.size, 1, 0)
+        self.simple_operators[(0,)] = BOG.for_vector(m0, m1.size, 1, 0, self.barrier)
         self.simple_operators[(0,)].has_low_dirichlet = True
 
-        self.simple_operators[(0,0)] = BOG.for_vector(m0, m1.size, 2, 0)
+        self.simple_operators[(0,0)] = BOG.for_vector(m0, m1.size, 2, 0, self.barrier)
         self.simple_operators[(0,0)].has_low_dirichlet = True
 
-        self.simple_operators[(1,)] = BOG.for_vector(m1, m0.size, 1, 1)
+        self.simple_operators[(1,)] = BOG.for_vector(m1, m0.size, 1, 1, self.barrier)
 
-        self.simple_operators[(1,1)] = BOG.for_vector(m1, m0.size, 2, 1)
+        self.simple_operators[(1,1)] = BOG.for_vector(m1, m0.size, 2, 1, self.barrier)
 
         try:
             if self.option.correlation != 0:

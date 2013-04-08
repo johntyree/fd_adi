@@ -265,7 +265,7 @@ class Operations_test(unittest.TestCase):
     def test_axis_0_derivative_1(self):
         B = self.F.simple_operators[(0,)]
         BG = BOG.for_vector(self.F.grid.mesh[0],
-                            self.F.grid.shape[1], 1, 0).immigrate()
+                            self.F.grid.shape[1], 1, 0, 0).immigrate()
 
         # We don't care about the deltas, just duplicate here to pass the
         # equality check
@@ -278,7 +278,7 @@ class Operations_test(unittest.TestCase):
     def test_axis_0_derivative_2(self):
         B = self.F.simple_operators[(0,0)]
         BG = BOG.for_vector(self.F.grid.mesh[0],
-                            self.F.grid.shape[1], 2, 0).immigrate()
+                            self.F.grid.shape[1], 2, 0, 0).immigrate()
 
         # We don't care about the deltas, just duplicate here to pass the
         # equality check
@@ -291,7 +291,7 @@ class Operations_test(unittest.TestCase):
     def test_axis_1_derivative_1(self):
         B = self.F.simple_operators[(1,)]
         BG = BOG.for_vector(self.F.grid.mesh[1],
-                            self.F.grid.shape[0], 1, 1).immigrate()
+                            self.F.grid.shape[0], 1, 1, 0).immigrate()
 
         # We don't care about the deltas, just duplicate here to pass the
         # equality check
@@ -304,7 +304,7 @@ class Operations_test(unittest.TestCase):
     def test_axis_1_derivative_2(self):
         B = self.F.simple_operators[(1,1)]
         BG = BOG.for_vector(self.F.grid.mesh[1],
-                            self.F.grid.shape[0], 2, 1).immigrate()
+                            self.F.grid.shape[0], 2, 1, 0).immigrate()
 
         # We don't care about the deltas, just duplicate here to pass the
         # equality check
