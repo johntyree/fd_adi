@@ -90,8 +90,8 @@ def read_args():
     parser.add_argument('-nx', required=True, metavar='int', help='nspots/vols', nargs=2, type=int)
     parser.add_argument('-nt', required=True, metavar='int', help='timesteps', type=int)
     parser.add_argument('-v', action='count', dest='verbose')
-    parser.add_argument('--gpu', action='store_const', default=False, const=engineGPU)
-    parser.add_argument('--cpu', action='store_const', default=False, const=engineCPU)
+    parser.add_argument('--gpu', action='store_const', default=None, const=engineGPU)
+    parser.add_argument('--cpu', action='store_const', default=None, const=engineCPU)
     opt = parser.parse_args()
     if opt.mean_variance == -1:
         opt.mean_variance = opt.variance
