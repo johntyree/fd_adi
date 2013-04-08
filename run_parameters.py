@@ -9,6 +9,8 @@ import os
 import itertools as it
 import subprocess
 
+import numpy as np
+
 from price_one_option import data_dir
 
 os.chdir(os.path.join(data_dir, '..'))
@@ -16,7 +18,7 @@ os.chdir(os.path.join(data_dir, '..'))
 moneyness = [0.93, 1, 1.06]
 ir = [0.01, 0.1]
 
-vol = [0.015, 0.6]
+vol = [0.05, 0.5]
 volvol = [0.001, 0.4]
 
 corr = [-0.5, 0, 0.3]
@@ -33,22 +35,26 @@ params = it.product(
     corr,
     rev,
     tenor,
-    space,
-    [s // 2 for s in space],
+    [(s, s // 2) for s in space],
     time
 )
 
 
 def main():
     """Run main."""
-    for mon, ir, vol, volvol, corr, rev, tenor, ns, nv, nt in params:
+    print sys.argv
+    try:
+        back = sys.argv[1]
+    except IndexError:
+        back = '--gpu'
+    for mon, ir, vol, volvol, corr, rev, tenor, (ns, nv), nt in params:
         spot = 100
-        strike = spot / mon
+        strike = np.round(spot / mon, decimals=2)
         cmd = 'python'
         args = [cmd, 'price_one_option.py', '--scheme', 'hv', '-s', spot, '-k',
                 strike, '-t', tenor, '-r', ir, '--mean-reversion', rev,
                 '--variance', vol**2, '-o', volvol, '--mean-variance', vol**2,
-                '-p', corr, '-nx', ns, nv, '-nt', nt, '-v', '--gpu']
+                '-p', corr, '-nx', ns, nv, '-nt', nt, '-v', back]
         args = map(str, args)
         print args
         try:
