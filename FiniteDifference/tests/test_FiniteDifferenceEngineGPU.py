@@ -186,7 +186,7 @@ class HestonOptionConstruction_test(unittest.TestCase):
                         , mean_reversion = 1
                         , mean_variance = 0.12
                         , vol_of_variance = 0.3
-                        , correlation = 0.4
+                        , correlation = 10.4
                         )
         option = DefaultHeston
         # option = HestonOption(tenor=1, strike=99.0, volatility=0.2,
@@ -244,13 +244,20 @@ class HestonOptionConstruction_test(unittest.TestCase):
 
     def test_scale_and_combine_FGG_01(self):
         self.FGG.scale_and_combine_operators()
-        ref = self.F.operators[(0,1)]
+        ref = self.F.operators[(0,1)].copy()
         tst = self.FGG.operators[(0,1)].immigrate()
         ref.deltas = tst.deltas
         npt.assert_array_almost_equal(tst.D.data, ref.D.data, decimal=14)
         tst.D *= 0
         ref.D *= 0
         npt.assert_equal(tst, ref)
+
+        dom = np.random.random(self.FGG.grid.shape)
+        ref = self.FGG.operators[(0,1)].apply(dom.copy())
+        tst = self.F.operators[(0,1)].apply(dom)
+        fp(ref - tst, 'e')
+        npt.assert_array_almost_equal(tst, ref, decimal=14)
+
 
 
     def test_verify_simple_operators_0_FGG(self):
