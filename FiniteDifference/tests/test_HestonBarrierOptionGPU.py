@@ -162,12 +162,9 @@ class HestonOptionConstruction_test(unittest.TestCase):
         ref = self.F.operators[0]
         tst = self.FGG.operators[0].immigrate()
 
-        npt.assert_array_almost_equal(tst.D.data, ref.D.data, decimal=14)
+        npt.assert_array_almost_equal(tst.D.data, ref.D.data, decimal=13)
         tst.D *= 0
         ref.D *= 0
-        npt.assert_array_almost_equal(tst.R, ref.R, decimal=12)
-        tst.R *= 0
-        ref.R *= 0
         npt.assert_equal(tst, ref)
 
 
