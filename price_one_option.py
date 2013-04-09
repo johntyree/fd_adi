@@ -23,12 +23,11 @@ data_dir = os.path.expanduser("~/cudafd/src/fd_pricer/py_adi/data_convergence/")
 figure_dir = os.path.join(data_dir, "figures")
 
 
-fname = "temp"
-
 def engineCPU(*args, **kwargs):
     F = FD.heston.HestonFiniteDifferenceEngine(*args, **kwargs)
     return F
 engineCPU.__repr__ = lambda: "engineCPU"
+
 
 def engineGPU(*args, **kwargs):
     F = FDEGPU(*args, **kwargs)
@@ -37,38 +36,11 @@ def engineGPU(*args, **kwargs):
     return F
 engineGPU.__str__ = lambda: "engineGPU"
 
+
 def save(*args, **kwargs):
     args = list(args)
     args[0] = os.path.join(figure_dir, str(int(time.time())) + '_' + args[0])
     savefig(*args, **kwargs)
-
-
-def mc_error(price):
-    def newf(V, F):
-        return abs(F.price - price)
-    return newf
-
-    # err = ct.dt()
-    # key = ('heston', mode, option.strike)
-    # errors[key] = err
-
-def rundx(option, engine, dt, min_i, max_i, scheme):
-    def update_kwargs(self, i):
-        self.engine_kwargs['nspots'] = 2**(i-1)
-        self.engine_kwargs['nvols'] = 2**(i-1)
-        # self.engine_kwargs['nvols'] = 256
-        try:
-            xs = self.F.grid.mesh[0]
-        except AttributeError:
-            return
-        return (max(xs) - min(xs)) / 2**i
-
-    ct = cv.ConvergenceTester(option, engine,
-            {'force_exact': False, 'spotdensity': 10, 'varexp': 4},
-            dt=dt, min_i=4, max_i=9, scheme=scheme,
-            update_kwargs=update_kwargs)
-    ct.kwargs['error_func'] = ct.selfreference
-    return ct.dx()
 
 
 def read_args():
@@ -140,8 +112,8 @@ def new_engine(opt):
         verbose=opt.verbose,
         force_bandwidth=None
         )
-
     return engine
+
 
 def run(opt):
     e = new_engine(opt)
@@ -176,6 +148,7 @@ def run(opt):
     print
     return e
 
+
 def filestring(opt, e):
     moneyness = opt.spot / opt.strike
     ir = opt.interest_rate
@@ -206,9 +179,11 @@ def filestring(opt, e):
     fn += ".txt"
     return fn
 
+
 def main():
     opt = read_args()
-    print repr(opt)
+    if opt.verbose:
+        print opt
     if opt.cpu:
         opt.engine = opt.cpu
         res = run(opt)
@@ -219,23 +194,6 @@ def main():
         res = run(opt)
         with open(filestring(opt, res), 'w') as fn:
             cPickle.dump([res.grid.mesh, res.grid.domain[-1]], fn, -1)
-
-def oldmain():
-    opt = read_args()
-
-    ctest = None
-    if opt.nx is not None:
-        ctester = cv.ConvergenceTester(option, opt.engine, {'nspots': opt.nx[0], 'nvols': opt.nx[1]},
-                                    scheme=opt.scheme, max_i=10)
-        ctester.kwargs['error_func'] = ctester.selfreference
-        ctest = ctester.dt()
-    else:
-        ctest = rundx(option, opt.engine, 1./opt.dt, opt.min_i, opt.max_i, opt.scheme)
-
-    ctest.reference_solution = ctest.result[ctest.mode]['error'][-1]
-    # print ctest.error2d_direct()
-    ctest.write()
-    return ctest
 
 
 if __name__ == '__main__':
