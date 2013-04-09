@@ -1146,7 +1146,7 @@ _TriBandedOperator *for_vector(SizedArray<double> &V, Py_ssize_t blocks,
         }
     }
 
-    bool has_high_dirichlet = false;
+    bool has_high_dirichlet = axis == 0 && barrier;
     bool has_low_dirichlet = axis == 0;
     std::string top_fold_status = "CANNOT_FOLD";
     std::string bottom_fold_status = axis == 1 && derivative == 2 ? "CAN_FOLD" : "CANNOT_FOLD";

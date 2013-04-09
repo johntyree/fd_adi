@@ -742,9 +742,13 @@ cdef class HestonFiniteDifferenceEngine(FiniteDifferenceEngineADI):
 
         self.simple_operators[(0,)] = BOG.for_vector(m0, m1.size, 1, 0, self.barrier)
         self.simple_operators[(0,)].has_low_dirichlet = True
+        if self.barrier:
+            self.simple_operators[(0,)].has_high_dirichlet = True
 
         self.simple_operators[(0,0)] = BOG.for_vector(m0, m1.size, 2, 0, self.barrier)
         self.simple_operators[(0,0)].has_low_dirichlet = True
+        if self.barrier:
+            self.simple_operators[(0,0)].has_high_dirichlet = True
 
         self.simple_operators[(1,)] = BOG.for_vector(m1, m0.size, 1, 1, self.barrier)
 
