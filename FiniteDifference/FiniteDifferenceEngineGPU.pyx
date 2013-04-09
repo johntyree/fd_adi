@@ -709,7 +709,10 @@ cdef class HestonFiniteDifferenceEngine(FiniteDifferenceEngineADI):
                 # spots = np.linspace(0,spot_max,nspots)
                 if isinstance(option, BarrierOption) and option.top and not option.top[0]:
                         p = 3
-                        spots = np.linspace(0, spot_max**p, nspots)**(1.0/p)
+                        # spots = np.linspace(0, spot_max**p, nspots)**(1.0/p)
+                        spots = utils.exponential_space(0.00, self.option.strike, spot_max,
+                                                    1.0/p, nspots,
+                                                    force_exact=force_exact)
                         print "Barrier spots"
                         self.barrier = self.option.top[1]
                         print "Barrier @", self.barrier
