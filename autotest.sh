@@ -27,7 +27,7 @@ build () {
 }
 
 run () {
-    args=($failed --rednose --verbosity=3 --with-id "$@")
+    args=($stop $failed --rednose --verbosity=3 --with-id "$@")
     if [[ $USE_GDB ]]; then
         echo "gdb --args python $(which nosetests) ${args[@]}"
         gdb --args python $(which nosetests) ${args[@]}
@@ -38,8 +38,10 @@ run () {
 }
 
 ARGS=()
-while getopts ":acfgb" opt; do
+while getopts ":axcfgb" opt; do
     case $opt in
+        x)  stop="--stop"
+            ;;
         a)
             ALL="remove_ids"
             ;;
