@@ -678,11 +678,11 @@ _CSRBandedOperator * mixed_for_vector(SizedArray<double> &v0,
 
     std::string name = "mixed_for_vector CSR";
 
-    SizedArray<double> R(0, "R");
-    SizedArray<double> high_dirichlet(0, "high_dirichlet");
-    SizedArray<double> low_dirichlet(0, "low_dirichlet");
-    SizedArray<double> top_factors(0, "top_factors");
-    SizedArray<double> bottom_factors(0, "bottom_factors");
+    SizedArray<double> R(1, "R");
+    SizedArray<double> high_dirichlet(1, "high_dirichlet");
+    SizedArray<double> low_dirichlet(1, "low_dirichlet");
+    SizedArray<double> top_factors(1, "top_factors");
+    SizedArray<double> bottom_factors(1, "bottom_factors");
     bool has_high_dirichlet = false;
     bool has_low_dirichlet = false;
     std::string top_fold_status = CANNOT_FOLD;
