@@ -200,6 +200,17 @@ class HestonOptionConstruction_test(unittest.TestCase):
         npt.assert_array_almost_equal(tst, ref, decimal=14)
 
 
+    def test_verify_spots_FGG(self):
+        ref = self.F.spots.copy()
+        tst = self.FGG.spots.copy()
+        npt.assert_equal(tst, ref)
+
+
+    def test_verify_vars_FGG(self):
+        ref = self.F.vars.copy()
+        tst = self.FGG.vars.copy()
+        npt.assert_equal(tst, ref)
+
 
     def test_verify_simple_operators_0_FGG(self):
         ref = self.F.simple_operators[(0,)].copy()
