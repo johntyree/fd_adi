@@ -94,7 +94,6 @@ class FiniteDifferenceEngineADI_from_Host_test(unittest.TestCase):
         tst = self.FG.simple_operators[(0,)].copy()
         ref.diagonalize(), tst.diagonalize()
         tst = tst.immigrate()
-        tst.deltas = ref.deltas
         npt.assert_equal(tst, ref)
 
 
@@ -106,7 +105,6 @@ class FiniteDifferenceEngineADI_from_Host_test(unittest.TestCase):
         tst = self.FG.simple_operators[(1,)].copy()
         ref.diagonalize(), tst.diagonalize()
         tst = tst.immigrate()
-        tst.deltas = ref.deltas
         npt.assert_equal(tst, ref)
 
 
@@ -118,7 +116,6 @@ class FiniteDifferenceEngineADI_from_Host_test(unittest.TestCase):
         tst = self.FG.simple_operators[(0,0)].copy()
         ref.diagonalize(), tst.diagonalize()
         tst = tst.immigrate()
-        tst.deltas = ref.deltas
         npt.assert_equal(tst, ref)
 
 
@@ -131,7 +128,6 @@ class FiniteDifferenceEngineADI_from_Host_test(unittest.TestCase):
         tst = self.FG.simple_operators[(1,1)].copy()
         ref.diagonalize(), tst.diagonalize()
         tst = tst.immigrate()
-        tst.deltas = ref.deltas
         npt.assert_equal(tst, ref)
 
 

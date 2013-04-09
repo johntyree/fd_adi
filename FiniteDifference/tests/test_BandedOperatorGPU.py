@@ -267,10 +267,6 @@ class Operations_test(unittest.TestCase):
         BG = BOG.for_vector(self.F.grid.mesh[0],
                             self.F.grid.shape[1], 1, 0, 0).immigrate()
 
-        # We don't care about the deltas, just duplicate here to pass the
-        # equality check
-        BG.deltas = B.deltas
-
         npt.assert_array_equal(B.D.data, BG.D.data)
         npt.assert_equal(B, BG)
 
@@ -279,10 +275,6 @@ class Operations_test(unittest.TestCase):
         B = self.F.simple_operators[(0,0)]
         BG = BOG.for_vector(self.F.grid.mesh[0],
                             self.F.grid.shape[1], 2, 0, 0).immigrate()
-
-        # We don't care about the deltas, just duplicate here to pass the
-        # equality check
-        BG.deltas = B.deltas
 
         npt.assert_array_equal(B.D.data, BG.D.data)
         npt.assert_equal(B, BG)
@@ -293,10 +285,6 @@ class Operations_test(unittest.TestCase):
         BG = BOG.for_vector(self.F.grid.mesh[1],
                             self.F.grid.shape[0], 1, 1, 0).immigrate()
 
-        # We don't care about the deltas, just duplicate here to pass the
-        # equality check
-        BG.deltas = B.deltas
-
         npt.assert_array_equal(B.D.data, BG.D.data)
         npt.assert_equal(B, BG)
 
@@ -306,9 +294,6 @@ class Operations_test(unittest.TestCase):
         BG = BOG.for_vector(self.F.grid.mesh[1],
                             self.F.grid.shape[0], 2, 1, 0).immigrate()
 
-        # We don't care about the deltas, just duplicate here to pass the
-        # equality check
-        BG.deltas = B.deltas
 
         fp(B.D.data)
         print
@@ -329,8 +314,6 @@ class Operations_test(unittest.TestCase):
         B = self.F.simple_operators[(0,1)]
         BG = BOG.mixed_for_vector(*self.F.grid.mesh)
         BG = BG.immigrate()
-        # We don't care about deltas
-        BG.deltas = B.deltas
         npt.assert_array_equal(B.D.todense(), BG.D.todense())
         assert BG == B
 
