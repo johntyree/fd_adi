@@ -679,23 +679,20 @@ cdef class HestonFiniteDifferenceEngine(FiniteDifferenceEngineADI):
         assert isinstance(option, Option)
         self.option = option
 
-        # if isinstance(option, BarrierOption):
-            # if option.top:
-                # if option.top[0]: # Knockin, not sure about implementing this
-                    # raise NotImplementedError("Knockin barriers are not supported.")
-                # else:
-                    # spot_max = option.top[1]
-                    # if grid:
-                        # assert np.allclose(spot_max, max(grid.mesh[0]))
-                    # boundaries[(0,)] = (boundaries[(0,)][0], (0, lambda *x: 0.0))
-                    # boundaries[(0,0)] = boundaries[(0,)]
-            # if option.bottom:
-                # if option.bottom[0]: # Knockin, not sure about implementing this
-                    # raise NotImplementedError("Knockin barriers are not supported.")
-                # else:
-                    # spot_min = option.bottom[1]
-                    # boundaries[(0,)] = ((0, lambda *x: 0.0), boundaries[(0,)][1])
-                    # boundaries[(0,0)] = boundaries[(0,)]
+        if isinstance(option, BarrierOption):
+            if option.top:
+                if option.top[0]: # Knockin, not sure about implementing this
+                    raise NotImplementedError("Knockin barriers are not supported.")
+                else:
+                    spot_max = option.top[1]
+                    if grid:
+                        assert np.allclose(spot_max, max(grid.mesh[0]))
+            if option.bottom:
+                raise NotImplementedError("Bottom barriers are not supported for GPU creation.")
+                if option.bottom[0]: # Knockin, not sure about implementing this
+                    raise NotImplementedError("Knockin barriers are not supported.")
+                else:
+                    spot_min = option.bottom[1]
 
 
         if grid:
