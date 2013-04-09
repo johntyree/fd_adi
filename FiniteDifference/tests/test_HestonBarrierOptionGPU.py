@@ -141,6 +141,7 @@ class HestonOptionConstruction_test(unittest.TestCase):
         self.F = HestonFiniteDifferenceEngine(option, nspots=5,
                                                    nvols=5,
                                                    force_bandwidth=None,
+                                                   force_exact=False,
                                                    flip_idx_var=False)
 
 
@@ -151,7 +152,10 @@ class HestonOptionConstruction_test(unittest.TestCase):
                                          # force_bandwidth=None,
                                          # force_exact=False)
         self.F.init()
-        self.FGG = FDG.HestonFiniteDifferenceEngine(option, nspots=self.F.grid.shape[0], nvols=self.F.grid.shape[1])
+        self.FGG = FDG.HestonFiniteDifferenceEngine(option,
+                                                    force_exact=False,
+                                                    nspots=self.F.grid.shape[0],
+                                                    nvols=self.F.grid.shape[1])
         self.FGG.set_zero_derivative()
         self.FGG.make_operator_templates()
 
