@@ -545,6 +545,7 @@ _CSRBandedOperator * mixed_for_vector(SizedArray<double> &v0,
     repeated_range<DptrIterator> dmid(mid.begin(), mid.end(), n1-2);
     repeated_range<DptrIterator> dsub(sub.begin(), sub.end(), n1-2);
 
+
     thrust::for_each(
             thrust::make_zip_iterator(
                 thrust::make_tuple(
@@ -627,6 +628,7 @@ _CSRBandedOperator * mixed_for_vector(SizedArray<double> &v0,
             _1 + _2 * n1
             );
 
+
     /* row = np.tile(row, 9) */
     tiled_range<GPUVec<int>::iterator> rowrt(
             rowr.begin(),
@@ -654,8 +656,7 @@ _CSRBandedOperator * mixed_for_vector(SizedArray<double> &v0,
 
     status = cusparseCreate(&handle);
     if (status != CUSPARSE_STATUS_SUCCESS) {
-        std::cerr << "CUSPARSE Library initialization failed." << std::endl;
-        assert(false);
+        DIE("CUSPARSE Library initialization failed.");
     }
 
     thrust::stable_sort_by_key(

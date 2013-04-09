@@ -341,7 +341,8 @@ class Operations_test(unittest.TestCase):
         B = self.F.simple_operators[(0,1)]
         BG = BOG.mixed_for_vector(*self.F.grid.mesh)
         BG = BG.immigrate()
-        npt.assert_array_equal(B.D.todense(), BG.D.todense())
+        npt.assert_array_equal(B.D.todense(),
+                               BG.D.todense())
         assert BG == B
 
 
