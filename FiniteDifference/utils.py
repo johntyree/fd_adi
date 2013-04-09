@@ -148,8 +148,9 @@ def sinh_space(exact, high, density, size, force_exact=True):
 
 def todia(A):
     d = scipy.sparse.dia_matrix(A)
-    d.data = d.data[::-1]
-    d.offsets = d.offsets[::-1]
+    idx = np.argsort(d.offsets)[::-1]
+    d.data = d.data[idx]
+    d.offsets = d.offsets[idx]
     return d
 
 
