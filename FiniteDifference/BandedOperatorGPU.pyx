@@ -610,6 +610,8 @@ cpdef mixed_for_vector(np.ndarray v0, np.ndarray v1):
     B.order = 2
     B.deltas = None
     B.blocks = v0.size
+    B.top_fold_status = CANNOT_FOLD
+    B.bottom_fold_status = CANNOT_FOLD
     return B
 
 cdef inline int sign(int i):
