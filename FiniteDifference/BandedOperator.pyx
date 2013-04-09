@@ -165,7 +165,12 @@ cdef class BandedOperator(object):
 
 
     cpdef copy(self):
-        B = BandedOperator((self.D.data, self.D.offsets), residual=self.R, inplace=False)
+        new = utils.todia(self.D)
+        try:
+            newR = self.R.copy()
+        except AttributeError:
+            newR = None
+        B = BandedOperator((new.data, new.offsets), residual=newR, inplace=False)
         B.copy_meta_data(self)
         return B
 
