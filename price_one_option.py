@@ -92,6 +92,7 @@ def read_args():
     parser.add_argument('-v', action='count', dest='verbose')
     parser.add_argument('--gpu', action='store_const', default=None, const=engineGPU)
     parser.add_argument('--cpu', action='store_const', default=None, const=engineCPU)
+    parser.add_argument('--mc', metavar='int', type=int, help="Number of MC paths", default=0)
     opt = parser.parse_args()
     if opt.mean_variance == -1:
         opt.mean_variance = opt.variance
@@ -160,9 +161,14 @@ def run(opt):
         e.grid.domain[-1] = e.gpugrid.to_numpy()
     except AttributeError:
         pass
-    print e.grid.domain[-1][s,v],
+    print "FD:", e.grid.domain[-1][s,v]
+    if opt.mc:
+        res = e.option.monte_carlo(npaths=opt.mc, dt=(opt.tenor / opt.nt))
+        print
+        print "MC:", res['expected'], "±", 1.96 * res['error']
     try:
-        print e.option.analytical,
+        res = e.option.analytical
+        print "AN:", res
     except NotImplementedError:
         pass
     except AttributeError:
