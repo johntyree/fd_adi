@@ -122,7 +122,8 @@ def new_engine(opt):
 
 
 def run(opt):
-    if opt.cpu or opt.gpu:
+    if opt.cpu:
+        opt.engine = opt.cpu
         e = new_engine(opt)
         option = e.option
         switch = {'i' : e.solve_implicit,
@@ -136,10 +137,28 @@ def run(opt):
         np.testing.assert_almost_equal(wanted, found,
                                     decimal=10,
                                     err_msg="We have the wrong indices! %s %s" % (wanted, found))
-
         # Compute FD result
         switch[opt.scheme](opt.nt, opt.tenor / opt.nt)
-    else:
+
+    if opt.gpu:
+        opt.engine = opt.gpu
+        e = new_engine(opt)
+        option = e.option
+        switch = {'i' : e.solve_implicit,
+        'd' : e.solve_douglas,
+        'hv': e.solve_hundsdorferverwer,
+        's' : e.solve_smooth
+        }
+        s = np.searchsorted(np.round(e.grid.mesh[0], decimals=6), e.option.spot)
+        v = np.searchsorted(np.round(e.grid.mesh[1], decimals=6), e.option.variance.value)
+        wanted, found = (opt.spot, opt.variance), (e.grid.mesh[0][s], e.grid.mesh[1][v])
+        np.testing.assert_almost_equal(wanted, found,
+                                    decimal=10,
+                                    err_msg="We have the wrong indices! %s %s" % (wanted, found))
+        # Compute FD result
+        switch[opt.scheme](opt.nt, opt.tenor / opt.nt)
+
+    if not opt.cpu or opt.gpu:
         option = new_option(opt)
 
     try:
