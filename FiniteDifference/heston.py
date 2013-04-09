@@ -243,7 +243,7 @@ class HestonBarrierOption(HestonOption, BarrierOption):
                 , spot=spot
                 , strike=strike
                 , interest_rate=interest_rate
-                , volatility=volatility
+                , variance=self.variance.value
                 , tenor=tenor
                 , mean_reversion=mean_reversion
                 , mean_variance=mean_variance
