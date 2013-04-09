@@ -689,10 +689,10 @@ cdef class HestonFiniteDifferenceEngine(FiniteDifferenceEngineADI):
                         assert np.allclose(spot_max, max(grid.mesh[0]))
             if option.bottom:
                 raise NotImplementedError("Bottom barriers are not supported for GPU creation.")
-                if option.bottom[0]: # Knockin, not sure about implementing this
-                    raise NotImplementedError("Knockin barriers are not supported.")
-                else:
-                    spot_min = option.bottom[1]
+                # if option.bottom[0]: # Knockin, not sure about implementing this
+                    # raise NotImplementedError("Knockin barriers are not supported.")
+                # else:
+                    # spot_min = option.bottom[1]
 
 
         if grid:
