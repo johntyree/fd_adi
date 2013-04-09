@@ -66,14 +66,15 @@ def read_args():
     parser.add_argument('--cpu', action='store_const', default=None, const=engineCPU)
     parser.add_argument('--mc', metavar='int', type=int, help="Number of MC paths", default=0)
     opt = parser.parse_args()
+    if opt.top:
+        assert opt.option is FD.heston.HestonBarrierOption, ("--barrier required with --top")
     if opt.mean_variance == -1:
         opt.mean_variance = opt.variance
     if opt.verbose:
         print "Verbosity:", opt.verbose
     return opt
 
-
-def new_engine(opt):
+def new_option(opt):
     option = opt.option(
         spot=opt.spot,
         strike=opt.strike,
@@ -86,11 +87,14 @@ def new_engine(opt):
         correlation=opt.correlation)
     if opt.top:
         option.top = (False, opt.top)
-
     if opt.verbose:
         print repr(option)
         print
+    return option
 
+
+def new_engine(opt):
+    option = new_option(opt)
     engine = opt.engine(option,
         grid=None,
         spot_max=1500.0,
@@ -116,30 +120,37 @@ def new_engine(opt):
 
 
 def run(opt):
-    e = new_engine(opt)
-    switch = {'i' : e.solve_implicit,
-     'd' : e.solve_douglas,
-     'hv': e.solve_hundsdorferverwer,
-     's' : e.solve_smooth
-    }
-    switch[opt.scheme](opt.nt, opt.tenor / opt.nt)
-    s = np.searchsorted(np.round(e.grid.mesh[0], decimals=6), e.option.spot)
-    v = np.searchsorted(np.round(e.grid.mesh[1], decimals=6), e.option.variance.value)
-    wanted, found = (opt.spot, opt.variance), (e.grid.mesh[0][s], e.grid.mesh[1][v])
-    np.testing.assert_almost_equal(wanted, found,
-                                   decimal=10,
-                                   err_msg="We have the wrong indices! %s %s" % (wanted, found))
+    if opt.cpu or opt.gpu:
+        e = new_engine(opt)
+        option = e.option
+        switch = {'i' : e.solve_implicit,
+        'd' : e.solve_douglas,
+        'hv': e.solve_hundsdorferverwer,
+        's' : e.solve_smooth
+        }
+        s = np.searchsorted(np.round(e.grid.mesh[0], decimals=6), e.option.spot)
+        v = np.searchsorted(np.round(e.grid.mesh[1], decimals=6), e.option.variance.value)
+        wanted, found = (opt.spot, opt.variance), (e.grid.mesh[0][s], e.grid.mesh[1][v])
+        np.testing.assert_almost_equal(wanted, found,
+                                    decimal=10,
+                                    err_msg="We have the wrong indices! %s %s" % (wanted, found))
+
+        # Compute FD result
+        switch[opt.scheme](opt.nt, opt.tenor / opt.nt)
+    else:
+        option = new_option(opt)
+
     try:
         e.grid.domain[-1] = e.gpugrid.to_numpy()
     except AttributeError:
         pass
     print "FD:", e.grid.domain[-1][s,v]
     if opt.mc:
-        res = e.option.monte_carlo(npaths=opt.mc, dt=(opt.tenor / opt.nt))
+        res = option.monte_carlo(npaths=opt.mc, dt=(opt.tenor / opt.nt))
         print
         print "MC:", res['expected'], "±", 1.96 * res['error']
     try:
-        res = e.option.analytical
+        res = option.analytical
         print "AN:", res
     except NotImplementedError:
         pass
