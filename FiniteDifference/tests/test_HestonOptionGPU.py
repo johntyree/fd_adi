@@ -81,7 +81,7 @@ class HestonOption_test(unittest.TestCase):
                 assert o.is_tridiagonal(), "%s, %s" % (d, o.D.offsets)
         V = self.FG.solve_douglas(t/dt, dt, self.F.grid.domain[-1])[self.F.idx]
         ans = self.F.option.analytical
-        # print "Spot:", self.F.option.spot
+        # print "Spot:", self.F.option.spot, self.F.spots[self.F.idx[0]]
         # print "Price:", V, ans, V - ans
         npt.assert_allclose(V, ans, rtol=0.001)
 
