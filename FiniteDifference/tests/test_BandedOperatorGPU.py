@@ -202,6 +202,7 @@ class Operations_test(unittest.TestCase):
 
     def test_csr_scale(self):
         B = self.F.operators[0]
+        B.D = scipy.sparse.csr_matrix(np.ones((5,5)))
         B.R = None
         B.dirichlet = (None, None)
         B.is_mixed_derivative = True
@@ -221,6 +222,7 @@ class Operations_test(unittest.TestCase):
     def test_csr_scalar(self):
         scalar = 0.235
         B = self.F.operators[0]
+        B.D = scipy.sparse.csr_matrix(np.ones((5,5)))
         B.R = None
         B.dirichlet = (None, None)
         B.is_mixed_derivative = True
