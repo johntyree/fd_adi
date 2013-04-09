@@ -38,7 +38,7 @@ cdef class BandedOperator(object):
 
         self.attrs = ('derivative', 'is_mixed_derivative', 'order', 'axis',
                       'deltas', 'dirichlet', 'blocks', 'top_factors',
-                      'bottom_factors', 'top_fold_status', 'top_fold_status')
+                      'bottom_factors', 'top_fold_status', 'bottom_fold_status')
         data, offsets = data_offsets
         assert data.shape[1] > 3, "Vector too short to use finite differencing."
         if not inplace:
