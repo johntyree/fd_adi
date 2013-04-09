@@ -58,6 +58,33 @@ class Operations_test(unittest.TestCase):
         # print "Setup complete for CPP test"
 
 
+    def test_to_csr(self):
+        A = self.F.operators[0].copy()
+        A.R = None
+        A.axis = 1
+        A.dirichlet = (None, None)
+        A.is_mixed_derivative = True
+        B = BOG.BandedOperator(A)
+        B = B.immigrate()
+        B.D = B.D.tocsr()
+
+        ref = A.apply(self.v2)
+        tst = B.apply(self.v2)
+
+        fp(ref - tst, 'e')
+
+        npt.assert_array_almost_equal(ref, tst, decimal=12)
+
+        B = BOG.BandedOperator(A)
+        tst = B.apply(self.v2)
+
+        fp(tst)
+        fp(ref)
+        fp(tst - ref, 'e')
+
+        npt.assert_array_almost_equal(ref, tst, decimal=12)
+
+
     def test_migrate_0(self):
         B = self.F.operators[0]
         ref = B.copy()

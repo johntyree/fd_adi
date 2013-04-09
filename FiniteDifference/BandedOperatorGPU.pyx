@@ -27,7 +27,7 @@ CANNOT_FOLD = "CANNOT_FOLD"
 
 cdef class BandedOperator(object):
 
-    def __init__(self, other=None, tag=""):
+    def __init__(self, BO other=None, tag=""):
         """
         A linear operator for discrete derivatives.
         Consist of a banded matrix (B.D) and a residual vector (B.R) for things
@@ -114,8 +114,19 @@ cdef class BandedOperator(object):
                 , self.thisptr_csr.row_ptr
                 , self.thisptr_csr.row_ind
                 , self.thisptr_csr.col_ind
+                , self.thisptr_csr.R
+                , self.thisptr_csr.high_dirichlet
+                , self.thisptr_csr.low_dirichlet
+                , self.thisptr_csr.top_factors
+                , self.thisptr_csr.bottom_factors
+                , self.axis
                 , self.thisptr_csr.operator_rows
-                , self.blocks
+                , self.thisptr_csr.blocks
+                , self.thisptr_csr.has_high_dirichlet
+                , self.thisptr_csr.has_low_dirichlet
+                , self.thisptr_csr.top_fold_status
+                , self.thisptr_csr.bottom_fold_status
+                , self.thisptr_csr.has_residual
                 , self.thisptr_csr.name
             )
         else:
@@ -159,24 +170,59 @@ cdef class BandedOperator(object):
         if tag:
             print "Emigrate CSR:", tag, to_string(self.thisptr_csr)
         assert not self.thisptr_csr
+
+        other = other.copy()
+
+        diad = False
+        if other.top_fold_status == CAN_FOLD or other.bottom_fold_status == CAN_FOLD:
+            diad = True
+            other.diagonalize()
+            # This is normally set by copy(), above. We changed it with diagonalize
+        self.top_fold_status = other.top_fold_status
+        self.bottom_fold_status = other.bottom_fold_status
+
+        tops = np.atleast_1d(other.top_factors if other.top_factors is not None else [0.0]*other.blocks)
+        bots = np.atleast_1d(other.bottom_factors if other.bottom_factors is not None else [0.0]*other.blocks)
         csr = other.D.tocsr()
         coo = csr.tocoo()
+
         cdef:
             SizedArrayPtr data = SizedArrayPtr(csr.data, "data")
             SizedArrayPtr_i row_ptr = SizedArrayPtr_i(csr.indptr, "row_ptr")
             SizedArrayPtr_i row_ind = SizedArrayPtr_i(coo.row, "row_ind")
             SizedArrayPtr_i col_ind = SizedArrayPtr_i(csr.indices, "col_ind")
+            SizedArrayPtr R = SizedArrayPtr(other.R, "R")
+            SizedArrayPtr low_dirichlet = SizedArrayPtr(np.atleast_1d(other.dirichlet[0] or [0.0]), "low_dirichlet")
+            SizedArrayPtr high_dirichlet = SizedArrayPtr(np.atleast_1d(other.dirichlet[1] or [0.0]), "high_dirichlet")
+            SizedArrayPtr top_factors = SizedArrayPtr(tops, "top_factors")
+            SizedArrayPtr bottom_factors = SizedArrayPtr(bots, "bottom_factors")
 
         self.thisptr_csr = new _CSRBandedOperator(
                   deref(data.p)
                 , deref(row_ptr.p)
                 , deref(row_ind.p)
                 , deref(col_ind.p)
+                , deref(R.p)
+                , deref(high_dirichlet.p)
+                , deref(low_dirichlet.p)
+                , deref(top_factors.p)
+                , deref(bottom_factors.p)
+                , other.axis
                 , other.D.shape[0]
                 , other.blocks
+                , other.dirichlet[1] is not None
+                , other.dirichlet[0] is not None
+                , other.top_fold_status
+                , other.bottom_fold_status
+                , other.R is not None
                 , tag
                 )
-        del data, row_ptr, row_ind, col_ind
+        del data, row_ptr, row_ind, col_ind, R,high_dirichlet, low_dirichlet
+        del top_factors, bottom_factors
+
+        if diad:
+            self.undiagonalize()
+            other.undiagonalize()
 
 
     cdef immigrate_csr(self, tag=""):
@@ -199,6 +245,12 @@ cdef class BandedOperator(object):
             axis=self.axis)
         B.is_mixed_derivative = True
         B.blocks = self.blocks
+        B.top_fold_status = self.top_fold_status
+        B.bottom_fold_status = self.bottom_fold_status
+        tops = from_SizedArray(self.thisptr_csr.top_factors)
+        bots = from_SizedArray(self.thisptr_csr.bottom_factors)
+        B.top_factors = tops if B.top_fold_status == FOLDED else None
+        B.bottom_factors = bots if B.bottom_fold_status == FOLDED else None
         return B
 
 
@@ -361,14 +413,29 @@ cdef class BandedOperator(object):
         return V
 
 
-    cpdef solve_(self, SizedArrayPtr sa_V, overwrite):
-        assert not self.is_mixed_derivative
+    cpdef fake_solve_(self, SizedArrayPtr sa_V, overwrite):
         cdef SizedArrayPtr sa_U
         if overwrite:
             sa_U = sa_V
         else:
             sa_U = sa_V.copy(True)
-        self.thisptr_tri.solve(deref(sa_U.p))
+        if self.is_mixed_derivative:
+            self.thisptr_csr.fake_solve(deref(sa_U.p))
+        else:
+            self.thisptr_tri.fake_solve(deref(sa_U.p))
+        return sa_U
+
+
+    cpdef solve_(self, SizedArrayPtr sa_V, overwrite):
+        cdef SizedArrayPtr sa_U
+        if overwrite:
+            sa_U = sa_V
+        else:
+            sa_U = sa_V.copy(True)
+        if self.is_mixed_derivative:
+            self.thisptr_csr.solve(deref(sa_U.p))
+        else:
+            self.thisptr_tri.solve(deref(sa_U.p))
         return sa_U
 
 

@@ -66,6 +66,7 @@ cdef class BandedOperator(object):
     cpdef mul_scalar_from_host(self, double v, bool inplace=*)
     cpdef solve(self, np.ndarray V, overwrite=*)
     cpdef solve_(self, SizedArrayPtr V, overwrite)
+    cpdef fake_solve_(self, SizedArrayPtr V, overwrite)
     cpdef undiagonalize(self)
     cpdef vectorized_scale_from_host(self, np.ndarray vector)
     cpdef vectorized_scale(self, SizedArrayPtr vector)

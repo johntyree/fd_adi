@@ -13,11 +13,7 @@
 typedef thrust::device_ptr<double> Dptr;
 typedef thrust::detail::normal_iterator<thrust::device_ptr<double> > DptrIterator;
 
-const double NaN = std::numeric_limits<double>::quiet_NaN();
-
-static const std::string FOLDED = "FOLDED";
-static const std::string CAN_FOLD = "CAN_FOLD";
-static const std::string CANNOT_FOLD = "CANNOT_FOLD";
+double const NaN = std::numeric_limits<double>::quiet_NaN();
 
 
 class _TriBandedOperator {
@@ -32,6 +28,7 @@ class _TriBandedOperator {
 
         void apply(SizedArray<double> &);
         void solve(SizedArray<double> &);
+        void fake_solve(SizedArray<double> &);
         bool is_folded();
         /* void DMVPY(SizedArray<double> &V, char operation, SizedArray<double> &Y, SizedArray<double> &out); */
         void add_operator(_TriBandedOperator &other);

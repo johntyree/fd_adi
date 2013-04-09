@@ -19,6 +19,7 @@
 
 #include "repeated_range.h"
 #include "tiled_range.h"
+#include "strided_range.h"
 
 #include "_CSRBandedOperatorGPU.cuh"
 
@@ -50,26 +51,230 @@ _CSRBandedOperator::_CSRBandedOperator(
         SizedArray<int> &row_ptr,
         SizedArray<int> &row_ind,
         SizedArray<int> &col_ind,
+        SizedArray<double> &R,
+        SizedArray<double> &high_dirichlet,
+        SizedArray<double> &low_dirichlet,
+        SizedArray<double> &top_factors,
+        SizedArray<double> &bottom_factors,
+        unsigned int axis,
         Py_ssize_t operator_rows,
         Py_ssize_t blocks,
+        bool has_high_dirichlet,
+        bool has_low_dirichlet,
+        std::string top_fold_status,
+        std::string bottom_fold_status,
+        bool has_residual,
         std::string name
         ) :
     data(data, true),
     row_ptr(row_ptr, true),
     row_ind(row_ind, true),
     col_ind(col_ind, true),
-    name(name),
+    R(R, true),
+    high_dirichlet(high_dirichlet, true),
+    low_dirichlet(low_dirichlet, true),
+    top_factors(top_factors, true),
+    bottom_factors(bottom_factors, true),
+    axis(axis),
     operator_rows(operator_rows),
     blocks(blocks),
     block_len(operator_rows / blocks),
-    nnz(data.size)
+    has_high_dirichlet(has_high_dirichlet),
+    has_low_dirichlet(has_low_dirichlet),
+    top_fold_status(top_fold_status),
+    bottom_fold_status(bottom_fold_status),
+    has_residual(has_residual),
+    nnz(data.size),
+    name(name)
     {
         status = cusparseCreate(&handle);
         if (status != CUSPARSE_STATUS_SUCCESS) {
-            std::cerr << "CUSPARSE Library initialization failed." << std::endl;
-            assert(false);
+            DIE("CUSPARSE Library initialization failed (handle).");
         }
+        status = cusparseCreateSolveAnalysisInfo(&analysis_info);
+        if (status != CUSPARSE_STATUS_SUCCESS) {
+            DIE("CUSPARSE Library initialization failed (analysis).");
+        }
+
+        status = cusparseCreateMatDescr(&mat_description);
+        if (status != CUSPARSE_STATUS_SUCCESS) {
+            DIE("CUSPARSE Library initialization failed (mat_descr).");
+        }
+        status = cusparseSetMatDiagType(mat_description, CUSPARSE_DIAG_TYPE_NON_UNIT);
     }
+
+
+bool _CSRBandedOperator::is_folded() {
+    return (top_fold_status == FOLDED || bottom_fold_status == FOLDED);
+}
+
+
+template <typename Tuple, typename Result>
+struct add_multiply3_ : public thrust::unary_function<Tuple, Result> {
+    Result direction;
+    add_multiply3_(Result x) : direction(x) {}
+    __host__ __device__
+    Result operator()(Tuple t) {
+        using thrust::get;
+        return  get<0>(t) + direction * get<1>(t) * get<2>(t);
+    }
+};
+
+void _CSRBandedOperator::fold_vector(SizedArray<double> &vector, bool unfold) {
+    FULLTRACE;
+
+    typedef thrust::tuple<REAL_t,REAL_t,REAL_t> REALTuple;
+
+    strided_range<DptrIterator> u0(vector.data, vector.data + vector.size, block_len);
+    strided_range<DptrIterator> u1(vector.data+1, vector.data + vector.size, block_len);
+
+    strided_range<DptrIterator> un(vector.data+block_len-1, vector.data + vector.size, block_len);
+    strided_range<DptrIterator> un1(vector.data+block_len-2, vector.data + vector.size, block_len);
+
+    // Top fold
+    if (top_fold_status == FOLDED) {
+        /* LOG("Folding top. direction("<<unfold<<") top_factors("<<top_factors<<")"); */
+        thrust::transform(
+            make_zip_iterator(make_tuple(u0.begin(), u1.begin(), top_factors.data)),
+            make_zip_iterator(make_tuple(u0.end(), u1.end(), top_factors.data + top_factors.size)),
+            u0.begin(),
+            add_multiply3_<REALTuple, REAL_t>(unfold ? -1 : 1));
+    }
+
+    if (bottom_fold_status == FOLDED) {
+        /* LOG("Folding bottom. direction("<<unfold<<") bottom_factors("<<bottom_factors<<")"); */
+        thrust::transform(
+            make_zip_iterator(make_tuple(un.begin(), un1.begin(), bottom_factors.data)),
+            make_zip_iterator(make_tuple(un.end(), un1.end(), bottom_factors.data + bottom_factors.size)),
+            un.begin(),
+            add_multiply3_<REALTuple, REAL_t>(unfold ? -1 : 1));
+    }
+
+    FULLTRACE;
+}
+
+
+
+void _CSRBandedOperator::solve(SizedArray<double> &V) {
+    FULLTRACE;
+
+    /* if (has_low_dirichlet) { */
+        /* LOG("has_low_dirichlet " << has_low_dirichlet); */
+        /* thrust::copy(low_dirichlet.data, */
+                /* low_dirichlet.data + low_dirichlet.size, */
+                /* V.data); */
+    /* } */
+    /* if (has_high_dirichlet) { */
+        /* LOG("has_high_dirichlet " << has_high_dirichlet); */
+        /* thrust::copy(high_dirichlet.data, */
+                /* high_dirichlet.data + high_dirichlet.size, */
+                /* V.data + V.size - V.shape[1]); */
+    /* } */
+
+    /* if (axis == 0) { */
+        /* V.transpose(1); */
+    /* } */
+
+    /* if (has_residual) { */
+        /* LOG("has_residual " << has_residual); */
+        /* thrust::transform(V.data, V.data + V.size, */
+                /* R.data, */
+                /* V.data, */
+                /* thrust::minus<double>()); */
+    /* } */
+
+    /* if (is_folded()) { */
+        /* LOG("is_folded()"); */
+        /* fold_vector(V); */
+    /* } */
+
+    double const one = 1;
+    thrust::copy(V.data, V.data + V.size, V.tempspace);
+    status = cusparseDcsrsv_analysis(
+            handle,
+            CUSPARSE_OPERATION_NON_TRANSPOSE,
+            V.size,
+            data.size,
+            mat_description,
+            data.data.get(),
+            row_ptr.data.get(),
+            col_ind.data.get(),
+            analysis_info
+            );
+
+    if (status != CUSPARSE_STATUS_SUCCESS) {
+        DIE("CUSPARSE Dcsrsv operation failed analysis.");
+    }
+
+    status = cusparseDcsrsv_solve(
+            handle,
+            CUSPARSE_OPERATION_NON_TRANSPOSE,
+            V.size,
+            &one,
+            mat_description,
+            data.data.get(),
+            row_ptr.data.get(),
+            col_ind.data.get(),
+            analysis_info,
+            V.tempspace.get(),
+            V.data.get()
+            );
+
+    if (status != CUSPARSE_STATUS_SUCCESS) {
+        DIE("CUSPARSE Dcsrsv operation failed solve.");
+    }
+
+    /* if (axis == 0) { */
+        /* V.transpose(1); */
+    /* } */
+
+    FULLTRACE;
+    return;
+}
+
+
+void _CSRBandedOperator::fake_solve(SizedArray<double> &V) {
+    FULLTRACE;
+    double const one = 1;
+    thrust::copy(V.data, V.data + V.size, V.tempspace);
+    status = cusparseDcsrsv_analysis(
+            handle,
+            CUSPARSE_OPERATION_NON_TRANSPOSE,
+            operator_rows,
+            nnz,
+            mat_description,
+            data.data.get(),
+            row_ptr.data.get(),
+            col_ind.data.get(),
+            analysis_info
+            );
+
+    if (status != CUSPARSE_STATUS_SUCCESS) {
+        DIE("CUSPARSE Dcsrsv operation failed analysis.");
+    }
+
+    status = cusparseDcsrsv_solve(
+            handle,
+            CUSPARSE_OPERATION_NON_TRANSPOSE,
+            operator_rows,
+            &one,
+            mat_description,
+            data.data.get(),
+            row_ptr.data.get(),
+            col_ind.data.get(),
+            analysis_info,
+            V.tempspace.get(),
+            V.data.get()
+            );
+
+    status = cusparseCreate(&handle);
+    if (status != CUSPARSE_STATUS_SUCCESS) {
+        DIE("CUSPARSE Dcsrsv operation failed solve.");
+    }
+    FULLTRACE;
+    return;
+}
+
 
 
 void _CSRBandedOperator::apply(SizedArray<double> &V) {
@@ -79,11 +284,42 @@ void _CSRBandedOperator::apply(SizedArray<double> &V) {
         DIE(V.name << ": Dimension mismatch. Got V(" <<V.size<<") Expected "<<operator_rows);
     }
 
-    cusparseMatDescr_t mat_description;
     status = cusparseCreateMatDescr(&mat_description);
 
     if (status != CUSPARSE_STATUS_SUCCESS) {
         DIE("CUSPARSE matrix description init failed.");
+    }
+
+    strided_range<DptrIterator> u0(V.data, V.data+V.size, block_len);
+    strided_range<DptrIterator> u1(V.data+block_len-1, V.data+V.size, block_len);
+
+    if (axis == 1) {
+        if (has_low_dirichlet) {
+            thrust::copy(
+                low_dirichlet.data,
+                low_dirichlet.data + low_dirichlet.size,
+                u1.begin()
+                );
+        }
+        if (has_high_dirichlet) {
+            thrust::copy(
+                high_dirichlet.data,
+                high_dirichlet.data + high_dirichlet.size,
+                u0.begin()
+                );
+        }
+    } else {
+        if (has_low_dirichlet) {
+            thrust::copy(low_dirichlet.data,
+                    low_dirichlet.data + low_dirichlet.size,
+                    V.data);
+        }
+        if (has_high_dirichlet) {
+            thrust::copy(high_dirichlet.data,
+                    high_dirichlet.data + high_dirichlet.size,
+                    V.data + V.size - V.shape[1]);
+        }
+        V.transpose(1);
     }
 
     thrust::copy(V.data, V.data + V.size, V.tempspace);
@@ -106,6 +342,23 @@ void _CSRBandedOperator::apply(SizedArray<double> &V) {
 
     if (status != CUSPARSE_STATUS_SUCCESS) {
         DIE("CUSPARSE CSR MV product failed.");
+    }
+
+    if (is_folded()) {
+        fold_vector(V, true);
+    }
+
+    if (has_residual) {
+        thrust::transform(
+                V.data,
+                V.data + V.size,
+                R.data,
+                V.data,
+                thrust::plus<double>());
+    }
+
+    if (axis == 0) {
+        V.transpose(1);
     }
 
     FULLTRACE;
@@ -425,6 +678,36 @@ _CSRBandedOperator * mixed_for_vector(SizedArray<double> &v0,
 
     std::string name = "mixed_for_vector CSR";
 
-    return new _CSRBandedOperator(data, row_ptr, row_ind,
-            col_ind, operator_rows, blocks, name);
+    SizedArray<double> R(0, "R");
+    SizedArray<double> high_dirichlet(0, "high_dirichlet");
+    SizedArray<double> low_dirichlet(0, "low_dirichlet");
+    SizedArray<double> top_factors(0, "top_factors");
+    SizedArray<double> bottom_factors(0, "bottom_factors");
+    bool has_high_dirichlet = false;
+    bool has_low_dirichlet = false;
+    std::string top_fold_status = CANNOT_FOLD;
+    std::string bottom_fold_status = CANNOT_FOLD;
+    bool has_residual = false;
+
+    int axis = 1;
+
+    return new _CSRBandedOperator(
+        data,
+        row_ptr,
+        row_ind,
+        col_ind,
+        R,
+        high_dirichlet,
+        low_dirichlet,
+        top_factors,
+        bottom_factors,
+        axis,
+        operator_rows,
+        blocks,
+        has_high_dirichlet,
+        has_low_dirichlet,
+        top_fold_status,
+        bottom_fold_status,
+        has_residual,
+        name);
 }

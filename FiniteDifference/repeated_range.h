@@ -1,3 +1,6 @@
+#ifndef REPEATED_RANGE_H
+#define REPEATED_RANGE_H
+
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
 #include <thrust/iterator/permutation_iterator.h>
@@ -65,3 +68,5 @@ class repeated_range
     Iterator last;
     difference_type repeats;
 };
+
+#endif /* end of include guard */

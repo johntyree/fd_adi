@@ -31,6 +31,9 @@
 #define FULLTRACE noop();
 static inline void noop() {};
 
+std::string const FOLDED = "FOLDED";
+std::string const CAN_FOLD = "CAN_FOLD";
+std::string const CANNOT_FOLD = "CANNOT_FOLD";
 
 static inline void debug_printer(std::ostream &os, const char *type, const char *fn, const char *func, int line, std::string msg) {
     os

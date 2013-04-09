@@ -457,7 +457,6 @@ void _TriBandedOperator::apply(SizedArray<double> &V) {
     }
     const unsigned N = V.size;
 
-    // TODO: This Iterator works, but is it right?
     strided_range<DptrIterator> u0(V.data, V.data+V.size, block_len);
     strided_range<DptrIterator> u1(V.data+block_len-1, V.data+V.size, block_len);
 
@@ -710,55 +709,60 @@ void _TriBandedOperator::solve(SizedArray<double> &V) {
     }
     const unsigned N = V.size;
 
-    if (has_low_dirichlet) {
-        thrust::copy(low_dirichlet.data,
-                low_dirichlet.data + low_dirichlet.size,
-                V.data);
-    }
-    if (has_high_dirichlet) {
-        thrust::copy(high_dirichlet.data,
-                high_dirichlet.data + high_dirichlet.size,
-                V.data + V.size - V.shape[1]);
-    }
+    /* if (has_low_dirichlet) { */
+        /* LOG("has_low_dirichlet " << has_low_dirichlet); */
+        /* thrust::copy(low_dirichlet.data, */
+                /* low_dirichlet.data + low_dirichlet.size, */
+                /* V.data); */
+    /* } */
+    /* if (has_high_dirichlet) { */
+        /* LOG("has_high_dirichlet " << has_high_dirichlet); */
+        /* thrust::copy(high_dirichlet.data, */
+                /* high_dirichlet.data + high_dirichlet.size, */
+                /* V.data + V.size - V.shape[1]); */
+    /* } */
 
-    if (axis == 0) {
-        V.transpose(1);
-    }
+    /* if (axis == 0) { */
+        /* V.transpose(1); */
+    /* } */
 
-    if (has_residual) {
-        thrust::transform(V.data, V.data + V.size,
-                R.data,
-                V.data,
-                thrust::minus<double>());
-    }
+    /* if (has_residual) { */
+        /* LOG("has_residual " << has_residual); */
+        /* thrust::transform(V.data, V.data + V.size, */
+                /* R.data, */
+                /* V.data, */
+                /* thrust::minus<double>()); */
+    /* } */
 
-    if (is_folded()) {
-        fold_vector(V);
-    }
+    /* if (is_folded()) { */
+        /* LOG("is_folded()"); */
+        /* fold_vector(V); */
+    /* } */
 
     status = cusparseDgtsvStridedBatch(handle, N,
                 sub.get(), mid.get(), sup.get(),
                 V.data.get(),
                 1, N);
 
-    /*
-     * if (block_len > 256) {
-     *     DIE("Block_len Too big!");
-     * }
-     * if (blocks * block_len > V.size) {
-     *     DIE("Indexing is wrong. Too large.");
-     * }
-     * triDiagonalSystemSolve<<<blocks, block_len>>>(V.size, sub.get(), mid.get(), sup.get(), V.data.get());
-     * cudaDeviceSynchronize();
-     */
-
     if (status != CUSPARSE_STATUS_SUCCESS) {
         DIE("CUSPARSE tridiag system solve failed.");
     }
 
-    if (axis == 0) {
-        V.transpose(1);
-    }
+    /* if (axis == 0) { */
+        /* V.transpose(1); */
+    /* } */
+    FULLTRACE;
+    return;
+}
+
+
+void _TriBandedOperator::fake_solve(SizedArray<double> &V) {
+    FULLTRACE;
+    const unsigned N = V.size;
+    status = cusparseDgtsvStridedBatch(handle, N,
+                sub.get(), mid.get(), sup.get(),
+                V.data.get(),
+                1, N);
     FULLTRACE;
     return;
 }

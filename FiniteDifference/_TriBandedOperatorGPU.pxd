@@ -27,6 +27,7 @@ cdef extern from "_TriBandedOperatorGPU.cuh":
         void fold_bottom(cbool unfold) except +
         void fold_top(cbool unfold) except +
         void solve(SizedArray[double] &) except +
+        void fake_solve(SizedArray[double] &) except +
         void undiagonalize() except +
         void vectorized_scale(SizedArray[double] &vector) except +
 

@@ -20,6 +20,8 @@ import FiniteDifference.FiniteDifferenceEngineGPU as FDG
 from FiniteDifference.blackscholes import BlackScholesFiniteDifferenceEngine, BlackScholesOption
 from FiniteDifference.heston import HestonOption, HestonBarrierOption, HestonFiniteDifferenceEngine
 
+from FiniteDifference import BandedOperatorGPU as BOG
+
 
 class FiniteDifferenceEngineADI_from_Host_test(unittest.TestCase):
 
@@ -84,6 +86,54 @@ class FiniteDifferenceEngineADI_from_Host_test(unittest.TestCase):
         # self.F.operators[1].diagonalize()
         self.FG = FDG.FiniteDifferenceEngineADI()
         self.FG.from_host_FiniteDifferenceEngine(self.F)
+
+
+    def test_csr_solve(self):
+        A = self.F.operators[1].copy() + 1
+        Tri = BOG.BandedOperator(A)
+        A.diagonalize()
+        Tri.diagonalize()
+
+        ref = A.apply(self.F.grid.domain[-1])
+        tst = Tri.apply(self.FG.grid.domain[-1])
+
+        fp(tst - ref, 'e')
+        npt.assert_array_almost_equal(ref, tst, decimal=11)
+
+        A.R = None
+        A.dirichlet = (None, None)
+        A.is_mixed_derivative = True
+
+        Csr = BOG.BandedOperator(A)
+
+        ref = Tri.immigrate()
+        tst = Csr.immigrate()
+        tst.is_mixed_derivative = False
+
+        npt.assert_array_almost_equal(tst.D.data, ref.D.data, decimal=11)
+        tst.D *= 0
+        ref.D *= 0
+        npt.assert_equal(tst, ref)
+
+
+        domT = self.FG.gpugrid.copy(True)
+        domC = self.FG.gpugrid.copy(True)
+        B = BOG.BandedOperator(A)
+
+        Csr.solve_(domC, True)
+        # tst = Csr.immigrate().solve(domC.to_numpy())
+        tst = domC.to_numpy()
+
+        Tri.solve_(domT, True)
+        ref = domT.to_numpy()
+
+
+        fp(tst)
+        fp(ref)
+        fp(tst - ref)
+
+        npt.assert_array_almost_equal(ref, tst, decimal=11)
+        assert False
 
 
     def test_verify_simple_operators_0(self):

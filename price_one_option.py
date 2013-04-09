@@ -22,6 +22,8 @@ import FiniteDifference.visualize as vis
 data_dir = os.path.expanduser("~/cudafd/src/fd_pricer/py_adi/data_convergence/")
 figure_dir = os.path.join(data_dir, "figures")
 
+from FiniteDifference import BandedOperatorGPU as BOG
+
 
 def engineCPU(*args, **kwargs):
     F = FD.heston.HestonFiniteDifferenceEngine(*args, **kwargs)
