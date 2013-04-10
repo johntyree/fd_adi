@@ -183,20 +183,12 @@ def trim1d(F, V=None):
         a = None
     return res, a, xs[trimx]
 
-def trim2d(F, V=None):
-    xs = F.grid.mesh[0]
-    ys = F.grid.mesh[1]
-    if V is None:
-        V = F.grid.domain[-1]
-    trimx = (0.0 * F.option.spot <= xs) & (xs <= 2.0*F.option.spot)
-    trimy = ys <= 1.0
+def trim2d(V, (xs, xmin, xmax), (ys, ymin, ymax)):
+    trimx = (xmin <= xs) & (xs <= xmax)
+    trimy = ymin <= ys <= ymax
     tr = lambda x: x[trimx, :][:, trimy]
     res = tr(V)
-    try:
-        a = tr(F.grid_analytical)
-    except NotImplementedError:
-        a = None
-    return res, a, xs[trimx], ys[trimy]
+    return res, xs[trimx], ys[trimy]
 
 def error1d(F):
     V = F.grid.domain[-1]
