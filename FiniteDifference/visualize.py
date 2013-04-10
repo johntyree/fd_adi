@@ -185,7 +185,7 @@ def trim1d(F, V=None):
 
 def trim2d(V, (xs, xmin, xmax), (ys, ymin, ymax)):
     trimx = (xmin <= xs) & (xs <= xmax)
-    trimy = ymin <= ys <= ymax
+    trimy = (ymin <= ys) & (ys <= ymax)
     tr = lambda x: x[trimx, :][:, trimy]
     res = tr(V)
     return res, xs[trimx], ys[trimy]
