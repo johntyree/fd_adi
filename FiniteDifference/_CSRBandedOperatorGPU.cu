@@ -158,43 +158,72 @@ void _CSRBandedOperator::fold_vector(SizedArray<double> &vector, bool unfold) {
 void _CSRBandedOperator::solve(SizedArray<double> &V) {
     FULLTRACE;
 
-    /* if (has_low_dirichlet) { */
-        /* LOG("has_low_dirichlet " << has_low_dirichlet); */
-        /* thrust::copy(low_dirichlet.data, */
-                /* low_dirichlet.data + low_dirichlet.size, */
-                /* V.data); */
-    /* } */
-    /* if (has_high_dirichlet) { */
-        /* LOG("has_high_dirichlet " << has_high_dirichlet); */
-        /* thrust::copy(high_dirichlet.data, */
-                /* high_dirichlet.data + high_dirichlet.size, */
-                /* V.data + V.size - V.shape[1]); */
-    /* } */
+    if (V.size != operator_rows) {
+        DIE(V.name << ": Dimension mismatch. Got V(" <<V.size<<") Expected "<<operator_rows);
+    }
 
-    /* if (axis == 0) { */
-        /* V.transpose(1); */
-    /* } */
+    status = cusparseCreateMatDescr(&mat_description);
 
-    /* if (has_residual) { */
-        /* LOG("has_residual " << has_residual); */
-        /* thrust::transform(V.data, V.data + V.size, */
-                /* R.data, */
-                /* V.data, */
-                /* thrust::minus<double>()); */
-    /* } */
+    if (status != CUSPARSE_STATUS_SUCCESS) {
+        DIE("CUSPARSE matrix description init failed.");
+    }
 
-    /* if (is_folded()) { */
-        /* LOG("is_folded()"); */
-        /* fold_vector(V); */
-    /* } */
+    if (is_folded()) {
+        LOG("is_folded()");
+        fold_vector(V);
+    }
 
-    double const one = 1;
+    if (nnz != data.size) {
+        DIE("nnz != data size");
+    }
+
+    strided_range<DptrIterator> u0(V.data, V.data+V.size, block_len);
+    strided_range<DptrIterator> u1(V.data+block_len-1, V.data+V.size, block_len);
+
+    if (axis == 1) {
+        if (has_low_dirichlet) {
+            thrust::copy(
+                low_dirichlet.data,
+                low_dirichlet.data + low_dirichlet.size,
+                u1.begin()
+                );
+        }
+        if (has_high_dirichlet) {
+            thrust::copy(
+                high_dirichlet.data,
+                high_dirichlet.data + high_dirichlet.size,
+                u0.begin()
+                );
+        }
+    } else {
+        if (has_low_dirichlet) {
+            thrust::copy(low_dirichlet.data,
+                    low_dirichlet.data + low_dirichlet.size,
+                    V.data);
+        }
+        if (has_high_dirichlet) {
+            thrust::copy(high_dirichlet.data,
+                    high_dirichlet.data + high_dirichlet.size,
+                    V.data + V.size - V.shape[1]);
+        }
+        V.transpose(1);
+    }
+
+    if (has_residual) {
+        LOG("has_residual " << has_residual);
+        thrust::transform(V.data, V.data + V.size,
+                R.data,
+                V.data,
+                thrust::minus<double>());
+    }
+
     thrust::copy(V.data, V.data + V.size, V.tempspace);
+
     status = cusparseDcsrsv_analysis(
             handle,
             CUSPARSE_OPERATION_NON_TRANSPOSE,
-            V.size,
-            data.size,
+            operator_rows,
+            nnz,
             mat_description,
             data.data.get(),
             row_ptr.data.get(),
@@ -206,10 +235,11 @@ void _CSRBandedOperator::solve(SizedArray<double> &V) {
         DIE("CUSPARSE Dcsrsv operation failed analysis.");
     }
 
+    double const one = 1;
     status = cusparseDcsrsv_solve(
             handle,
             CUSPARSE_OPERATION_NON_TRANSPOSE,
-            V.size,
+            operator_rows,
             &one,
             mat_description,
             data.data.get(),
@@ -224,13 +254,34 @@ void _CSRBandedOperator::solve(SizedArray<double> &V) {
         DIE("CUSPARSE Dcsrsv operation failed solve.");
     }
 
-    /* if (axis == 0) { */
-        /* V.transpose(1); */
-    /* } */
+    if (axis == 0) {
+        V.transpose(1);
+    }
 
     FULLTRACE;
     return;
 }
+
+
+/* SizedArray<double> _CSRBandedOperator::todense() { */
+
+    /* SizedArray<double> ret(operator_rows, "dense"); */
+
+    /* status = cusparseCreateMatDescr(&mat_description); */
+
+    /* cusparseDcsr2dense( */
+            /* handle, */
+            /* block_len, */
+            /* operator_rows / block_len, */
+            /* mat_description, */
+            /* data.data.get(), */
+            /* row_ptr.data.get(), */
+            /* col_ind.data.get(), */
+            /* block_len) */
+
+
+
+/* } */
 
 
 void _CSRBandedOperator::fake_solve(SizedArray<double> &V) {
