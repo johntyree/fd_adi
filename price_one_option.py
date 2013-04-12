@@ -122,15 +122,14 @@ def new_engine(opt):
 
 
 def run(opt):
-    if opt.cpu:
-        opt.engine = opt.cpu
+    if opt.engine:
         e = new_engine(opt)
         option = e.option
-        switch = {'i' : e.solve_implicit,
-        'd' : e.solve_douglas,
-        'hv': e.solve_hundsdorferverwer,
-        's' : e.solve_smooth
-        }
+        switch = {
+            'i' : e.solve_implicit,
+            'd' : e.solve_douglas,
+            'hv': e.solve_hundsdorferverwer,
+            's' : e.solve_smooth}
         s = np.searchsorted(np.round(e.grid.mesh[0], decimals=6), e.option.spot)
         v = np.searchsorted(np.round(e.grid.mesh[1], decimals=6), e.option.variance.value)
         wanted, found = (opt.spot, opt.variance), (e.grid.mesh[0][s], e.grid.mesh[1][v])
@@ -139,45 +138,26 @@ def run(opt):
                                     err_msg="We have the wrong indices! %s %s" % (wanted, found))
         # Compute FD result
         switch[opt.scheme](opt.nt, opt.tenor / opt.nt)
-
-    if opt.gpu:
-        opt.engine = opt.gpu
-        e = new_engine(opt)
-        option = e.option
-        switch = {'i' : e.solve_implicit,
-        'd' : e.solve_douglas,
-        'hv': e.solve_hundsdorferverwer,
-        's' : e.solve_smooth
-        }
-        s = np.searchsorted(np.round(e.grid.mesh[0], decimals=6), e.option.spot)
-        v = np.searchsorted(np.round(e.grid.mesh[1], decimals=6), e.option.variance.value)
-        wanted, found = (opt.spot, opt.variance), (e.grid.mesh[0][s], e.grid.mesh[1][v])
-        np.testing.assert_almost_equal(wanted, found,
-                                    decimal=10,
-                                    err_msg="We have the wrong indices! %s %s" % (wanted, found))
-        # Compute FD result
-        switch[opt.scheme](opt.nt, opt.tenor / opt.nt)
-
-    if not opt.cpu or opt.gpu:
+        try:
+            e.grid.domain[-1] = e.gpugrid.to_numpy()
+        except AttributeError: # Must already be on CPU
+            pass
+        print "FD:", e.grid.domain[-1][s,v]
+    else:
         option = new_option(opt)
-
-    try:
-        e.grid.domain[-1] = e.gpugrid.to_numpy()
-    except AttributeError:
-        pass
-    print "FD:", e.grid.domain[-1][s,v]
-    if opt.mc:
-        res = option.monte_carlo(npaths=opt.mc, dt=(opt.tenor / opt.nt))
+        if opt.mc:
+            res = option.monte_carlo(npaths=opt.mc, dt=(opt.tenor / opt.nt))
+            e = res
+            print
+            print "MC:", res['expected'], "±", 1.96 * res['error']
+        try:
+            AN = option.analytical
+            print "AN:", AN
+        except NotImplementedError:
+            pass
+        except AttributeError:
+            pass
         print
-        print "MC:", res['expected'], "±", 1.96 * res['error']
-    try:
-        res = option.analytical
-        print "AN:", res
-    except NotImplementedError:
-        pass
-    except AttributeError:
-        pass
-    print
     return e
 
 
@@ -226,7 +206,9 @@ def main():
         res = run(opt)
         with open(filestring(opt, res), 'w') as fn:
             cPickle.dump([res.grid.mesh, res.grid.domain[-1]], fn, -1)
-
+    if opt.mc:
+        opt.engine = None
+        res = run(opt)
 
 if __name__ == '__main__':
     main()
