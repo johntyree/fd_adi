@@ -132,10 +132,10 @@ class HestonOptionConstruction_test(unittest.TestCase):
                         , top = (False, 170.0)
                         )
         option = DefaultHeston
+
         # option = HestonOption(tenor=1, strike=99.0, volatility=0.2,
                                         # mean_reversion=3, mean_variance=0.04,
                                         # vol_of_variance=0.6, correlation=-0.7)
-
 
         self.dt = 1.0/2.0
         self.F = HestonFiniteDifferenceEngine(option, nspots=5,
@@ -144,14 +144,15 @@ class HestonOptionConstruction_test(unittest.TestCase):
                                                    force_exact=False,
                                                    flip_idx_var=False)
 
-
         # self.F = HestonFiniteDifferenceEngine(H, nspots=100,
                                          # nvols=100, spotdensity=10, varexp=4,
                                          # var_max=12, flip_idx_spot=False,
                                          # flip_idx_var=False, verbose=False,
                                          # force_bandwidth=None,
                                          # force_exact=False)
+
         self.F.init()
+
         self.FGG = FDG.HestonFiniteDifferenceEngine(option,
                                                     force_exact=False,
                                                     nspots=self.F.grid.shape[0],

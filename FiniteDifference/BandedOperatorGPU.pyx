@@ -614,6 +614,7 @@ cpdef mixed_for_vector(np.ndarray v0, np.ndarray v1):
     B.bottom_fold_status = CANNOT_FOLD
     return B
 
+
 cdef inline int sign(int i):
     if i < 0:
         return -1
