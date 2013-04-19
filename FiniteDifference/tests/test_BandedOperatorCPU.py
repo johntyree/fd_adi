@@ -286,7 +286,7 @@ class BandedOperator_test(unittest.TestCase):
                     # print (X12.D.offsets, manualX12.offsets[::-1]),  "%s+%s (dv %i) idx %i" % (sch0, sch1, dv, idx)
                     assert np.array_equal(X12.D.todense(), manualX12.todense()),  "%s+%s (dv %i) idx %i" % (sch0, sch1, dv, idx)
                     assert np.array_equal(X12.D.offsets, manualX12.offsets[::-1]),  "%s+%s (dv %i) idx %i" % (sch0, sch1, dv, idx)
-                    assert (X12.D.data.shape, manualX12.data.shape),  "%s+%s (dv %i) idx %i" % (sch0, sch1, dv, idx)
+                    assert X12.D.data.shape == manualX12.data.shape,  "%s+%s (dv %i) idx %i" % (sch0, sch1, dv, idx)
                     assert np.array_equal(X12.D.data, manualX12.data[::-1]),  "%s+%s (dv %i) idx %i" % (sch0, sch1, dv, idx)
 
 
