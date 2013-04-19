@@ -1,0 +1,56 @@
+# Compiled Object files
+*.slo
+*.lo
+*.o
+
+# Compiled Dynamic libraries
+*.so
+
+# Compiled Static libraries
+*.lai
+*.la
+*.a
+
+# C++ precompiled headers
+*.gch
+
+# Project files
+a.out
+main
+device_query
+data
+output
+heston_cache
+noselog
+NVVP_Session
+FiniteDifference.egg-info
+FiniteDifference/BandedOperator.cpp
+FiniteDifference/BandedOperatorGPU.cpp
+FiniteDifference/FiniteDifferenceEngine.cpp
+FiniteDifference/FiniteDifferenceEngineGPU.cpp
+FiniteDifference/SizedArrayPtr.cpp
+
+# Dot files
+.*
+
+*~
+.fuse_hidden*
+*.pyc
+*.pyo
+*.swp
+*.o
+*.hi
+*.lo
+*.la
+*.a
+*.toc
+*.aux
+*.log
+*.pyg
+report.pdf
+*.dvi
+*.bbl
+*.blg
+*.out
+*.brf
+tags
