@@ -67,84 +67,16 @@ cdef class FiniteDifferenceEngine(object):
 
     def __init__(self):
         """
-        @coefficients@ is a dict of tuple, function pairs with c[i,j] referring to the
-        coefficient of the i j derivative, dU/didj. Absent pairs are counted as zeros.
+        Directly instantiating this class is only useful if you want to build
+        it from a prototypical @FiniteDifferenceEngine@. In that case, call the
+        `from_host_FiniteDifferenceEngine(proto)` method.
 
-        The functions MUST be able to handle dims+1 arguments, with the first
-        being time and the rest corresponding to the dimensions given by @grid.shape@.
-
-        Still need a good way to handle cross terms.
-
-        N.B. You don't actually want to do this with lambdas. They aren't real
-        closures. Weird things might happen.
-
-        Ex. (2D grid)
-
-            {(): lambda t, x0, x1: 0.06 # 0th derivative
-              (0,)  : lambda t, x0, x1: 0.5,
-              (0,0) : lambda t, x0, x1: x,
-              # python magic lets be more general than (2*x1*t)
-              (1,)  : lambda t, *dims: 2*dims[1]*t
-              (0,1) : lambda t, *dims: dims[0]*dims[1]}
-
-        is interpreted as:
-            0.5*(dU/dx1) + x1*(d²U/dx1²) + 2*x2*t*(dU/dx2)
-                + 0*(d²U/dx2²) + x1*x2*(d²U/dx1dx2)
-
-        A similar scheme applies for the boundaries conditions.  @boundaries@
-        is a dict of 2-tuples corresponding to the lower and upper boundary
-        (where lower means low index in @grid.mesh@). Each can have one of
-        two possible values.
-
-        The first element is a number corresponding to the type of boundary
-        condition.
-            None signifies free boundaries, simply satisfying the PDE.
-            0 is a dirchlet boundary condition
-            1 is a Von Neuman boundary
-
-        It's up to you to make sure this makes sense. If you specify a
-        dirichlet boundary somewhere, then it doesn't make sense to also
-        specify a Von Neumann boundary there.
-
-        The second element is a function in the same form as for the coefficients,
-        representing the value of the boundary.
-
-        Ex. (Heston PDE, x0 = spot, x1 = variance)
-
-                    # 0'th derivative term (ex. -rU)
-                    # This can only depend on time!
-            {()    : lambda t: -self.r
-                    # dirichlet: U = 0         # VN: dUdS = 1
-             (0,)  : ((1, lambda *args: 0), (1, lambda *args:1))
-                    # dirichlet: U = 0         # Free boundary
-             (0,0) : ((1, lambda *args: 0), (None, lambda *x: None)),
-                    # Free boundary at low variance
-             (1,)  : ((None, lambda *x: None),
-                    # dirichlet: intrinsic value at high variance
-                       (1, lambda t, *dims: np.maximum(0, dim[0]-k)))
-                    # Free boundary at low variance
-                    # VN: second derivative is 0 at high variance
-            (1,1)  : ((None, lambda *x: None), (1, lambda *args:0))}
-
-
-        Again we do a similar encoding for the FD schemes used.
-
-        @schemes@ is a dict of tuples of dicts as follows.
-
-        Ex. (Centered in all cases. Switch to upwinding at index 10 in
-                convection term in x1 dimension.)
-
-            {(0,) : ({"scheme": "center"},),
-            (0,0): ({"scheme": "center"},),
-            (1,) : ({"scheme": "center"},
-                    {"scheme": "backward", "from" : flip_idx_var}),
-            (1,1): ({"scheme": "center"},)}
-
-        Any missing values are determined by @self.default_scheme@ and
-        @self.default_order@ (making this particular example largely
-        redundant).
-
-        Can't do this with C/Cuda of course... maybe cython?
+        There is no GPU implementation of the boundary conditions or scaling
+        functions embedded into this class and it does not honor those
+        parameters. If the engine is already initialized on the CPU, then
+        building this from it will simply move the operators and domain to the
+        GPU, skipping the creation step. (This implies that time dependent
+        operators are not possible via this method)
         """
         self.simple_operators = {}
         self.operators = {}
@@ -165,6 +97,9 @@ cdef class FiniteDifferenceEngine(object):
 
 
     def from_host_FiniteDifferenceEngine(self, other):
+        """
+        Move a FiniteDifferenceEngine onto the GPU.
+        """
         other.init()
         for attr in ['option', 'grid_analytical']:
             if hasattr(other, attr):
@@ -179,7 +114,7 @@ cdef class FiniteDifferenceEngine(object):
         self.ndim = self.grid.ndim
         self.coefficients = other.coefficients
 
-        # Setup
+        # Remove cross deriv operator if correlation is 0
         try:
             if self.option.correlation == 0:
                 other.operators.pop((0,1))
@@ -192,14 +127,13 @@ cdef class FiniteDifferenceEngine(object):
         self.simple_operators = {k:BOG.BandedOperator(v) for k,v in other.simple_operators.items()}
 
 
-    def solve(self):
-        """Run all the way to the terminal condition."""
-        raise NotImplementedError
-
-
 cdef class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
 
     def __init__(self):
+        """
+        This class exists because an ADE method was also considered. It was
+        scrapped so only one type of FDE remains.
+        """
         FiniteDifferenceEngine.__init__(self)
 
 
@@ -226,6 +160,10 @@ cdef class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
 
 
     cpdef preprocess_operators(self, SizedArrayPtr dt, SizedArrayPtr theta):
+        """Combine operators together as needed by the schemes.
+        This is factored out because it needs to be done at each time step when
+        time dependent params are used.
+        """
 
         if self.zero_derivative_coefficient.p == NULL:
             self.set_zero_derivative()
@@ -252,18 +190,24 @@ cdef class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
 
 
     cpdef scale_and_combine_operators(self, operators=None):
+        """
+        Scale each operator by the appropriate coefficient based on the PDE.
+        If this is being done on the GPU we call out to cuda kernels. Otherwise
+        it's done in the same way as the CPU implementation, then copied over.
+        """
         if operators is None:
             try:
                 self.make_operator_templates()
             except AttributeError:
                 pass
-            operators = self.simple_operators
+            operators = self.simple_operators  # single derivative operators
         self.operators = {}
         coeffs = self.coefficients
-        on_gpu = type(coeffs) == list
 
-        # self.zero_derivative_coefficient = SizedArrayPtr(
-            # self.zero_derivative_coefficient_host)
+        # Usually, coeffs would be a dict containing lambdas representing the
+        # functions which are the coefficients. If it's just a list then we
+        # must be on the GPU with hardcoded implementations.
+        on_gpu = type(coeffs) == list
 
         for d, op in sorted(operators.items()):
             op = op.copy()
@@ -404,6 +348,9 @@ cdef class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
 
 
     cpdef set_zero_derivative(self):
+        """Compute the zero derivative coefficient (-r(t) in the Heston case)
+        and move it over to the GPU.
+        """
         if self.zero_derivative_coefficient_host is None:
             if () in self.coefficients:
                 try:
@@ -422,6 +369,7 @@ cdef class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
 
 
     def solve_implicit(self, n, dt, initial=None):
+        """Wrapper for implicit scheme using CPU-based data."""
         n = int(n)
         cdef SizedArrayPtr V
         if initial is not None:
@@ -436,6 +384,8 @@ cdef class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
 
 
     cpdef solve_implicit_(self, n, SizedArrayPtr dt, SizedArrayPtr V, callback=None, numpy=False):
+        """The fully implicit scheme on the GPU."""
+
         if callback or numpy:
             raise NotImplementedError("Callbacks and Numpy not available for GPU solver.")
 
@@ -474,6 +424,7 @@ cdef class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
 
 
     def solve_douglas(self, n, dt, initial=None, theta=0.5, callback=None, numpy=False):
+        """Wrapper for the douglas scheme using CPU based data."""
         if callback or numpy:
             raise NotImplementedError("Callbacks and Numpy not available for GPU solver.")
         n = int(n)
@@ -489,6 +440,7 @@ cdef class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
 
 
     cpdef solve_douglas_(self, int n, double dt, SizedArrayPtr V, double theta=0.5):
+        """The Douglas ADI scheme on the GPU"""
 
         Firsts = [o.mul_scalar_from_host(dt) for d, o in self.operators.items()]
 
@@ -520,6 +472,7 @@ cdef class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
                     # return V
                 print int(k * to_percent),
                 sys.stdout.flush()
+            # Preprocess here to regenerate operators for new timestep
             for L in Firsts:
                 X.copy_from(Y)
                 L.apply_(X, overwrite=True)
@@ -536,6 +489,7 @@ cdef class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
 
 
     def solve_hundsdorferverwer(self, n, dt, initial=None, theta=0.5, callback=None, numpy=False):
+        """Wrapper for HV ADI scheme."""
         if callback or numpy:
             raise NotImplementedError("Callbacks and Numpy not available for GPU solver.")
         n = int(n)
@@ -553,6 +507,7 @@ cdef class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
 
 
     cpdef solve_hundsdorferverwer_(self, n, SizedArrayPtr dt, SizedArrayPtr V, SizedArrayPtr theta):
+        """HV ADI scheme implemented on the GPU"""
 
         Firsts, Les, Lis = self.preprocess_operators(dt, theta)
 
@@ -576,6 +531,7 @@ cdef class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
                     # return V
                 print int(k * to_percent),
                 sys.stdout.flush()
+            # Preprocess here to regenerate operators for new timestep
 
             Y.copy_from(V)
             for L in Firsts:
@@ -631,6 +587,10 @@ cdef class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
 
 
     cpdef solve_smooth_(self, n, SizedArrayPtr dt, SizedArrayPtr V, smoothing_steps=2):
+        """
+        Perform @smoothing_steps@ fully implicit steps, then do the HV
+        scheme to completion.
+        """
         halfdt = SizedArrayPtr()
         halfdt.alloc(1)
         halfdt.copy_from(dt)
@@ -668,7 +628,14 @@ cdef class HestonFiniteDifferenceEngine(FiniteDifferenceEngineADI):
             verbose=True,
             force_bandwidth=None
             ):
-        """@option@ is a HestonOption"""
+        """
+        This creates a GPU based FiniteDifferenceEngine that is hardcoded to
+        solve Vanilla Heston Options. It doesn't honor @coefficients@ or
+        @boundaries@. If you want them, then create the FDE first and import it
+        as an FDEGPUADI with the from_host... method
+
+        @option@ is a HestonOption
+        """
         FiniteDifferenceEngineADI.__init__(self)
 
         if schemes is not None or flip_idx_var or flip_idx_spot:
@@ -728,13 +695,16 @@ cdef class HestonFiniteDifferenceEngine(FiniteDifferenceEngineADI):
 
         self.grid = grid
         self.gpugrid = SizedArrayPtr(self.grid.domain[-1], "FDEGPU.grid")
-        self.fill_gpugridmesh_from_grid()
+        self._fill_gpugridmesh_from_grid()
         self.scaling_vec.alloc(self.gpugrid.size, self.scaling_vec.tag)
         self.zero_derivative_coefficient_host = np.atleast_1d(
                 -self.option.interest_rate.value / self.grid.ndim)
 
 
     def make_operator_templates(self):
+        """
+        Create the single derivative operators for the Heston PDE
+        """
         m0 = self.grid.mesh[0]
         m1 = self.grid.mesh[1]
         self.zero_derivative_coefficient_host = np.atleast_1d(
@@ -763,6 +733,9 @@ cdef class HestonFiniteDifferenceEngine(FiniteDifferenceEngineADI):
 
     @property
     def idx(self):
+        """
+        The indices in the domain corresponding to the Option paramters.
+        """
         ids = bisect_left(np.round(self.spots, decimals=4), np.round(self.option.spot, decimals=4))
         idv = bisect_left(np.round(self.vars, decimals=4), np.round(self.option.variance.value, decimals=4))
         return (ids, idv)

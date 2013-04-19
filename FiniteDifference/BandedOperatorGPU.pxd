@@ -17,10 +17,9 @@ from FiniteDifference.SizedArrayPtr cimport SizedArrayPtr, SizedArrayPtr_i
 from FiniteDifference.SizedArrayPtr cimport from_SizedArray, from_SizedArray_i
 
 
+# Include these headers for debugging.
 cdef extern from "backtrace.h":
     pass
-
-
 cdef extern from "filter.h":
     pass
 

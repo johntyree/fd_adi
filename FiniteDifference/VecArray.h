@@ -24,6 +24,10 @@ using thrust::make_constant_iterator;
 
 
 namespace impl {
+    /* These are all forward declarations for simple operations on the array. We
+     * aren't very DRY here because the build system is poorly set up and chokes
+     * on crazy situations with templates not being instantiated.
+     */
 
     /* Vector Vector double */
     void pluseq(
@@ -118,6 +122,9 @@ namespace impl {
 
 template <typename T>
 struct GPUVec : thrust::device_vector<T> {
+    /* A simple wrapper around device vectors to make it easier to extra raw
+     * pointers to the data.
+     */
 
     GPUVec() : thrust::device_vector<T>() {}
 
@@ -202,6 +209,7 @@ struct HostVec : thrust::host_vector<T> {
 };
 
 
+/* Functions to make debugging less hellish. */
 template <typename T>
 void print_array(T *a, Py_ssize_t len) {
     std::ostream_iterator<T> out = std::ostream_iterator<T>(std::cout, " ");
@@ -230,6 +238,12 @@ std::ostream & operator<<(std::ostream &os, thrust::device_vector<T> const &v) {
 template<typename T>
 struct SizedArray {
 
+    /* The main class for wrapping data on the GPU. SizedArray stores the
+     * dimensionality and size of the data, provides pointer access. Can free
+     * the data upon destruction, keeps a temporary space allocated for
+     * operations requiring it, etc.
+     */
+
     bool owner;
     thrust::device_ptr<T> data;
     thrust::device_ptr<T> tempspace;
@@ -240,6 +254,7 @@ struct SizedArray {
 
 
     SizedArray(Py_ssize_t size, std::string name)
+        /* Allocate an empty block of memory and treat it as 1 dimensional */
         : owner(true),
           data(device_malloc<T>(size)),
           tempspace(device_malloc<T>(size)),
@@ -252,6 +267,9 @@ struct SizedArray {
 
 
     SizedArray(Py_ssize_t size, T default_val, std::string name)
+        /* Allocate block of mem with default value. Treat as 1 dimensional.
+         * Can't reuse constructors in C++, isn't that great?
+         */
         : owner(true),
           data(device_malloc<T>(size)),
           tempspace(device_malloc<T>(size)),
@@ -265,6 +283,11 @@ struct SizedArray {
 
 
     SizedArray(SizedArray<T> const &S, bool deep)
+        /* Make a new SizedArray that's a copy of S
+         * If deep is true, then copy the data to a new memory location and take
+         * ownership of it, otherwise point to the same memory. This can be
+         * useful for creating "views" with different dimensionality
+         */
         : owner(deep),
           data(owner ? device_malloc<T>(S.size) : S.data),
           tempspace(device_malloc<T>(S.size)),
@@ -282,6 +305,9 @@ struct SizedArray {
     }
 
     SizedArray(GPUVec<T> const &S, std::string name)
+        /* Create a new SizedArray that is a copy of a GPUVec
+         * Assumed to be 1 dimensional
+         */
         : owner(true),
           data(device_malloc<T>(S.size())),
           tempspace(device_malloc<T>(S.size())),
@@ -296,6 +322,13 @@ struct SizedArray {
 
 
     SizedArray(T *rawptr, Py_ssize_t size, std::string name, bool from_host)
+        /* Create a new sized array from a pointer to memory.
+         * If @from_host@ is true, then rawptr is assumed to point to the host.
+         * In that case, we copy it and take ownership.
+         *
+         * Otherwise we simply wrap the existing data and assume someone else
+         * owns it.
+         */
         : owner(from_host),
           data(),
           tempspace(device_malloc<T>(size)),
@@ -315,6 +348,14 @@ struct SizedArray {
 
 
     SizedArray(T *rawptr, int ndim, intptr_t *s, std::string name, bool from_host)
+        /* Create from pointer to memory with dimensionality @ndim@ and array of
+         * dimension lengths @s@.
+         * If @from_host@ is true, then rawptr is assumed to point to the host.
+         * In that case, we copy it and take ownership.
+         *
+         * Otherwise we simply wrap the existing data and assume someone else
+         * owns it.
+         */
         : owner(from_host),
           data(),
           tempspace(),
@@ -375,6 +416,7 @@ struct SizedArray {
 
 
     void copy_from(SizedArray<T> &other) {
+        /* Copy the data and shape from other into *this */
         if (other.data.get() == NULL) {
             DIE(name << "Copying from uninitialized memory");
         }
@@ -412,6 +454,7 @@ struct SizedArray {
 
 
     void transpose(int strategy) {
+        /* Transpose the SizedArray if it's 2 dimensional. */
         if (ndim != 2) {
             /* Skip transposing for 1D case */
             return;
@@ -431,6 +474,9 @@ struct SizedArray {
         if (owner) {
             std::swap(tempspace, data);
         } else {
+            /* We have to copy here because we're not the only one looking at
+             * *data
+             */
             thrust::copy(tempspace, tempspace+size, data);
         }
     }
@@ -444,6 +490,7 @@ struct SizedArray {
 
 
     int idx(int idx) {
+        /* Make sure we don't jump out of bounds, for debugging */
         if (idx < 0 || size <= idx) {
             DIE(name  << " idx("<<idx<<") not in range [0, Size("<<size<<"))");
         }
@@ -452,6 +499,7 @@ struct SizedArray {
 
 
     int idx(int i, int j) {
+        /* Make sure we don't jump out of bounds, for debugging */
         if (ndim != 2) {
             DIE("Can't use 2D index on a 1D array");
         }

@@ -15,6 +15,8 @@ typedef thrust::detail::normal_iterator<thrust::device_ptr<double> > DptrIterato
 
 double const NaN = std::numeric_limits<double>::quiet_NaN();
 
+/* See the implmentations for descriptions */
+
 
 class _TriBandedOperator {
     public:

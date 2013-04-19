@@ -22,6 +22,11 @@ from FiniteDifference.thrust.copy cimport copy_n
 cdef class SizedArrayPtr(object):
 
     def __init__(self, a=None, tag="Unknown"):
+        """
+        This class holds a pointer to a SizedArray<double> and allows us to
+        play with it from Python. In effect, Python's garbage collection turns
+        this into an autoptr.
+        """
         if a is not None:
             self.from_numpy(a, tag)
             # print "imported from numpy in constructor"
@@ -36,14 +41,20 @@ cdef class SizedArrayPtr(object):
 
 
     cdef store(self, SizedArray[double] *p, cpp_string tag="Unknown"):
+        """
+        Take ownership of a pointer to a SizedArray.
+        """
         if self.p:
-            raise RuntimeError("SizedArrayPtr is single assignment")
+            raise RuntimeError("SizedArrayPtr is single assignment for now")
         self.p = p
         self.size = self.p.size
         # print "SAPtr -> Storing %s:" % tag, to_string(p)
 
 
     cpdef from_numpy(self, np.ndarray a, cpp_string tag="Unknown"):
+        """
+        Send a numpy vector to the GPU as a sized array.
+        """
         if self.p:
             print "SizedArrayPtr is single assignment"
             raise RuntimeError("SizedArrayPtr is single assignment")
@@ -53,6 +64,9 @@ cdef class SizedArrayPtr(object):
 
 
     cpdef to_numpy(self):
+        """
+        Return a copy of the SizedArray as a numpy vector.
+        """
         # print "Converting", to_string(deref(self.p))
         # print "ndim", self.p.ndim, self.p.shape[0], self.p.shape[1]
         a = from_SizedArray(deref(self.p))
@@ -61,6 +75,9 @@ cdef class SizedArrayPtr(object):
 
 
     cpdef SizedArrayPtr copy(self, cbool deep):
+        """
+        Return a copy of this SizedArray.
+        """
         cdef SizedArray[double] *x = new SizedArray[double](deref(self.p), deep)
         u = SizedArrayPtr()
         u.store(x)
@@ -68,6 +85,9 @@ cdef class SizedArrayPtr(object):
 
 
     cpdef copy_from(self, SizedArrayPtr other):
+        """
+        Copy the data from @other@ into our SizedArray
+        """
         self.p.copy_from(deref(other.p))
 
 
@@ -116,6 +136,7 @@ cdef class SizedArrayPtr(object):
 
 
     def __neg__(self):
+        """The slowest, worst way to negate the SizedArray"""
         other = SizedArrayPtr()
         other.alloc(1)
         other.copy_from(self)
@@ -136,6 +157,10 @@ cdef class SizedArrayPtr(object):
 cdef class SizedArrayPtr_i(object):
 
     def __init__(self, a=None, tag="Unknown"):
+        """
+        An exact copy of the SizedArrayPtr class, specialized to int because we
+        don't have templates.
+        """
         if a is not None:
             self.from_numpy(a, tag)
             # print "imported from numpy in constructor"
@@ -165,6 +190,9 @@ cdef class SizedArrayPtr_i(object):
 
 
     cpdef copy_from(self, SizedArrayPtr_i other):
+        """
+        Copy the data from @other@ into our SizedArray
+        """
         self.p.copy_from(deref(other.p))
 
 
@@ -230,6 +258,7 @@ cdef class SizedArrayPtr_i(object):
 
 
     def __dealloc__(self):
+        """ Called when this python object is destroyed. """
         if self.p != NULL:
             # print "Freeing %s:" % (self.tag,), to_string(self.p)
             del self.p

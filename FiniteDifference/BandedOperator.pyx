@@ -82,6 +82,9 @@ cdef class BandedOperator(object):
 
 
     def __richcmp__(self, other, op):
+        """
+        Comparison function for equality. Only used in testing.
+        """
         true = op == 2
         false = op == 3
 
@@ -176,6 +179,10 @@ cdef class BandedOperator(object):
 
 
     cpdef diagonalize(self):
+        """
+        Transform the operator matrix to a tri-diaonal one by performing
+        guassian elimination on the top and bottom row.
+        """
         # This is an ugly heuristic
         top = 0
         bot = len(self.D.offsets)
@@ -192,6 +199,9 @@ cdef class BandedOperator(object):
 
 
     cpdef undiagonalize(self):
+        """
+        Reverse the diagonalize() operation. Always results in bandwidth 5!
+        """
         data = np.zeros((5, self.shape[0]))
         offsets = np.array((2, 1, 0, -1, -2), dtype=np.int32)
         selfoffsets = self.D.offsets
@@ -281,6 +291,9 @@ cdef class BandedOperator(object):
 
 
     cpdef fold_vector(self, double[:] v, unfold=False):
+        """
+        Perform the appropriate (un)diagonalization as needed on the RHS vector
+        """
         cdef int direction, u0, u1, un ,un1
         blocks = self.blocks
         block_len = self.shape[0] // blocks
@@ -316,6 +329,7 @@ cdef class BandedOperator(object):
 
 
     cpdef apply(self, V, overwrite=False):
+        """Matrix application with residual."""
         if not overwrite:
             V = V.copy()
         t = range(V.ndim)
@@ -348,6 +362,7 @@ cdef class BandedOperator(object):
 
 
     cpdef solve(self, V, overwrite=False):
+        """Matrix inversion and linear system solve with residual."""
         if not overwrite:
             V = V.copy()
         t = range(V.ndim)

@@ -1,8 +1,8 @@
 #include "_kernels.h"
 
+/* Parameters to tweak for the transpose kernel. */
 #define TILE_DIM 32
 #define BLOCK_ROWS 8
-
 
 __global__
 void d_transposeNoBankConflicts(

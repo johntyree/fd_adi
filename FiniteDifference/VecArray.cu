@@ -22,6 +22,9 @@ using thrust::make_constant_iterator;
 using thrust::placeholders::_1;
 using thrust::placeholders::_2;
 
+/* These are simple operations on SizedArrays. The assume very little and can be
+ * defined arbitrarily. Used to increase efficiency from python.
+ */
 
 namespace impl {
 

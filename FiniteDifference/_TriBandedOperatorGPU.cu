@@ -43,6 +43,7 @@ using namespace thrust::placeholders;
 
 template <typename T, typename U>
 int find_index(T haystack, U needle, int max) {
+    /* Search array @haystack@ for first occurance of @needle@. */
     FULLTRACE;
     int idx;
     for (idx = 0; idx < max; ++idx) {
@@ -63,6 +64,7 @@ int find_index(T haystack, U needle, int max) {
 }
 
 struct first_deriv {
+    /* Fill in the coefficients for the first derivative */
     template <typename Tuple>
     __host__ __device__
     /* (sup, mid, sub, deltas+1, deltas+2) */
@@ -76,6 +78,7 @@ struct first_deriv {
 };
 
 struct second_deriv {
+    /* Fill in the coefficients for the second derivative */
     template <typename Tuple>
     __host__ __device__
     /* (sup, mid, sub, deltas+1, deltas+2) */
@@ -101,14 +104,11 @@ struct dirichlet_boundary {
         get<2>(t) =  0;
         get<3>(t) = val;
     }
-    /* # Dirichlet boundary. No derivatives, but we need to preserve the */
-    /* # value we get, because we will have already forced it. */
     /* Bdata[m, 0] = 1 */
     /* B.dirichlet[0] = lower_val */
 };
 
 struct von_neumann_boundary {
-// thrust::fill...
     von_neumann_boundary(double val) : val(val) {}
 
     double val;
@@ -129,6 +129,7 @@ struct free_boundary_first {
     template <typename Tuple>
     __host__ __device__
     // (sup, mid, sub, d[1])
+    //  or
     // (mid, sub, sup, d[-1])
     void operator()(Tuple t) {
         using thrust::get;
@@ -146,6 +147,7 @@ struct free_boundary_first {
 
 
 struct free_boundary_second_with_first_derivative_one {
+    /* Special case hardcoded for delta one at high spot boundary */
     template <typename Tuple>
     __host__ __device__
     // (sup, mid, sub, d[1], R[0])
@@ -192,6 +194,11 @@ struct free_boundary_second {
 };
 
 
+
+
+/* These functions all build the discrete operator needed for the Heston case in
+ * their particular dimension (spot or var) and derivative (first or second)
+ */
 
 template <typename T>
 int spot_first(Dptr &sup, Dptr &mid, Dptr &sub, T deltas,
@@ -318,8 +325,9 @@ int var_second(Dptr &sup, Dptr &mid, Dptr &sub, T deltas,
     strided_range<DptrIterator> topmid(mid, mid+sz, blksz);
     strided_range<DptrIterator> topsub(sub, sub+sz, blksz);
     strided_range<DptrIterator> topresidual(residual, residual+sz, blksz);
-    /* We use the von neumann boundary here because we know this will all be
-     * multiplied by the 0 spot value. */
+    /* We use the von neumann boundary here instead of the free boundary because
+     * we know this will all be multiplied by the 0 spot value. This assumption
+     * is false if low spot is not 0 of course. Be careful with barriers. */
     thrust::for_each(
             thrust::make_zip_iterator(thrust::make_tuple(topsup.begin(),
                     topmid.begin(), topsub.begin(), topresidual.begin())),
@@ -412,6 +420,7 @@ void _TriBandedOperator::verify_diag_ptrs() {
 }
 
 struct zipdot3 {
+    /* The dotproduct using our sparse dia_matrix format */
     template <typename T>
     __host__ __device__
     REAL_t operator()(const T &diags, const T &x) {
@@ -426,6 +435,7 @@ struct zipdot3 {
     }
 };
 struct zipdotTopAndBottom {
+    /* Edge case for the top and bottom rows */
     template <typename T>
     __host__ __device__
     void operator()(T t) {
@@ -451,6 +461,7 @@ struct zipdotTopAndBottom {
 
 
 void _TriBandedOperator::apply(SizedArray<double> &V) {
+    /* Apply this operator to the domain @V@, overwriting it */
     FULLTRACE;
     if (top_fold_status == CAN_FOLD || bottom_fold_status == CAN_FOLD) {
         DIE("Must be tridiagonal to apply operator on GPU.");
@@ -543,6 +554,9 @@ void _TriBandedOperator::apply(SizedArray<double> &V) {
 
 
 struct periodic_from_to_mask : thrust::unary_function<int, bool> {
+    /* This is a trick to work with transform_if so that we only operator on
+     * indices not corresponding to Dirichlet boundaries.
+     */
     int begin;
     int end;
     int period;
@@ -703,6 +717,9 @@ bool _TriBandedOperator::is_folded() {
 
 
 void _TriBandedOperator::solve(SizedArray<double> &V) {
+    /* Solve the linear system taking the residual and boundary conditions into
+     * account
+     */
     FULLTRACE;
     if (top_fold_status == CAN_FOLD || bottom_fold_status == CAN_FOLD) {
         DIE("Must be tridiagonal to apply inverse operator on GPU.");
@@ -735,14 +752,15 @@ void _TriBandedOperator::solve(SizedArray<double> &V) {
         fold_vector(V);
     }
 
+    /* Other solvers can be plugged in here */
     status = cusparseDgtsvStridedBatch(handle, N,
                 sub.get(), mid.get(), sup.get(),
                 V.data.get(),
                 1, N);
-
     if (status != CUSPARSE_STATUS_SUCCESS) {
         DIE("CUSPARSE tridiag system solve failed.");
     }
+    /* */
 
     if (axis == 0) {
         V.transpose(1);
@@ -753,6 +771,7 @@ void _TriBandedOperator::solve(SizedArray<double> &V) {
 
 
 void _TriBandedOperator::fake_solve(SizedArray<double> &V) {
+    /* For testing */
     FULLTRACE;
     const unsigned N = V.size;
     status = cusparseDgtsvStridedBatch(handle, N,
@@ -779,6 +798,9 @@ struct curry :
 
 template <typename Tuple, typename Result>
 struct add_multiply3 : public thrust::unary_function<Tuple, Result> {
+    /* This operation is needed for the gaussian elimination step to fold the
+     * matrix into a tri-diagonal one.
+     */
     Result direction;
     add_multiply3(Result x) : direction(x) {}
     __host__ __device__
@@ -790,6 +812,7 @@ struct add_multiply3 : public thrust::unary_function<Tuple, Result> {
 
 
 void _TriBandedOperator::fold_vector(SizedArray<double> &vector, bool unfold) {
+    /* Fold the right hand side to match the operator */
     FULLTRACE;
 
     typedef thrust::tuple<REAL_t,REAL_t,REAL_t> REALTuple;
@@ -859,6 +882,7 @@ void _TriBandedOperator::undiagonalize() {
 
 /* These fold the third element of first row and third from last element of last
  * row into the neighboring row, resulting in a tridiagonal system.
+ * This is the brain behind the diagonalize() function.
  */
 template <typename Tuple>
 struct fold_operator : public thrust::unary_function<Tuple, void> {
@@ -1088,13 +1112,24 @@ void _TriBandedOperator::vectorized_scale(SizedArray<double> &vector) {
             v.begin(),
             R.data,
             thrust::multiplies<REAL_t>());
-    /* LOG("Scaled R."); */
+    /* LOG("Scaled residual R."); */
     FULLTRACE;
     return;
 }
 
 _TriBandedOperator *for_vector(SizedArray<double> &V, Py_ssize_t blocks,
         Py_ssize_t derivative, Py_ssize_t axis, bool barrier) {
+
+    /* Create a new _TriBandedOperator intended for use on a domain having axis
+     * @V@. Blocks refers to the length of the *other* axis used, which is the
+     * number of times V will be repeated.
+     *
+     * If @barrier@ is true, we assume that we're pricing a barrier option when
+     * making boundary conditions.
+     *
+     * Axis 0 is always assumed to be the spot and axis 1 the variance.
+     * Additionally we always assume Heston model.
+     */
 
     int blksz = V.size;
     int operator_rows = blocks * blksz;

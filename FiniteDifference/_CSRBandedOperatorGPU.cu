@@ -23,6 +23,15 @@
 
 #include "_CSRBandedOperatorGPU.cuh"
 
+/* Every function here has exactly the same semantics as its counterpart in
+ * _TriBandedOperator.cu
+ *
+ * This class was originally just for the cross derivative, which never requires
+ * a matrix inversion. If used for the other derivatives, cusparse solvers for
+ * general matrices can be used. That aspect of it, however, was not ironed out
+ * and is totally untrustworthy right now.
+ */
+
 typedef thrust::device_ptr<double> Dptr;
 typedef thrust::detail::normal_iterator<thrust::device_ptr<double> > DptrIterator;
 

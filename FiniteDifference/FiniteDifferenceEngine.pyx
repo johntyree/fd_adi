@@ -4,6 +4,10 @@
 # distutils: language = c++
 
 
+# These classes are the CPU-only counterparts to
+# FiniteDifferenceEngeineGPU.pyx, All of the same comments apply.
+
+
 import sys
 import itertools
 
@@ -34,7 +38,10 @@ def initialized(f):
     """Create compound operators and initialize the underlying FiniteDifferenceEngine.
     Under normal circumstances, this is called automatically. If you want to
     access the operators before they are used, you must call this yourself to
-    create them."""
+    create them.
+
+    This function is probably not useful now.
+    """
     def newf(self, *args, **kwargs):
         if not self._initialized:
             FiniteDifferenceEngine.__init__(self, self.grid, coefficients=self.coefficients,
@@ -128,8 +135,8 @@ cdef class FiniteDifferenceEngine(object):
 
         @schemes@ is a dict of tuples of dicts as follows.
 
-        Ex. (Centered in all cases. Switch to upwinding at index 10 in
-                convection term in x1 dimension.)
+        Ex. (Centered in all cases. Switch to upwinding at index `flip_idx_var`
+             in convection term in x1 dimension.)
 
             {(0,) : ({"scheme": "center"},),
             (0,0): ({"scheme": "center"},),
@@ -141,7 +148,7 @@ cdef class FiniteDifferenceEngine(object):
         @self.default_order@ (making this particular example largely
         redundant).
 
-        Can't do this with C/Cuda of course... maybe cython?
+        Can't do this with C/Cuda of course... there it gets hardcoded.
         """
         self.grid = grid
         self.shape = grid.shape
@@ -166,6 +173,12 @@ cdef class FiniteDifferenceEngine(object):
 class FiniteDifferenceEngineADE(FiniteDifferenceEngine):
 
     def __init__(self, grid, coefficients={}, boundaries={}, schemes={}):
+        """
+        This is an exploration of the ADE scheme that was being discussed on the Wilmott forums.
+        It's a 1-dimensional prototype but did not perform well.
+
+        Status: abandoned
+        """
         self.grid = grid
         self.coefficients = coefficients
         self.boundaries = boundaries
@@ -265,6 +278,9 @@ cdef class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
 
     def __init__(self, grid, coefficients={}, boundaries={}, schemes={},
             force_bandwidth=None):
+        """
+        The main class describing a FiniteDifferenceEngine that will use the ADI schemes.
+        """
         self.grid = grid
         self.coefficients = coefficients
         self.boundaries = boundaries
@@ -432,7 +448,13 @@ cdef class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
 
 
     # TODO: This guy is *WAY* too big
+    # Hasn't been refactored because effort has shifted to the GPU FDE side
     def make_discrete_operators(self):
+        """
+        Create the discrete operator templates that correspond to the needed
+        derivatives in each dimension. These will later be scaled appropriately
+        and combined as needed to make the compound operators.
+        """
         templates = {}
         mixed_derivs = {}
         coeffs = self.coefficients
@@ -568,6 +590,10 @@ cdef class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
 
 
     def scale_and_combine_operators(self):
+        """
+        Make the combined operators as needed, such as:
+            (mu * As + gamma * Ass)
+        """
         coeffs = self.coefficients
         self.operators = {}
 
@@ -618,6 +644,12 @@ cdef class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
 
     @initialized
     def solve_implicit(self, n, dt, initial=None, callback=None, numpy=False):
+        """
+        Solve using the fully implicit scheme.
+        If not None, @callback@ is called on the domain after each time step.
+
+        @numpy@ is vestigial and ignored, previously passed to cross_term.
+        """
         n = int(n)
         if initial is not None:
             V = initial.copy()
@@ -658,6 +690,9 @@ cdef class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
 
     @initialized
     def solve_explicit(self, n, dt, initial=None, callback=None, numpy=False):
+        """
+        The fully explicit scheme. This is basically useless for interesting problems.
+        """
         n = int(n)
         if initial is not None:
             V = initial.copy()
@@ -693,6 +728,9 @@ cdef class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
     @initialized
     def solve_hundsdorferverwer(self, n, dt, initial=None, theta=0.5, callback=None,
             numpy=False):
+        """
+        Solve using the hundsdorferverwer scheme.
+        """
 
         n = int(n)
         if initial is not None:
@@ -769,6 +807,9 @@ cdef class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
     @initialized
     def solve_craigsneyd2(self, n, dt, initial=None, theta=0.5, callback=None,
             numpy=False):
+        """
+        Solve using the modified craigsneyd scheme.
+        """
 
         n = int(n)
         if initial is not None:
@@ -830,6 +871,9 @@ cdef class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
     @initialized
     def solve_craigsneyd(self, n, dt, initial=None, theta=0.5, callback=None,
             numpy=False):
+        """
+        Solve using the original craigsneyd scheme.
+        """
 
         n = int(n)
         if initial is not None:
@@ -928,6 +972,9 @@ cdef class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
     @initialized
     def solve_douglas(self, n, dt, initial=None, theta=0.5, callback=None,
             numpy=False):
+        """
+        Solve using the Douglas scheme.
+        """
 
         n = int(n)
         if initial is not None:

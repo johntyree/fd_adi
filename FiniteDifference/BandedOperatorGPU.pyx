@@ -70,6 +70,7 @@ cdef class BandedOperator(object):
 
 
     property operator_rows:
+        # The number of rows in this operator
         def __get__(self):
             if self.is_mixed_derivative:
                 return self.thisptr_csr.operator_rows
@@ -99,10 +100,13 @@ cdef class BandedOperator(object):
                 else:
                     setattr(self, attr, getattr(other, attr))
             except AttributeError, e:
-                print attr, e
+                print "Missing:", attr, e
 
 
     def __richcmp__(self, other, op):
+        """
+        We can't and won't do comparisons of operators living on the GPU
+        """
         raise NotImplementedError
 
 
@@ -152,6 +156,7 @@ cdef class BandedOperator(object):
 
 
     cpdef emigrate(self, other, tag=""):
+        """Become a GPU version of the @other@ operator"""
         self.copy_meta_data(other)
         if self.is_mixed_derivative:
             return self.emigrate_csr(other, tag)
@@ -160,6 +165,9 @@ cdef class BandedOperator(object):
 
 
     cpdef immigrate(self, tag=""):
+        """
+        Retrun a CPU version of this operator.
+        """
         if self.is_mixed_derivative:
             return self.immigrate_csr(tag)
         else:
@@ -366,6 +374,7 @@ cdef class BandedOperator(object):
 
 
     cpdef diagonalize(self):
+        """Fold this operator to make it tridiagonal."""
         if self.thisptr_tri == NULL:
             raise RuntimeError("Diagonalize called but C++ tridiag is NULL. CSR? Mixed(%s)" % self.is_mixed_derivative)
         self.top_fold_status = FOLDED if self.top_fold_status == CAN_FOLD else CANNOT_FOLD
@@ -374,6 +383,8 @@ cdef class BandedOperator(object):
 
 
     cpdef undiagonalize(self):
+        """Unfold this operator. Stores extra values in top_factors and
+        bottom_factors"""
         if self.thisptr_tri == NULL:
             raise RuntimeError("Undiagonalize called but C++ tridiag is NULL. CSR? Mixed(%s)" % self.is_mixed_derivative)
         self.top_fold_status = CAN_FOLD if self.top_fold_status == FOLDED else CANNOT_FOLD
@@ -406,6 +417,7 @@ cdef class BandedOperator(object):
 
 
     cpdef apply(self, np.ndarray V, overwrite=False):
+        """Wrapper for CPU based data."""
         cdef SizedArrayPtr sa_V = SizedArrayPtr(V, "sa_V apply")
         cdef SizedArrayPtr sa_U = self.apply_(sa_V, overwrite)
         V = sa_U.to_numpy()
@@ -414,6 +426,7 @@ cdef class BandedOperator(object):
 
 
     cpdef fake_solve_(self, SizedArrayPtr sa_V, overwrite):
+        """Used for testing only. Ignore."""
         cdef SizedArrayPtr sa_U
         if overwrite:
             sa_U = sa_V
@@ -440,6 +453,7 @@ cdef class BandedOperator(object):
 
 
     cpdef solve(self, np.ndarray V, overwrite=False):
+        """Wrapper for CPU based data."""
         cdef SizedArrayPtr sa_V = SizedArrayPtr(V, "sa_V solve")
         cdef SizedArrayPtr sa_U = self.solve_(sa_V, overwrite)
         V = sa_U.to_numpy()
@@ -448,11 +462,14 @@ cdef class BandedOperator(object):
 
 
     cpdef enable_residual(self, cbool state):
+        """If state is false, then the residual will not be used when applying
+        or solving."""
         if self.thisptr_tri:
             self.thisptr_tri.has_residual = state
 
 
     cdef inline no_mixed(self):
+        """Ensure this operator is not a mixed derivative."""
         if self.is_mixed_derivative:
             raise ValueError("Operation not supported with mixed operator.")
 
@@ -561,7 +578,7 @@ cdef class BandedOperator(object):
 
     cpdef vectorized_scale(self, SizedArrayPtr vector):
         """
-        @vector@ is the correpsonding mesh vector of the current dimension.
+        Element wise scale the operator with column vector @vector@.
 
         Also applies to the residual vector self.R.
 
@@ -581,6 +598,11 @@ cdef class BandedOperator(object):
 
 
 cpdef for_vector(np.ndarray v, int blocks, int derivative, int axis, barrier):
+    """
+    Build a new operator from the vector @v@ on the CPU.
+
+    Defines discrete  d/dv
+    """
     cdef SizedArrayPtr V = SizedArrayPtr(v, tag='for_vector v')
     cdef BandedOperator B = BandedOperator(tag='for_vector')
 
@@ -598,6 +620,11 @@ cpdef for_vector(np.ndarray v, int blocks, int derivative, int axis, barrier):
 
 
 cpdef mixed_for_vector(np.ndarray v0, np.ndarray v1):
+    """
+    Define a mixed derivative operator from two vectors on the CPU.
+
+    Defines  d² / dv0 dv1
+    """
     cdef SizedArrayPtr V0 = SizedArrayPtr(v0, tag='mixed_for_vector v0')
     cdef SizedArrayPtr V1 = SizedArrayPtr(v1, tag='mixed_for_vector v1')
     cdef BandedOperator B = BandedOperator(tag='mixed_for_vector')
@@ -623,7 +650,10 @@ cdef inline int sign(int i):
 
 
 cpdef cublas_to_scipy(B):
-    # Shift because of scipy/cublas row configuration
+    """
+    Cublas expects the lower rows to be shifted.
+    Scipy is the opposite.
+    """
     for row, o in enumerate(B.D.offsets):
         if o > 0:
             B.D.data[row,o:] = B.D.data[row,:-o]
@@ -634,7 +664,10 @@ cpdef cublas_to_scipy(B):
 
 
 cpdef scipy_to_cublas(B):
-    # We have to shift the offsets between scipy and cublas
+    """
+    Cublas expects the lower rows to be shifted.
+    Scipy is the opposite.
+    """
     for row, o in enumerate(B.D.offsets):
         if o > 0:
             B.D.data[row,:-o] = B.D.data[row,o:]

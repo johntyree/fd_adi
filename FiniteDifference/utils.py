@@ -147,6 +147,10 @@ def sinh_space(exact, high, density, size, force_exact=True):
     return space
 
 def todia(A):
+    """
+    Just like normal sparse.dia_matrix, but swap the offsets and row data from
+    ascending to descending. In the data matrix, top row should be top diagonal.
+    """
     d = scipy.sparse.dia_matrix(A)
     idx = np.argsort(d.offsets)[::-1]
     d.data = d.data[idx]
@@ -499,6 +503,10 @@ def rolllist(l, fromindex, toindex):
 
 
 def foldMatFor(A, blocks):
+    """
+    A matrix that, when applied to @A@, will perform a step of gaussian
+    elimination. Used in testing only.
+    """
     l = A.shape[0] // blocks
     data = np.zeros((3, A.shape[0]))
     data[1, :] = 1
