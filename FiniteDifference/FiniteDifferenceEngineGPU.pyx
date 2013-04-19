@@ -395,7 +395,7 @@ cdef class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
         for o in Lis:
             if o.top_fold_status == 'CAN_FOLD':
                 o.diagonalize()
-            if o.bottom_fold_status == 'CAN_FOLD':
+            elif o.bottom_fold_status == 'CAN_FOLD':
                 o.diagonalize()
 
         print_step = max(1, int(n / 10))
