@@ -182,33 +182,6 @@ struct GPUVec : thrust::device_vector<T> {
 };
 
 
-template <typename T>
-struct HostVec : thrust::host_vector<T> {
-
-    HostVec() : thrust::host_vector<T>() {}
-
-
-    template<typename X>
-    HostVec(const X &x)
-        : thrust::host_vector<T>(x) {}
-
-
-    template<typename X, typename Y>
-    HostVec(const X &x, const Y &y)
-        : thrust::host_vector<T>(x, y) {}
-
-
-    template<typename X, typename Y, typename Z>
-    HostVec(const X &x, const Y &y, const Z &z)
-        : thrust::host_vector<T>(x, y, z) {}
-
-
-    T *raw() {
-        return thrust::raw_pointer_cast(this->data());
-    }
-};
-
-
 /* Functions to make debugging less hellish. */
 template <typename T>
 void print_array(T *a, Py_ssize_t len) {

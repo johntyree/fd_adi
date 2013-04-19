@@ -19,6 +19,7 @@ from FiniteDifference.VecArray cimport to_string
 
 from FiniteDifference.thrust.copy cimport copy_n
 
+
 cdef class SizedArrayPtr(object):
 
     def __init__(self, a=None, tag="Unknown"):

@@ -199,35 +199,6 @@ class FiniteDifferenceEngineADE(FiniteDifferenceEngine):
         return newf
 
 
-    def solve_exp(self, n, dt, bfunc):
-        """What is this doing? Who knows!? Not you."""
-        # n = int(n)
-        # dx = self.grid.dx[0][1]
-        # mu = self.mu / (2*dx)
-        # gamma2 = self.gamma2 / (dx*dx)
-        # r = self.r
-        # v = self.grid.domain[-1].copy()
-        # count = 0
-        # for t in range(1, n+1, 1):
-            # vm = v
-            # v = np.zeros_like(v)
-            # for i in range(1, v.shape[0]-1):
-                # # for j in range(1, v.shape[1]-1):
-                # v[i] = vm[i] + dt * (
-                      # gamma2[i] * (vm[i-1] - 2*vm[i] + vm[i+1])
-                    # + mu[i]     * (vm[i+1] - vm[i-1])
-                    # - r * vm[i]
-                # )
-            # # duds = mu[-1] * self.grid.mesh[0][-1]
-            # # d2uds = gamma2[-1]*(self.grid.mesh[0][-1]*2*dx + 2*vm[-2] - 2*vm[-1])
-            # # v[-1] = vm[-1] + dt*(duds + d2uds + -r*vm[-1])
-            # v[0] = bfunc(t, 0)
-            # v[-1] = bfunc(t, -1)
-            # self.grid.domain.append(v)
-        # return v
-        pass
-
-
     def solve(self, n, dt):
         n = int(n)
         cdef double dx = self.grid.dx[0][1]
@@ -321,7 +292,7 @@ cdef class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
         return Binit
 
 
-    def min_possible_bandwidth(self, derivative_tuple):
+    def _min_possible_bandwidth(self, derivative_tuple):
         explain = False
         high = low = 0
         d = len(derivative_tuple)
@@ -386,7 +357,7 @@ cdef class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
     # rather than the mesh value itself. This way the caller doesn't need
     # to know anything other than the row it's working on.
     # f : (t x R^n -> R) -> Z -> R
-    def wrapscalarfunc(self, f, args, dim):
+    def _wrapscalarfunc(self, f, args, dim):
         x = list(args)
         x.insert(dim, None)
         def newf(i):
@@ -404,7 +375,7 @@ cdef class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
     # Here we do the same except we go ahead and evalutate the function for
     # the entire vector. This is just for numpy's speed and is otherwise
     # redundant.
-    def evalvectorfunc(self, f, args, dim):
+    def _evalvectorfunc(self, f, args, dim):
         x = list(args)
         x.insert(dim, self.grid.mesh[dim])
         vec = f(self.t, *x)
@@ -475,7 +446,7 @@ cdef class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
             dim = d[0]
 
             # Make an operator template for this dimension
-            low, high = self.min_possible_bandwidth(d)
+            low, high = self._min_possible_bandwidth(d)
             bw = force_bandwidth
             # print "Minimum bandwidth for %s: %s" % (d, (low, high))
             if bw:
@@ -504,8 +475,8 @@ cdef class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
                 # dimension values
                 for a in argset:
                     b = bounds[d]
-                    lowfunc  = self.wrapscalarfunc(b[0][1], a, dim)
-                    highfunc = self.wrapscalarfunc(b[1][1], a, dim)
+                    lowfunc  = self._wrapscalarfunc(b[0][1], a, dim)
+                    highfunc = self._wrapscalarfunc(b[1][1], a, dim)
                     b = ((b[0][0], lowfunc(0)), (b[1][0], highfunc(-1)))
 
                     B.applyboundary(b, self.grid.mesh)
@@ -515,8 +486,8 @@ cdef class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
                     if b[1][0] == 0:
                         highbound.append(b[1][1])
 
-            Bs = replicate(self.grid.size / self.grid.shape[B.axis], B)
-            Bs = flatten_tensor_aligned(Bs)
+            Bs = _replicate(self.grid.size / self.grid.shape[B.axis], B)
+            Bs = _flatten_tensor_aligned(Bs)
             if lowbound:
                 Bs.dirichlet[0] = tuple(lowbound) if len(lowbound) > 1 else lowbound[0]
             if highbound:
@@ -527,7 +498,7 @@ cdef class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
 
         # TODO
         # This expects only 2 dimensions
-        self.check_mixed_derivative_parameters(mixed_derivs.keys())
+        self._check_mixed_derivative_parameters(mixed_derivs.keys())
         for d in mixed_derivs.keys():
             d0_size = len(self.grid.mesh[d[0]])
             d1_size = len(self.grid.mesh[d[1]])
@@ -540,9 +511,9 @@ cdef class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
             Bp1 = Bm1.copy()
 
             # TODO: Hardcoding in for centered differencing
-            Bps = [Bp1 * 0, Bp1 * 0] + replicate(d0_size-2, Bp1)
-            Bbs = [Bb1 * 0] + replicate(d0_size-2, Bb1) +  [Bb1 * 0]
-            Bms = replicate(d0_size-2, Bm1) + [Bm1 * 0, Bm1 * 0]
+            Bps = [Bp1 * 0, Bp1 * 0] + _replicate(d0_size-2, Bp1)
+            Bbs = [Bb1 * 0] + _replicate(d0_size-2, Bb1) +  [Bb1 * 0]
+            Bms = _replicate(d0_size-2, Bm1) + [Bm1 * 0, Bm1 * 0]
 
             offsets = Bs.D.offsets
             data = [Bps, Bbs, Bms]
@@ -550,25 +521,25 @@ cdef class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
                 if o >= 0:
                     for i in range(Bs.shape[0]-o):
                         # a = (np.array(self.grid.mesh[d[0]][i]).repeat(d1_size),)
-                        # vec = self.evalvectorfunc(coeffs[d], a, 1)
+                        # vec = self._evalvectorfunc(coeffs[d], a, 1)
                         # data[row][i+o].vectorized_scale(vec)
                         data[row][i+o] *= Bs.D.data[row, i+o]
                 else:
                     for i in range(abs(o), Bs.shape[0]):
                         # a = (np.array(self.grid.mesh[d[0]][i]).repeat(d1_size),)
-                        # vec = self.evalvectorfunc(coeffs[d], a, 1)
+                        # vec = self._evalvectorfunc(coeffs[d], a, 1)
                         # data[row][i-abs(o)].vectorized_scale(vec)
                         data[row][i-abs(o)] *= Bs.D.data[row, i-abs(o)]
 
             # We flatten here because it's faster
-            # Check is set to False because we're only faking that the offsets.
-            # The resulting operator will take the offsets from only the first
-            # in the list.
+            # Check is set to False because we're only faking that the offsets
+            # are correct. The resulting operator will take the offsets from
+            # only the first in the list.
             Bps[0].D.offsets += d1_size
             Bms[0].D.offsets -= d1_size
-            BP = flatten_tensor_aligned(Bps, check=False)
-            BB = flatten_tensor_aligned(Bbs, check=False)
-            BM = flatten_tensor_aligned(Bms, check=False)
+            BP = _flatten_tensor_aligned(Bps, check=False)
+            BB = _flatten_tensor_aligned(Bbs, check=False)
+            BM = _flatten_tensor_aligned(Bms, check=False)
             templates[d] = BP + BM + BB
             templates[d].is_mixed_derivative = True
             templates[d].deltas = np.array([np.nan])
@@ -577,7 +548,7 @@ cdef class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
         return mixed_derivs
 
 
-    def check_mixed_derivative_parameters(self, mds):
+    def _check_mixed_derivative_parameters(self, mds):
         for d in mds:
             if len(d) > 2:
                 raise NotImplementedError("Derivatives must be 2nd order or less.")
@@ -928,7 +899,8 @@ cdef class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
 
 
     @initialized
-    def dummy(self):
+    def _dummy(self):
+        """This method is only for testing. Ignore."""
         n = 1
         dt = 0.01
         theta = 0.5
@@ -1044,10 +1016,10 @@ cdef class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
         return scheme(n-smoothing_steps, dt, initial=V, theta=0.60)
 
 
-def replicate(n, x):
+def _replicate(n, x):
     return [x.copy() for _ in range(n)]
 
-def flatten_tensor_aligned(mats, check=True):
+def _flatten_tensor_aligned(mats, check=True):
     if check:
         assert len(set(tuple(m.D.offsets) for m in mats)) == 1
     residual = np.hstack([x.R for x in mats])
@@ -1066,7 +1038,7 @@ def flatten_tensor_aligned(mats, check=True):
     return B
 
 
-def flatten_tensor_misaligned(mats):
+def _flatten_tensor_misaligned(mats):
     offsets = set()
     offsets.update(*[set(tuple(m.D.offsets)) for m in mats])
     offsets = sorted(offsets, reverse=True)

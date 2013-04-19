@@ -783,19 +783,6 @@ void _TriBandedOperator::fake_solve(SizedArray<double> &V) {
 }
 
 
-template <typename Tuple, typename OP>
-struct curry :
-    public thrust::unary_function<Tuple, typename OP::result_type> {
-
-    OP f;
-
-    __host__ __device__
-    typename OP::result_type operator()(Tuple t) {
-        using thrust::get;
-        return  f(get<0>(t), get<1>(t));
-    }
-};
-
 template <typename Tuple, typename Result>
 struct add_multiply3 : public thrust::unary_function<Tuple, Result> {
     /* This operation is needed for the gaussian elimination step to fold the

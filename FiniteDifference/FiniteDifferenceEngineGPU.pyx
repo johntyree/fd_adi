@@ -26,7 +26,7 @@ import FiniteDifference.BandedOperator as BO
 cimport FiniteDifference.BandedOperator as BO
 BandedOperator = BO.BandedOperator
 
-from FiniteDifference.VecArray cimport SizedArray, GPUVec
+from FiniteDifference.VecArray cimport SizedArray
 from FiniteDifference.SizedArrayPtr cimport SizedArrayPtr
 
 from FiniteDifference.Option import Option, BarrierOption
@@ -88,7 +88,8 @@ cdef class FiniteDifferenceEngine(object):
         self.scaling_vec = SizedArrayPtr(tag="scaling_vec")
         self.zero_derivative_coefficient = SizedArrayPtr(tag="zero_derivative_coefficient")
 
-    def fill_gpugridmesh_from_grid(self):
+
+    def _fill_gpugridmesh_from_grid(self):
         i = self.grid.ndim
         if i > 0:
             self.gpugridmesh0 = SizedArrayPtr(self.grid.mesh[0])
@@ -108,7 +109,7 @@ cdef class FiniteDifferenceEngine(object):
                 setattr(self, attr, None)
         self.grid = other.grid.copy()
         self.gpugrid = SizedArrayPtr(self.grid.domain[-1], "FDEGPU.grid")
-        self.fill_gpugridmesh_from_grid()
+        self._fill_gpugridmesh_from_grid()
         self.scaling_vec.alloc(self.gpugrid.size, self.scaling_vec.tag)
         self.shape = self.grid.shape
         self.ndim = self.grid.ndim
@@ -279,16 +280,8 @@ cdef class FiniteDifferenceEngineADI(FiniteDifferenceEngine):
         return self.scaling_vec
 
 
-    def cross_term(self, V, numpy=True):
-        """Apply the cross derivative operator."""
-        if (0,1) in self.coefficients:
-            ret = self.operators[(0,1)].apply(V)
-        else:
-            ret = 0
-        return ret
-
-
-    def dummy(self):
+    def _dummy(self):
+        """ This method is only for testing. Ignore."""
         n = 1
         dt = 0.01
         theta = 0.5

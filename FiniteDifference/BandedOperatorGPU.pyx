@@ -17,7 +17,6 @@ import FiniteDifference.utils as utils
 
 from FiniteDifference.BandedOperator import BandedOperator as BO
 from FiniteDifference.BandedOperator cimport BandedOperator as BO
-from FiniteDifference.VecArray cimport GPUVec
 
 
 FOLDED = "FOLDED"

@@ -286,8 +286,8 @@ class FiniteDifferenceEngineADI_from_Host_test(unittest.TestCase):
 
 
     def test_firsts(self):
-        r = self.F.dummy()[0]
-        t = self.FG.dummy()[0]
+        r = self.F._dummy()[0]
+        t = self.FG._dummy()[0]
         for ref, tstG in zip(r, t):
             tst = tstG.immigrate()
             if not tst.is_mixed_derivative:
@@ -301,8 +301,8 @@ class FiniteDifferenceEngineADI_from_Host_test(unittest.TestCase):
 
 
     def test_Les(self):
-        r = self.F.dummy()[1]
-        t = self.FG.dummy()[1]
+        r = self.F._dummy()[1]
+        t = self.FG._dummy()[1]
         for ref, tstG in zip(r, t):
             tst = tstG.immigrate()
             if not tst.is_mixed_derivative:
@@ -316,8 +316,8 @@ class FiniteDifferenceEngineADI_from_Host_test(unittest.TestCase):
 
 
     def test_Lis(self):
-        r = self.F.dummy()[2]
-        t = self.FG.dummy()[2]
+        r = self.F._dummy()[2]
+        t = self.FG._dummy()[2]
         for ref, tstG in zip(r, t):
             tst = tstG.immigrate()
             if not tst.is_mixed_derivative:
@@ -333,24 +333,24 @@ class FiniteDifferenceEngineADI_from_Host_test(unittest.TestCase):
 
 
     def test_Orig(self):
-        ref = self.F.dummy()[3]
-        tst = self.FG.dummy()[3]
+        ref = self.F._dummy()[3]
+        tst = self.FG._dummy()[3]
         # print
         # fp(ref - tst, 'e')
         npt.assert_array_equal(ref, tst)
 
 
     def test_Y(self):
-        ref = self.F.dummy()[4]
-        tst = self.FG.dummy()[4]
+        ref = self.F._dummy()[4]
+        tst = self.FG._dummy()[4]
         # print
         # fp(ref - tst, 'e')
         npt.assert_array_almost_equal(ref, tst)
 
 
     def test_V(self):
-        ref = self.F.dummy()[5]
-        tst = self.FG.dummy()[5]
+        ref = self.F._dummy()[5]
+        tst = self.FG._dummy()[5]
         # print
         # fp(ref - tst, 'e')
         npt.assert_array_almost_equal(ref, tst)
