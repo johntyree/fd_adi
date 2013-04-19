@@ -1,5 +1,5 @@
 Finite Differencing on GPUs
-==========================
+===========================
 
 PDE based option pricing on GPUs
 
@@ -22,3 +22,15 @@ Finite-Difference based calculations.
 
 In this project we will explore the potentials for the application of GPUs for
 PDE based derivatives pricing.
+
+
+QuickStart
+==========
+
+    $ git clone <REPO>
+    $ sh autotest.sh  # builds and runs tests
+
+Now price a test option with default parameters using the CPU, the GPU, and
+Monte Carlo integration.
+
+    $ python price_one_option.py -nx 150 150 -nt 150 --cpu --gpu --mc -v
