@@ -33,4 +33,4 @@ QuickStart
 Now price a test option with default parameters using the CPU, the GPU, and
 Monte Carlo integration.
 
-    $ python price_one_option.py -nx 150 150 -nt 150 --cpu --gpu --mc -v
+    $ python price_one_option.py -nx 150 150 -nt 150 --cpu --gpu --mc 10000 -v
