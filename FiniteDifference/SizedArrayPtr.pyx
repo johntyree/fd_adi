@@ -34,9 +34,13 @@ cdef class SizedArrayPtr(object):
 
 
     cpdef alloc(self, int sz, cpp_string tag="Unknown"):
-        if self.p:
-            del self.p
+        """
+        Just call the SizedArray<double>(int, string) constructor.
+        """
+        if self.p != NULL:
+            self.decref(self.p)
         self.p = new SizedArray[double](sz, tag)
+        self.incref(self.p)
         self.size = sz
         return self
 
@@ -48,6 +52,7 @@ cdef class SizedArrayPtr(object):
         if self.p:
             raise RuntimeError("SizedArrayPtr is single assignment for now")
         self.p = p
+        self.incref(self.p)
         self.size = self.p.size
         # print "SAPtr -> Storing %s:" % tag, to_string(p)
 
@@ -60,6 +65,7 @@ cdef class SizedArrayPtr(object):
             print "SizedArrayPtr is single assignment"
             raise RuntimeError("SizedArrayPtr is single assignment")
         self.p = to_SizedArray(a, tag)
+        self.incref(self.p)
         self.size = self.p.size
         # print "Numpy -> Storing %s: %s" % (tag, to_string(self.p))
 
@@ -146,9 +152,30 @@ cdef class SizedArrayPtr(object):
 
 
     def __dealloc__(self):
-        if self.p:
-            # print "Freeing %s:" % (self.tag,), to_string(self.p)
-            del self.p
+        """ Called when this python object is destroyed. """
+        if self.p != NULL:
+            self.decref(self.p)
+
+
+    cdef incref(self, SizedArray[double] *p):
+        """
+        Increment the reference counter embedded in p.
+        """
+        if p == NULL:
+            raise RuntimeError("Trying to increment refcount of nonexistant SAP. Explosions.")
+        p.refcount += 1
+
+
+    cdef decref(self, SizedArray[double] *p):
+        """
+        Decrement the reference count of p, freeing it if it reaches 0.
+        """
+        if p.refcount <= 0:
+            raise RuntimeError("Trying to decrement an SAP that no one owns. Explosions.")
+        else:
+            p.refcount -= 1
+        if p.refcount == 0:
+            del p
 
 
     def __str__(self):
@@ -169,8 +196,9 @@ cdef class SizedArrayPtr_i(object):
 
     cpdef alloc(self, int sz, cpp_string tag="Unknown"):
         if self.p:
-            del self.p
+            raise RuntimeError("SizedArrayPtr_i is single assignment")
         self.p = new SizedArray[int](sz, tag)
+        self.incref(self.p)
         self.size = self.p.size
         return self
 
@@ -179,6 +207,7 @@ cdef class SizedArrayPtr_i(object):
         if self.p:
             raise RuntimeError("SizedArrayPtr_i is single assignment")
         self.p = p
+        self.incref(self.p)
         self.size = self.p.size
         # print "SAPtr -> Storing %s:" % tag, to_string(p)
 
@@ -202,6 +231,7 @@ cdef class SizedArrayPtr_i(object):
             print "SizedArrayPtr_i is single assignment"
             raise RuntimeError("SizedArrayPtr_i is single assignment")
         self.p = to_SizedArray_i(a, tag)
+        self.incref(self.p)
         self.size = self.p.size
         # print "Numpy -> Storing %s: %s" % (tag, to_string(self.p))
 
@@ -261,8 +291,26 @@ cdef class SizedArrayPtr_i(object):
     def __dealloc__(self):
         """ Called when this python object is destroyed. """
         if self.p != NULL:
-            # print "Freeing %s:" % (self.tag,), to_string(self.p)
-            del self.p
+            self.decref(self.p)
+
+
+    cdef incref(self, SizedArray[int] *p):
+        if p == NULL:
+            raise RuntimeError("Trying to increment refcount of nonexistant SAP. Explosions.")
+        p.refcount += 1
+
+
+    cdef decref(self, SizedArray[int] *p):
+        """
+        Decrement the reference count of p, freeing it if it reaches 0.
+        """
+        if p.refcount <= 0:
+            raise RuntimeError("Trying to decrement an SAP that no one owns. Explosions.")
+        else:
+            p.refcount -= 1
+        if p.refcount == 0:
+            del p
+
 
 
     def __str__(self):

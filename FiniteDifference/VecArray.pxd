@@ -19,6 +19,7 @@ cdef extern from "VecArray.h":
 
     cdef cppclass SizedArray[T]:
         cbool owner
+        int refcount
         device_ptr[T] data
         Py_ssize_t size
         Py_ssize_t ndim

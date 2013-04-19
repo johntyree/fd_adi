@@ -215,9 +215,12 @@ struct SizedArray {
      * dimensionality and size of the data, provides pointer access. Can free
      * the data upon destruction, keeps a temporary space allocated for
      * operations requiring it, etc.
+     *
+     * @refcount@ is exclusively for use from python. Ignore it here.
      */
 
     bool owner;
+    int refcount;
     thrust::device_ptr<T> data;
     thrust::device_ptr<T> tempspace;
     Py_ssize_t ndim;
@@ -229,6 +232,7 @@ struct SizedArray {
     SizedArray(Py_ssize_t size, std::string name)
         /* Allocate an empty block of memory and treat it as 1 dimensional */
         : owner(true),
+          refcount(0),
           data(device_malloc<T>(size)),
           tempspace(device_malloc<T>(size)),
           ndim(1),
@@ -244,6 +248,7 @@ struct SizedArray {
          * Can't reuse constructors in C++, isn't that great?
          */
         : owner(true),
+          refcount(0),
           data(device_malloc<T>(size)),
           tempspace(device_malloc<T>(size)),
           ndim(1),
@@ -262,6 +267,7 @@ struct SizedArray {
          * useful for creating "views" with different dimensionality
          */
         : owner(deep),
+          refcount(0),
           data(owner ? device_malloc<T>(S.size) : S.data),
           tempspace(device_malloc<T>(S.size)),
           ndim(S.ndim),
@@ -282,6 +288,7 @@ struct SizedArray {
          * Assumed to be 1 dimensional
          */
         : owner(true),
+          refcount(0),
           data(device_malloc<T>(S.size())),
           tempspace(device_malloc<T>(S.size())),
           ndim(1),
@@ -303,6 +310,7 @@ struct SizedArray {
          * owns it.
          */
         : owner(from_host),
+          refcount(0),
           data(),
           tempspace(device_malloc<T>(size)),
           ndim(1),
@@ -330,6 +338,7 @@ struct SizedArray {
          * owns it.
          */
         : owner(from_host),
+          refcount(0),
           data(),
           tempspace(),
           ndim(ndim),

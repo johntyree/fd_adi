@@ -16,6 +16,9 @@ cdef class SizedArrayPtr(object):
     cdef public cpp_string tag
     cdef public Py_ssize_t size
 
+    cdef decref(self, SizedArray[double]* p)
+    cdef incref(self, SizedArray[double]* p)
+
     cdef store(self, SizedArray[double] *p, cpp_string tag=*)
     cpdef alloc(self, int sz, cpp_string tag=*)
     cpdef from_numpy(self, np.ndarray a, cpp_string tag=*)
@@ -40,6 +43,9 @@ cdef class SizedArrayPtr_i(object):
     cdef SizedArray[int] *p
     cdef public cpp_string tag
     cdef public Py_ssize_t size
+
+    cdef decref(self, SizedArray[int]* p)
+    cdef incref(self, SizedArray[int]* p)
 
     cdef store(self, SizedArray[int] *p, cpp_string tag=*)
     cpdef alloc(self, int sz, cpp_string tag=*)
