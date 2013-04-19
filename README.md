@@ -1,5 +1,5 @@
-Thesis
-======
+Finite Differencing on GPUs
+==========================
 
 PDE based option pricing on GPUs
 
