@@ -10,7 +10,7 @@ numerical algorithms in solving complex problems such as option pricing, risk
 analysis, portfolio management, etc. Computational finance, generally referring
 to the application of computational techniques to finance, has become an
 integral part of modeling, analysis, and decision-making in the financial
-industry. 
+industry.
 
 In the world of derivatives pricing there are two main working horses, namely:
 Monte Carlo methods and numerical PDE (Partial Differential Equation) based
@@ -20,14 +20,19 @@ Units (GPUs). However, so far this technology has shown most promising results
 for Monte Carlo based approaches, while limited analysis has been done on
 Finite-Difference based calculations.
 
-In this project we will explore the potentials for the application of GPUs for
-PDE based derivatives pricing.
+In this project we explore the potentials for the application of GPUs for PDE
+based derivatives pricing.
 
 
 QuickStart
 ==========
 
-    $ git clone <REPO>
+    This project requires (at least) python, cython, numpy, scipy, nose, and cuda.
+
+    I uesd [Canopy](https://enthought.com/products/canopy/) which included
+    everything I needed.
+
+    $ git clone https://github.com/johntyree/fd_adi.git
     $ sh autotest.sh  # builds and runs tests
 
 Now price a test option with default parameters using the CPU, the GPU, and
