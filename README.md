@@ -27,10 +27,11 @@ based derivatives pricing.
 QuickStart
 ==========
 
-    This project requires (at least) python, cython, numpy, scipy, nose, and cuda.
+This project requires (at least) `python`, `cython`, `numpy`, `scipy`, `nose`,
+and `cuda`.
 
-    I uesd [Canopy](https://enthought.com/products/canopy/) which included
-    everything I needed.
+I used [Canopy](https://enthought.com/products/canopy/) which included
+everything I needed.
 
     $ git clone https://github.com/johntyree/fd_adi.git
     $ sh autotest.sh  # builds and runs tests
